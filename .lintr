@@ -1,0 +1,8 @@
+linters:
+  linters_with_defaults(
+    line_length_linter = line_length_linter(120),
+    assignment_linter = assignment_linter(c("<-", "->", "=")),
+    object_name_linter = object_name_linter(
+      regex = "^(?:[a-z][a-z0-9]*|(CI|SE|MSE|RMSE|SD|GPC|NTB|BT|X|Y|Z))(?:_(?:[a-z][a-z0-9]*|(CI|SE|MSE|RMSE|SD|GPC|NTB|BT|X|Y|Z)))*$"
+    )
+  )
