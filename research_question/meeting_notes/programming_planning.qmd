@@ -1,0 +1,78 @@
+---
+title: "Programming planning"
+format: docx
+editor: source
+---
+
+# Programming Layers
+3 layers: data generation, analysis, aggregation, later expand to visualization/table generation? + high level orchestration
+
+## Data generation layer
+
+Simulate the data
+
+Formula: $y_{ij} = \beta_0 + \beta_1T_i  +\beta_2t_{ij} + \beta_3T_it_{i,j} + b_{0,i} + b_{1,i}t_{i,j} + \epsilon_{ij}$
+
+* Input:
+  *  Number of simulations $B$
+  *  Number of clusters/longitudinal sequences, suggested: $N$ = 10,000;100;50;20;10:
+  *  Number of repeated measures: random variable uniform in [1,12] 
+     * **Q: monotone missingness or random missingness (if random missingness, which missingness scheme?), Geert: dropout dus monotone missingness**
+     * note: later uitbreiden 
+  *  Fixed effect sizes $\beta$
+  *  Random effects variance covariance matrix  $D$
+     * **Q: unstructured?**
+     * Geert: cholesky decompositie
+  * Variance of error term
+  
+**Q: balanced allocation to $T$?** (Geert: yes)
+  
+*	Output:
+  * List of $B$ Dataframes for each $N$ (or list of lists of df's)
+    * df in wide format. Columns: subject/cluster ID, dummy variable for treatment group, measurement values for T1-12
+
+## Analysis layer
+Perform the 3 different analyses on the data from the data generation layer
+
+* Analyses:
+  * Classical maximum likelihood **(options: lme4::lmer or nlme::lme)**
+    * Both allow for full ML
+    * Different optimizations of cholesky of $D$
+  * Closed form + weighting (paper 568)
+    * **Q: is the closed form basically a simple linear model on a cluster by cluster basis?**
+  * Multiple imputation, then apply closed form (paper 471 and 546)
+    * Paper 471 uses proc MI in SAS with jeffreys prior + burnin of 200, MI per cluster, 3 imp per dataset
+      * **Which software in R, options: Amelia or mice**
+      * Amelia most like proc MI behaviour, mice better for per cluster MI (can also better handle non-continuous data)
+      
+
+* Input:
+  * Dataframe generated in Data generation layer
+  * Analysis
+  
+* Output:
+  * List of:
+    * Convergence: proper convergence/convergence but non positive definite D/divergence (cfr paper 471)
+    * Coefficient estimates & SE's
+    * Computation time (cfr paper 568)
+        * **Q: Is this of intrest**?
+
+## Aggregation layer
+Take in the analyses from the analysis layer and create summary statistics
+
+* Input:
+  * List from analysis layer
+  * Data generation parameters (spec: fixed effect sizes)
+* Output:
+  * mean convergence per $N$, per type of analysis
+  * relative bias and relative efficiency (cfr paper 568), per $N$, per type of analysis
+  * mean/median computation time per $N$, per type of analysis
+  * 95% confidence interval coverage of $\beta_3$ (cfr paper 568)
+
+
+## High level orchestration
+Bring everything together in single script
+
+# First steps:
+* Data generation layer + check validity
+* Analysis & aggregation layer: mvp with classical ML
