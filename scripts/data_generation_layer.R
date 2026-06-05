@@ -3,8 +3,7 @@
 # research_question/meeting_notes/programming_planning.qmd.
 #
 # Mixed model:
-#   y_ij = beta0 + beta1*T_i + beta2*t_ij + beta3*T_i*t_ij
-#          + b0_i + b1_i*t_ij + epsilon_ij
+#   y_ij = beta0 + beta1*T_i + beta2*t_ij + beta3*T_i*t_ij + b0_i + b1_i*t_ij + epsilon_ij
 #
 # Canonical output format (long):
 #   sim_id, scenario_id, subject_id, treatment, time_value, y, observed
@@ -26,26 +25,28 @@
 #   summarize_generated_data()
 
 
-# ==============================================================================
-# 1. build_scenario_grid
-# ==============================================================================
+
+# Scenario Setup --------------------------------------------------------------------------------------------------
+
+## Build Scenario Grid ---------------------------------------------------------------------------------------------
 
 #' Build a formal simulation scenario grid.
 #'
 #' Creates a tidy data frame with one row per scenario by calling expand.grid
 #' over all supplied factor vectors. Each row fully specifies one condition.
 #'
-#' @param n_values            Integer vector. Candidate N (subjects/clusters).
-#' @param n_measures          Integer vector. Candidate numbers of equally spaced repeated measures.
-#' @param beta0_values        Numeric vector. Candidate intercept values.
-#' @param beta1_values        Numeric vector. Candidate treatment main effect values.
-#' @param beta2_values        Numeric vector. Candidate time main effect values.
-#' @param beta3_values        Numeric vector. Candidate time-by-treatment interaction values.
-#' @param d11_values          Numeric vector. Candidate values for var(b0_i).
-#' @param d22_values          Numeric vector. Candidate values for var(b1_i).
-#' @param d12_values          Numeric vector. Candidate values for cov(b0_i, b1_i).
-#' @param sigma2_values       Numeric vector. Candidate residual variance values.
-#' @param dropout_rate_values Numeric vector. Candidate per-visit dropout probabilities.
+#' @param n_values            Integer vector. N (subjects/clusters).
+#' @param n_measures          Integer vector. Numbers of equally spaced repeated measures.
+#' @param beta0_values        Numeric vector. Intercept values.
+#' @param beta1_values        Numeric vector. Treatment main effect values.
+#' @param beta2_values        Numeric vector. Time main effect values.
+#' @param beta3_values        Numeric vector. Time-by-treatment interaction values.
+#' @param d11_values          Numeric vector. Values for var(b0_i).
+#' @param d22_values          Numeric vector. Values for var(b1_i).
+#' @param d12_values          Numeric vector. Values for cov(b0_i, b1_i).
+#' @param sigma2_values       Numeric vector. Residual variance values.
+#' @param dropout_mechanism   String vector.  Dropout mechanism
+#' @param dropout_rate_values Numeric vector. Per-visit dropout probabilities.
 #'
 #' @return Data frame with one row per scenario and a unique scenario_id column.
 
@@ -60,6 +61,7 @@ build_scenario_grid <- function(
     d22_values = 1,
     d12_values = 0,
     sigma2_values = 1,
+    dropout_mechanism = NULL,
     dropout_rate_values = 0
 ) {
   grid <- expand.grid(
@@ -73,6 +75,7 @@ build_scenario_grid <- function(
     d22 = d22_values,
     d12 = d12_values,
     sigma2 = sigma2_values,
+    dropout_mechanism = dropout_mechanism,
     dropout_rate = dropout_rate_values,
     stringsAsFactors = FALSE
   )
@@ -81,9 +84,8 @@ build_scenario_grid <- function(
 }
 
 
-# ==============================================================================
-# 2. validate_scenario_grid
-# ==============================================================================
+## Validate Scenario Grid ------------------------------------------------------------------------------------------
+
 
 #' Validate the simulation scenario grid for internal consistency.
 #'
@@ -128,9 +130,10 @@ validate_scenario_grid <- function(scenario_grid) {
 }
 
 
-# ==============================================================================
-# 3. make_time_grid
-# ==============================================================================
+
+# Single dataset building blocks ----------------------------------------------------------------------------------
+
+## Make Time grid --------------------------------------------------------------------------------------------------
 
 #' Generate the planned repeated-measure time schedule.
 #'
@@ -153,9 +156,7 @@ make_time_grid <- function(n_measures, time_start = 0, time_spacing = 1) {
 }
 
 
-# ==============================================================================
-# 4. allocate_treatment
-# ==============================================================================
+## Allocate Treatment ----------------------------------------------------------------------------------------------
 
 #' Assign subjects to treatment arms with balanced allocation.
 #'
@@ -180,14 +181,11 @@ allocate_treatment <- function(n, n_arms = 2) {
 }
 
 
-# ==============================================================================
-# 5. generate_random_effects
-# ==============================================================================
+## Generate random effects -----------------------------------------------------------------------------------------
 
 #' Simulate subject-specific random effects from a bivariate normal distribution.
 #'
-#' Random effects (b0_i, b1_i) are drawn from N(0, D) using a Cholesky
-#' decomposition, consistent with the approach referenced in programming_planning.qmd.
+#' Random effects (b0_i, b1_i) are drawn from N(0, D) using a Cholesky decomposition
 #'
 #' @param n     Integer. Number of subjects.
 #' @param d_mat 2x2 positive semi-definite covariance matrix for (b0_i, b1_i).
@@ -195,7 +193,6 @@ allocate_treatment <- function(n, n_arms = 2) {
 #' @return Data frame with columns: subject_id, b0_i, b1_i.
 
 generate_random_effects <- function(n, d_mat) {
-  # TODO: extend for higher-dimensional random effects in future iterations
   chol_d <- chol(d_mat)                        # upper-triangular Cholesky factor of D
   z <- matrix(rnorm(n * 2L), nrow = n, ncol = 2L)
   re <- z %*% chol_d                           # n x 2 matrix: rows are (b0_i, b1_i)
@@ -203,9 +200,7 @@ generate_random_effects <- function(n, d_mat) {
 }
 
 
-# ==============================================================================
-# 6. expand_subject_time_panel
-# ==============================================================================
+## Expand subject time panel ---------------------------------------------------------------------------------------
 
 #' Create the complete balanced long-format design panel before outcomes.
 #'
@@ -233,9 +228,7 @@ expand_subject_time_panel <- function(subjects, time_grid, scenario_id, sim_id) 
 }
 
 
-# ==============================================================================
-# 7. compute_linear_predictor
-# ==============================================================================
+## Compute linear predictor ----------------------------------------------------------------------------------------
 
 #' Compute the linear predictor eta_ij from the mixed model mean structure.
 #'
@@ -263,10 +256,7 @@ compute_linear_predictor <- function(panel, beta0, beta1, beta2, beta3) {
   panel
 }
 
-
-# ==============================================================================
-# 8. generate_residual_errors
-# ==============================================================================
+## Generate residual errors ----------------------------------------------------------------------------------------
 
 #' Simulate independent Gaussian residual errors.
 #'
@@ -281,9 +271,7 @@ generate_residual_errors <- function(n_rows, sigma2) {
 }
 
 
-# ==============================================================================
-# 9. generate_outcomes
-# ==============================================================================
+## Generate outcomes -----------------------------------------------------------------------------------------------
 
 #' Combine linear predictor and residual errors into complete-data outcomes.
 #'
@@ -298,16 +286,12 @@ generate_outcomes <- function(panel, epsilon) {
   panel
 }
 
-
-# ==============================================================================
-# 10. generate_dropout_process
-# ==============================================================================
+## Generate dropout process ----------------------------------------------------------------------------------------
 
 #' Simulate monotone dropout and return a per-subject dropout indicator.
 #'
-#' Supports multiple dropout mechanisms via the 'mechanism' argument. For the
-#' MVP, only 'none' (no dropout) and 'fixed_rate' (constant per-visit
-#' probability) are implemented.
+#' Supports multiple dropout mechanisms via the 'mechanism' argument. Currently, only 'none' (no dropout) and
+#' 'fixed_rate' (constant per-visit probability) are implemented.
 #'
 #' @param panel        Long-format data frame with at least subject_id, time_index.
 #' @param dropout_rate Numeric. Per-visit probability of dropping out (used by
@@ -318,12 +302,17 @@ generate_outcomes <- function(panel, epsilon) {
 #'   (NA = observed throughout; otherwise the last observed time_index).
 
 generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none") {
-  # TODO: add 'time_dependent' and 'outcome_dependent' mechanisms
   subject_ids <- unique(panel$subject_id)
   n_measures <- length(unique(panel$time_index))
 
-  if (mechanism == "none" || dropout_rate == 0) {
+  if (mechanism == "none") {
     dropout_time <- rep(NA_integer_, length(subject_ids))
+  } else if (mechanism == "uniform"){
+    # Each number of visits has the same probability of occurring.
+    # Dropout is monotone: once dropped, always dropped.
+    dropout_time <- vapply(subject_ids, function(id) {
+      return(sample.int(n = n_measures, size = 1))
+      }, integer(1L))
   } else if (mechanism == "fixed_rate") {
     # At each visit after the first, subject drops out with probability dropout_rate.
     # Dropout is monotone: once dropped, always dropped.
@@ -341,14 +330,11 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
 }
 
 
-# ==============================================================================
-# 11. apply_missingness
-# ==============================================================================
+## Apply Missingness -----------------------------------------------------------------------------------------------
 
 #' Apply monotone dropout to convert complete-data outcomes into observed data.
 #'
-#' Sets y to NA for all time points after a subject's dropout time and adds
-#' an observed indicator column.
+#' Sets y to NA for all time points after a subject's dropout time and adds an observed indicator column.
 #'
 #' @param panel        Long-format data frame with y_complete and time_index.
 #' @param dropout_info Data frame with columns: subject_id, dropout_time
@@ -372,15 +358,16 @@ apply_missingness <- function(panel, dropout_info) {
 }
 
 
-# ==============================================================================
-# 12. simulate_one_dataset
-# ==============================================================================
+
+
+# Orchestration ---------------------------------------------------------------------------------------------------
+
+## Simulate one dataset --------------------------------------------------------------------------------------------
 
 #' Orchestrate all data-generation steps for one simulation replicate.
 #'
-#' Calls make_time_grid(), allocate_treatment(), generate_random_effects(),
-#' expand_subject_time_panel(), compute_linear_predictor(),
-#' generate_residual_errors(), generate_outcomes(),
+#' Calls make_time_grid(), allocate_treatment(), generate_random_effects(),expand_subject_time_panel(),
+#' compute_linear_predictor(), generate_residual_errors(), generate_outcomes(),
 #' generate_dropout_process(), and apply_missingness() in sequence.
 #'
 #' @param scenario_row A single-row data frame from the scenario grid.
@@ -389,9 +376,9 @@ apply_missingness <- function(panel, dropout_info) {
 #'
 #' @return Long-format data frame for one replicate (see apply_missingness()).
 
-simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL) {
+simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL, ...) {
   if (!is.null(seed)) set.seed(seed)
-
+  
   n <- scenario_row$n
   d_mat <- matrix(
     c(scenario_row$d11, scenario_row$d12,
@@ -399,7 +386,7 @@ simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL) {
     nrow = 2L
   )
 
-  time_grid <- make_time_grid(scenario_row$n_measures)
+  time_grid <- make_time_grid(scenario_row$n_measures, ...)
   subjects <- merge(
     allocate_treatment(n),
     generate_random_effects(n, d_mat),
@@ -416,16 +403,17 @@ simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL) {
   )
   epsilon <- generate_residual_errors(nrow(panel), scenario_row$sigma2)
   panel <- generate_outcomes(panel, epsilon)
-
-  dropout_mechanism <- if (scenario_row$dropout_rate > 0) "fixed_rate" else "none"
-  dropout_info <- generate_dropout_process(panel, scenario_row$dropout_rate, dropout_mechanism)
+  
+  dropout_mechanism <- scenario_row$dropout_mechanism
+  if(is.null(dropout_mechanism)){
+    dropout_mechanism <- if (scenario_row$dropout_rate > 0) "fixed_rate" else "none"
+  }
+  dropout_info <- generate_dropout_process(panel, scenario_row$dropout_rate, scenario_row$dropout_mechanism)
   apply_missingness(panel, dropout_info)
 }
 
 
-# ==============================================================================
-# 13. simulate_scenario
-# ==============================================================================
+## Simulate scenario -----------------------------------------------------------------------------------------------
 
 #' Generate all B simulated datasets for a single scenario.
 #'
@@ -449,9 +437,8 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
 }
 
 
-# ==============================================================================
-# 14. summarize_generated_data
-# ==============================================================================
+
+## Summarize generated data ----------------------------------------------------------------------------------------
 
 #' Produce quick diagnostic summaries to verify the data generator.
 #'
