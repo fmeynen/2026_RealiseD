@@ -2,7 +2,7 @@ source("scripts/data_generation_layer.R")
 
 # Check random effects --------------------------------------------------------------------------------------------
 
-# Check the cholesky decomp
+# Check the cholesky decomp for R.E. generation
 
 d_mat <- matrix(c(2, 0.4, 0.4, 1), nrow = 2)
 set.seed(260925)
@@ -10,10 +10,13 @@ re <- generate_random_effects(n = 1000000, d_mat = d_mat)
 sample_cov <- cov(re[, c("b0_i", "b1_i")])
 
 #compare sample cov with d_mat
-round(sample_cov, 3)
-round(d_mat, 3)
+round(sample_cov, 4)
+round(d_mat, 4)
+
+(sample_cov - d_mat)/d_mat
+
 # check correlations
-# diagonals should be ~1, off diag should be ~ d12 / sqrt(d11*d22)
+# diagonals should be 1, off diag should be  d12 / sqrt(d11*d22)
 round(cor(re[, c("b0_i", "b1_i")]) , 4)
 round(d_mat[1,2] / (sqrt(d_mat[1,1] * d_mat[2,2])), 4)
 
@@ -32,3 +35,5 @@ summarize_generated_data(d)
 
 res <- lme4::lmer(formula = y ~ treatment + time_value + treatment:time_value + (1+time_value|subject_id) , data = d)
 summary(res)
+
+View(d)
