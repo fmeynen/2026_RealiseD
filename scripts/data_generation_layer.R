@@ -358,8 +358,6 @@ apply_missingness <- function(panel, dropout_info) {
 }
 
 
-
-
 # Orchestration ---------------------------------------------------------------------------------------------------
 
 ## Simulate one dataset --------------------------------------------------------------------------------------------
@@ -410,6 +408,7 @@ simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL, ...) {
   }
   dropout_info <- generate_dropout_process(panel, scenario_row$dropout_rate, scenario_row$dropout_mechanism)
   apply_missingness(panel, dropout_info)
+  
 }
 
 
@@ -458,7 +457,8 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
 summarize_generated_data <- function(data) {
   # TODO: add comparison of empirical random-effect covariance against D
   # TODO: add comparison of empirical fixed-effect trends vs. theoretical expectations
-
+  
+  #Treatment Balance
   unique_subjects <- data[!duplicated(data[, c("scenario_id", "sim_id", "subject_id")]), ]
   treatment_balance <- aggregate(
     subject_id ~ scenario_id + sim_id + treatment,
@@ -467,19 +467,30 @@ summarize_generated_data <- function(data) {
   )
   names(treatment_balance)[names(treatment_balance) == "subject_id"] <- "n_subjects"
 
+  #observation rate by time
   obs_rate_by_time <- aggregate(
     observed ~ scenario_id + time_index,
     data = data,
     FUN = mean
   )
   names(obs_rate_by_time)[names(obs_rate_by_time) == "observed"] <- "obs_rate"
+  obs_rate_by_time$dropout <- c(NA,head(obs_rate_by_time$obs_rate, -1)) - obs_rate_by_time$obs_rate
 
+  #mean outcome by treatment * time
   mean_y_by_treatment_time <- aggregate(
     y ~ scenario_id + treatment + time_value,
     data = data,
     FUN = function(x) mean(x, na.rm = TRUE)
   )
 
+  # model params
+  res <- lme4::lmer(formula = y ~ treatment + time_value + treatment:time_value +
+                      (1+time_value|subject_id) , data = data)
+  fixef <- lme4::fixef(res)
+  VarCorr <- lme4::VarCorr(res)
+  
+  
+  # mean # of obs per subject
   obs_per_subject <- aggregate(
     observed ~ scenario_id + sim_id + subject_id,
     data = data,
@@ -495,6 +506,8 @@ summarize_generated_data <- function(data) {
   list(
     treatment_balance = treatment_balance,
     obs_rate_by_time = obs_rate_by_time,
+    fixed_effects = fixef,
+    random_effect_cov = as.data.frame(VarCorr),#print(VarCorr, comp = c("Variance")),
     mean_y_by_treatment_time = mean_y_by_treatment_time,
     n_obs_per_subject = n_obs_per_subject
   )
