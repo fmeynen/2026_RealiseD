@@ -33,7 +33,3 @@ validate_scenario_grid(s)
 d <- simulate_one_dataset(s, sim_id = 1, seed = 260925)
 summarize_generated_data(d)
 
-res <- lme4::lmer(formula = y ~ treatment + time_value + treatment:time_value + (1+time_value|subject_id) , data = d)
-summary(res)
-
-View(d)
