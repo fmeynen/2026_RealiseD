@@ -290,13 +290,12 @@ generate_outcomes <- function(panel, epsilon) {
 
 #' Simulate monotone dropout and return a per-subject dropout indicator.
 #'
-#' Supports multiple dropout mechanisms via the 'mechanism' argument. Currently, only 'none' (no dropout) and
-#' 'fixed_rate' (constant per-visit probability) are implemented.
+#' Supports multiple dropout mechanisms via the 'mechanism' argument.
 #'
 #' @param panel        Long-format data frame with at least subject_id, time_index.
 #' @param dropout_rate Numeric. Per-visit probability of dropping out (used by
 #'   mechanism = 'fixed_rate'). Ignored when mechanism = 'none'.
-#' @param mechanism    Character. Dropout mechanism: 'none' or 'fixed_rate'.
+#' @param mechanism    Character. Dropout mechanism: 'none', 'uniform', 'half-missing', or 'fixed_rate'.
 #'
 #' @return Data frame with columns subject_id and dropout_time
 #'   (NA = observed throughout; otherwise the last observed time_index).
@@ -307,12 +306,22 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
 
   if (mechanism == "none") {
     dropout_time <- rep(NA_integer_, length(subject_ids))
-  } else if (mechanism == "uniform"){
+  } else if (mechanism == "uniform") {
     # Each number of visits has the same probability of occurring.
     # Dropout is monotone: once dropped, always dropped.
     dropout_time <- vapply(subject_ids, function(id) {
       return(sample.int(n = n_measures, size = 1))
-      }, integer(1L))
+    }, integer(1L))
+  } else if (mechanism == "half-missing") {
+    # Randomly split subjects in two groups.
+    # One half remains fully observed, the other half has dropout time sampled uniformly from 1..(n_measures - 1).
+    n_subjects <- length(subject_ids)
+    n_complete <- n_subjects %/% 2L
+    complete_subjects <- sample(subject_ids, size = n_complete)
+    dropout_time <- vapply(subject_ids, function(id) {
+      if (id %in% complete_subjects) return(NA_integer_)
+      sample.int(n = n_measures - 1L, size = 1L)
+    }, integer(1L))
   } else if (mechanism == "fixed_rate") {
     # At each visit after the first, subject drops out with probability dropout_rate.
     # Dropout is monotone: once dropped, always dropped.
@@ -323,7 +332,7 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
       NA_integer_
     }, integer(1L))
   } else {
-    stop("Unknown dropout mechanism: '", mechanism, "'. Use 'none' or 'fixed_rate'.")
+    stop("Unknown dropout mechanism: '", mechanism, "'. Use 'none', 'uniform', 'half-missing', or 'fixed_rate'.")
   }
 
   data.frame(subject_id = subject_ids, dropout_time = dropout_time)
