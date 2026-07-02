@@ -1,7 +1,6 @@
 source("scripts/data_generation_layer.R")
 source("scripts/analysis_layer.R")
 
-
 # Example scenario setup -------------------------------------------------------------------------------------------
 
 scenarios <- build_scenario_grid(
@@ -44,7 +43,7 @@ generated_stacked <- do.call(
   lapply(seq_len(nrow(scenarios)), function(i) {
     simulate_scenario(
       scenarios[i, , drop = FALSE],
-      B = 2,
+      B = 1000,
       seed_base = 260925 + i * 1000
     )
   })
@@ -53,8 +52,18 @@ generated_stacked <- do.call(
 analysis_results <- analyze_generated_data_classical_ml(generated_stacked)
 
 analysis_results[, c(
-  "scenario_id", "sim_id", "status",
-  "estimate_beta0", "estimate_beta1",
-  "estimate_beta2", "estimate_beta3",
+  "scenario_id", "sim_id",
+  "status", "converged", "singular",
   "elapsed_seconds"
+)]
+
+analysis_results[, c(
+  "scenario_id", "sim_id",
+  "estimate_beta0", "estimate_beta1",
+  "estimate_beta2", "estimate_beta3"
+)]
+
+analysis_results[, c(
+  "scenario_id", "sim_id",
+  "var_b0", "cov_b0b1", "var_b1", "sigma2_hat"
 )]

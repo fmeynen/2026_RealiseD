@@ -455,8 +455,6 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
 #'   }
 
 summarize_generated_data <- function(data) {
-  # TODO: add comparison of empirical random-effect covariance against D
-  # TODO: add comparison of empirical fixed-effect trends vs. theoretical expectations
   
   #Treatment Balance
   unique_subjects <- data[!duplicated(data[, c("scenario_id", "sim_id", "subject_id")]), ]
