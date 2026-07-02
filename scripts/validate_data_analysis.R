@@ -14,7 +14,7 @@ scenarios <- build_scenario_grid(
   d22_values = 1,
   d12_values = 0.4,
   sigma2_values = 1,
-  dropout_mechanism = "uniform"
+  dropout_mechanism = "half-missing"
 )
 
 validate_scenario_grid(scenarios)
