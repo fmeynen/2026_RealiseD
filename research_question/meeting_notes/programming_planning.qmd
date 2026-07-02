@@ -4,6 +4,9 @@ format: docx
 editor: source
 ---
 
+# Practical Question:
+* Deadline? Mild (ergens in 2026 + 3 maanden leestijd = 30 september)
+
 # Programming Layers
 4 layers: data generation, analysis, results, aggregation, later expand to visualization/table generation? + high level orchestration
 
@@ -14,19 +17,21 @@ Simulate the data
 Formula: $y_{ij} = \beta_0 + \beta_1T_i  +\beta_2t_{ij} + \beta_3T_it_{i,j} + b_{0,i} + b_{1,i}t_{i,j} + \epsilon_{ij}$
 
 * Input:
-  *  Number of simulations $B$
+  *  Number of simulations $B$ **Q: how many?**
   *  Number of clusters/longitudinal sequences, suggested: $N$ = 10,000;100;50;20;10:
-  *  Formal simulation scenario grid (one row per scenario) with explicit scenario settings (e.g., $N$, fixed effects, $D$, error variance, dropout setting)
   *  Number of repeated measures: planned equally spaced measurements (e.g., T1-T12)
      * dropout = monotone missingness: once dropout occurs, all later equally spaced measurements are missing
-     * note: later uitbreiden 
-  *  Fixed effect sizes $\beta$
+     * note: later uitbreiden?
+     * **Q: Kan voor onbalans zorgen** Oplossing: 50/50 verdeling geen dropout en uniforme dropout
+  *  Fixed effect sizes $\beta$ **Q: Which beta's, is the $\beta_1$ necessary?** Gebruik de age related MACD dataset
   *  Random effects variance covariance matrix  $D$
      * **Q: unstructured?**
-     * Geert: cholesky decompositie
+     * Geert: via cholesky decompositie
   * Variance of error term
+    * **Q: Independent?**
+  * All put into formal simulation scenario grid (one row per scenario) with explicit scenario settings (e.g., $N$, fixed effects, $D$, error variance, dropout setting)
   
-**Q: balanced allocation to $T$?** (Geert: yes)
+
   
 *	Output:
   * List of $B$ Dataframes for each $N$ (or list of lists of df's)
@@ -41,10 +46,13 @@ Perform the 3 different analyses on the data from the data generation layer
     * Different optimizations of cholesky of $D$
   * Closed form + weighting (paper 568)
     * **Q: is the closed form basically a simple linear model on a cluster by cluster basis?**
+    * **Reference 12 of paper 568**
+    * Geert stuurt correcte paper door
   * Multiple imputation, then apply closed form (paper 471 and 546)
     * Paper 471 uses proc MI in SAS with jeffreys prior + burnin of 200, MI per cluster, 3 imp per dataset
-      * **Which software in R, options: Amelia or mice**
+      * **Which software in R, options: Amelia or mice: Anna: Jomo package**
       * Amelia most like proc MI behaviour, mice better for per cluster MI (can also better handle non-continuous data)
+      * Mice of Jomo allebei ok, kan gezien worden als verbetering
       
 
 * Input:
@@ -56,7 +64,7 @@ Perform the 3 different analyses on the data from the data generation layer
     * Convergence: proper convergence/convergence but non positive definite D/divergence (cfr paper 471)
     * Coefficient estimates & SE's
     * Computation time (cfr paper 568)
-        * **Q: Is this of intrest**?
+        * **Q: Is this of interest**?
 
 ## Results layer
 Store analysis outputs in a tidy results structure.
@@ -85,5 +93,5 @@ Take in the analyses from the analysis layer and create summary statistics
 Bring everything together in single script
 
 # First steps:
-* Data generation layer + check validity
-* Analysis & aggregation layer: mvp with classical ML
+* Data generation layer + check validity: Done
+* Analysis & aggregation layer: mvp with classical ML: Done (need to check validity)
