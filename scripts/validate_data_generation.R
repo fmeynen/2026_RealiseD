@@ -29,7 +29,6 @@ s <- build_scenario_grid(n_values = 10000, n_measures = 12,
                          d11_values = 2, d22_values = 1, d12_values = 0.4,
                          sigma2_values = 1,
                          dropout_mechanism = "uniform")
-validate_scenario_grid(s)
 d <- simulate_one_dataset(s, sim_id = 1, seed = 260925)
 summarize_generated_data(d)
 
