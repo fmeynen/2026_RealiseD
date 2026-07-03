@@ -18,7 +18,6 @@
 #     order_results_columns()
 #     build_canonical_meta()
 #     compute_results_hash()
-#     get_git_sha()
 #     build_results_metadata()
 #     save_results_artifact()
 #     print_results_summary()
@@ -50,20 +49,20 @@ results_schema_version <- "v1"
 #' @return data with a new convergence_status character column appended.
 
 add_convergence_status <- function(data) {
-  is_success <- !is.na(data$status) & data$status == "success"
+  is_success    <- !is.na(data$status) & data$status == "success"
   has_error_msg <- !is.na(data$error_message)
-  is_converged_true <- !is.na(data$converged) & as.logical(data$converged)
-  is_singular_true <- !is.na(data$singular) & as.logical(data$singular)
-  has_warning <- !is.na(data$warning_message)
+  is_converged  <- !is.na(data$converged) & as.logical(data$converged)
+  is_singular   <- !is.na(data$singular) & as.logical(data$singular)
+  has_warning   <- !is.na(data$warning_message)
 
   data$convergence_status <- ifelse(
     !is_success | has_error_msg,
     "error",
     ifelse(
-      !is_converged_true,
+      !is_converged,
       "not_converged",
       ifelse(
-        is_singular_true,
+        is_singular,
         "converged_singular",
         ifelse(
           has_warning,
@@ -214,10 +213,8 @@ order_results_columns <- function(data, scenario_cols) {
   group1 <- c("scenario_id", "sim_id", "method", "engine")
   group2 <- c("status", "converged", "singular", "convergence_status", "warning_message", "error_message")
   group3 <- c("n_rows", "n_observed", "n_subjects", "elapsed_seconds")
-  group4 <- c(
-    "estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
-    "se_beta0", "se_beta1", "se_beta2", "se_beta3"
-  )
+  group4 <- c("estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
+              "se_beta0", "se_beta1", "se_beta2", "se_beta3")
   group5 <- c("var_b0", "cov_b0b1", "var_b1", "sigma2_hat")
   group6 <- setdiff(scenario_cols, "scenario_id")
 
@@ -230,19 +227,6 @@ order_results_columns <- function(data, scenario_cols) {
 
 
 # Hashing and provenance -------------------------------------------------------------------------------------------
-
-## Git SHA ---------------------------------------------------------------------------------------------------------
-
-#' Attempt to retrieve the current git commit SHA.
-#'
-#' @return Character SHA string, or NA_character_ if not discoverable.
-
-get_git_sha <- function() {
-  tryCatch({
-    sha <- system("git rev-parse HEAD 2>/dev/null", intern = TRUE, ignore.stderr = TRUE)
-    if (length(sha) == 1L && nchar(trimws(sha)) > 0L) trimws(sha) else NA_character_
-  }, error = function(e) NA_character_)
-}
 
 
 ## Canonical metadata object ---------------------------------------------------------------------------------------
@@ -278,21 +262,21 @@ build_canonical_meta <- function(results_data, scenarios) {
 
 ## Hash computation ------------------------------------------------------------------------------------------------
 
-#' Compute a deterministic 12-character hex hash of the canonical metadata.
+#' Compute a deterministic 16-character hex hash of the canonical metadata.
 #'
 #' Serializes the canonical_meta list to a temporary file and returns the first
-#' 12 characters of the file's MD5 checksum via tools::md5sum().
+#' 16 characters of the file's MD5 checksum via tools::md5sum().
 #'
 #' @param canonical_meta List returned by build_canonical_meta().
 #'
-#' @return 12-character lowercase hex string.
+#' @return 16-character lowercase hex string.
 
 compute_results_hash <- function(canonical_meta) {
   tmp <- tempfile(fileext = ".rds")
   on.exit(unlink(tmp), add = TRUE)
   saveRDS(canonical_meta, file = tmp)
   hash_full <- unname(tools::md5sum(tmp))
-  substr(hash_full, 1L, 12L)
+  substr(hash_full, 1L, 16L)
 }
 
 
@@ -301,17 +285,15 @@ compute_results_hash <- function(canonical_meta) {
 #' Build the provenance metadata object to embed in the saved artifact.
 #'
 #' @param results_data Final tidy results data frame.
-#' @param hash         12-character hex hash string from compute_results_hash().
-#' @param git_sha      Optional git commit SHA string (NA if not available).
+#' @param hash         16-character hex hash string from compute_results_hash().
 #'
 #' @return Named list with hash, versions, row counts, status counts, and timestamp.
 
-build_results_metadata <- function(results_data, hash, git_sha = NA_character_) {
+build_results_metadata <- function(results_data, hash) {
   list(
     hash = hash,
     convergence_status_version = convergence_status_version,
     results_schema_version = results_schema_version,
-    git_sha = git_sha,
     created_at = Sys.time(),
     n_rows = nrow(results_data),
     n_error_rows = sum(results_data$convergence_status == "error", na.rm = TRUE),
@@ -341,13 +323,13 @@ build_results_metadata <- function(results_data, hash, git_sha = NA_character_) 
 #'
 #' @return Named list with immutable_path and latest_path.
 
-save_results_artifact <- function(artifact, hash, dir = "results", overwrite = FALSE) {
+save_results_artifact <- function(artifact, hash, dir = "results/data", overwrite = FALSE) {
   if (!dir.exists(dir)) {
     dir.create(dir, recursive = TRUE)
   }
 
   immutable_path <- file.path(dir, paste0("sim_results_", hash, ".rds"))
-  latest_path <- file.path(dir, "simulation_results_latest.rds")
+  latest_path <- file.path(dir, "sim_results_latest.rds")
 
   if (file.exists(immutable_path) && !overwrite) {
     message("Immutable artifact already exists (overwrite = FALSE): ", immutable_path)
@@ -482,8 +464,7 @@ build_and_save_results_layer <- function(
 
   canonical_meta <- build_canonical_meta(results_data, scenarios)
   hash <- compute_results_hash(canonical_meta)
-  git_sha <- get_git_sha()
-  metadata <- build_results_metadata(results_data, hash, git_sha)
+  metadata <- build_results_metadata(results_data, hash)
 
   artifact <- list(results = results_data, metadata = metadata)
   paths <- save_results_artifact(artifact, hash, dir = output_dir, overwrite = overwrite)
