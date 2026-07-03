@@ -23,12 +23,32 @@ round(d_mat[1,2] / (sqrt(d_mat[1,1] * d_mat[2,2])), 4)
 
 # Check data generation -------------------------------------------------------------------------------------------
 
-s <- build_scenario_grid(n_values = 10000, n_measures = 12,
-                         beta0_values = 0, beta1_values = 0,
-                         beta2_values = 1, beta3_values = 0.5,
-                         d11_values = 2, d22_values = 1, d12_values = 0.4,
-                         sigma2_values = 1,
-                         dropout_mechanism = "half-missing")
-d <- simulate_one_dataset(s, sim_id = 1, seed = 260925)
-summarize_generated_data(d)
+scenarios <- build_scenario_grid(
+  n_values = c(10000, 100, 50, 20, 10),
+  n_measures = 12,
+  beta0_values = 0,
+  beta1_values = 0,
+  beta2_values = 1,
+  beta3_values = 0.5,
+  d11_values = 2,
+  d22_values = 1,
+  d12_values = 0.4,
+  sigma2_values = 1,
+  dropout_mechanism = "half-missing",
+  seed_base = 260925
+)
+validate_scenario_grid(scenarios)
 
+# Single scenario
+scenario_one  <- scenarios[1, , drop = FALSE]
+generated_one <- simulate_one_dataset(scenario_one, sim_id = 1)
+summarize_generated_data(generated_one)
+
+# Whole scenario grid
+generated_stacked <- do.call(
+  rbind,
+  lapply(seq_len(nrow(scenarios)), function(i) {
+    simulate_scenario(scenarios[i, , drop = FALSE], B = 10)
+  })
+)
+summarize_generated_data(generated_stacked[generated_stacked$sim_id == 1, ])
