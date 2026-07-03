@@ -539,15 +539,12 @@ build_and_save_results <- function(
 
 #' Compute the exact results artifact hash from the save-time identity inputs.
 #'
-#' This is a thin wrapper around the existing canonicalization and hashing
-#' helpers. `analysis_file` is accepted for caller symmetry but is intentionally
-#' excluded from the hash because the current save-time logic does not use it.
+#' This is a thin wrapper around the existing canonicalization and hashing helpers. 
 #'
 #' @param scenarios      Scenario metadata data frame (one row per scenario_id).
 #' @param methods        Character vector of analysis methods.
 #' @param engines        Character vector of analysis engines.
 #' @param n_simulations  Integer-ish scalar. Number of simulation replicates.
-#' @param analysis_file  Optional analysis-file identifier. Accepted but ignored
 #'   to preserve exact save-time behavior.
 #'
 #' @return 16-character lowercase hex string.
@@ -556,8 +553,7 @@ compute_results_hash_from_spec <- function(
     scenarios,
     methods,
     engines,
-    n_simulations,
-    analysis_file = NULL
+    n_simulations
 ) {
   canonical_meta <- build_results_hash_identity(
     scenarios = scenarios,
@@ -581,7 +577,6 @@ compute_results_hash_from_spec <- function(
 #' @param methods        Character vector of analysis methods.
 #' @param engines        Character vector of analysis engines.
 #' @param n_simulations  Integer-ish scalar. Number of simulation replicates.
-#' @param analysis_file  Optional analysis-file identifier. Accepted but ignored
 #'   to preserve exact save-time behavior.
 #' @param output_dir     Directory containing saved results artifacts.
 #'
@@ -592,15 +587,13 @@ find_results_artifact_exact <- function(
     methods,
     engines,
     n_simulations,
-    analysis_file = NULL,
     output_dir = "results/data"
 ) {
   hash <- compute_results_hash_from_spec(
     scenarios = scenarios,
     methods = methods,
     engines = engines,
-    n_simulations = n_simulations,
-    analysis_file = analysis_file
+    n_simulations = n_simulations
   )
   paths <- build_results_artifact_paths(hash, dir = output_dir)
 
@@ -630,7 +623,6 @@ load_results_artifact_exact <- function(
     methods,
     engines,
     n_simulations,
-    analysis_file = NULL,
     output_dir = "results/data"
 ) {
   artifact_info <- find_results_artifact_exact(
@@ -638,7 +630,6 @@ load_results_artifact_exact <- function(
     methods = methods,
     engines = engines,
     n_simulations = n_simulations,
-    analysis_file = analysis_file,
     output_dir = output_dir
   )
 
