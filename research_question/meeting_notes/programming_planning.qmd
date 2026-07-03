@@ -83,7 +83,7 @@ Take in the analyses from the results layer and create summary statistics
   * Tidy results rows from results layer
   * Data generation parameters (spec: fixed effect sizes)
 * Output:
-  * mean convergence per $N$, per type of analysis
+  * mean convergence per scenario, per type of analysis
   * relative bias and relative efficiency (cfr paper 568), per $N$, per type of analysis
   * mean/median computation time per $N$, per type of analysis
   * 95% confidence interval coverage of $\beta_3$ (cfr paper 568)
