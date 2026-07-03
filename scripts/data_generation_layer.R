@@ -23,6 +23,14 @@
 #       generate_dropout_process()
 #       apply_missingness()
 #   summarize_generated_data()
+#   build_and_save_generated_data_artifact()
+#   find_generated_data_artifact_exact()
+#   load_generated_data_artifact_exact()
+
+
+# Constants --------------------------------------------------------------------------------------------------------
+
+data_generation_schema_version <- "v1"
 
 
 
@@ -536,4 +544,216 @@ summarize_generated_data <- function(data) {
     mean_y_by_treatment_time = mean_y_by_treatment_time,
     n_obs_per_subject = n_obs_per_subject
   )
+}
+
+
+# Artifact persistence ---------------------------------------------------------------------------------------------
+
+ensure_results_artifact_helpers <- function() {
+  required_helpers <- c(
+    "canonicalize_results_scenarios_for_hash",
+    "compute_results_hash"
+  )
+  missing_helpers <- required_helpers[!vapply(required_helpers, exists, logical(1L), mode = "function")]
+
+  if (length(missing_helpers) > 0L) {
+    stop(
+      paste0(
+        "Results artifact helpers are not available. ",
+        "Source 'scripts/results_layer.R' before using ",
+        "data-generation artifact persistence helpers."
+      )
+    )
+  }
+
+  invisible(TRUE)
+}
+
+
+infer_data_generation_n_simulations <- function(data) {
+  required_cols <- c("scenario_id", "sim_id")
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0L) {
+    stop("data is missing required columns for artifact identity: ", paste(missing_cols, collapse = ", "))
+  }
+
+  sim_counts <- tapply(data$sim_id, data$scenario_id, function(x) length(unique(x)))
+  unique_counts <- unique(as.integer(sim_counts))
+
+  if (length(unique_counts) != 1L) {
+    stop("data must contain the same number of simulation replicates for every scenario_id.")
+  }
+
+  unique_counts[1L]
+}
+
+
+build_data_generation_canonical_meta <- function(scenarios, n_simulations) {
+  ensure_results_artifact_helpers()
+
+  list(
+    scenario_grid = canonicalize_results_scenarios_for_hash(scenarios),
+    n_simulations = n_simulations,
+    data_generation_schema_version = data_generation_schema_version
+  )
+}
+
+
+compute_data_generation_hash_from_spec <- function(scenarios, n_simulations) {
+  canonical_meta <- build_data_generation_canonical_meta(
+    scenarios = scenarios,
+    n_simulations = n_simulations
+  )
+  compute_results_hash(canonical_meta)
+}
+
+
+build_data_generation_metadata <- function(data, scenarios, hash, n_simulations) {
+  list(
+    hash                           = hash,
+    data_generation_schema_version = data_generation_schema_version,
+    created_at                     = Sys.time(),
+    n_rows                         = nrow(data),
+    n_scenarios                    = nrow(scenarios),
+    n_simulations                  = as.integer(n_simulations),
+    scenario_ids                   = as.integer(sort(unique(scenarios$scenario_id)))
+  )
+}
+
+
+build_data_generation_artifact_paths <- function(hash, dir = "data/processed") {
+  list(
+    immutable_path = file.path(dir, paste0("generated_data_", hash, ".rds")),
+    latest_path = file.path(dir, "generated_data_latest.rds")
+  )
+}
+
+
+save_generated_data_artifact <- function(artifact, hash, dir = "data/processed", overwrite = FALSE) {
+  if (!dir.exists(dir)) {
+    dir.create(dir, recursive = TRUE)
+  }
+
+  paths <- build_data_generation_artifact_paths(hash, dir = dir)
+  immutable_path <- paths$immutable_path
+  latest_path <- paths$latest_path
+
+  if (file.exists(immutable_path) && !overwrite) {
+    message("Immutable artifact already exists (overwrite = FALSE): ", immutable_path)
+    message("Updating stable latest pointer only.")
+  } else {
+    saveRDS(artifact, file = immutable_path)
+    message("Saved immutable artifact: ", immutable_path)
+  }
+
+  saveRDS(artifact, file = latest_path)
+  message("Updated stable pointer:    ", latest_path)
+
+  paths
+}
+
+
+#' Build and save a generated-data artifact using exact hash-based persistence.
+#'
+#' This thin wrapper reuses the existing results-layer hashing primitive and the
+#' same dual-file immutable/latest save strategy. Retrieval of these artifacts is
+#' exact-only and must use the same scenario grid and `n_simulations`.
+#'
+#' @param data          Stacked generated data.
+#' @param scenarios     Scenario metadata data frame (one row per scenario_id).
+#' @param n_simulations Optional integer-ish scalar. If NULL, infer from `data`.
+#' @param output_dir    Directory for saved data-generation artifacts.
+#' @param overwrite     Logical. Overwrite existing immutable artifact when TRUE.
+#'
+#' @return Invisibly: named list with data, scenarios, metadata, and paths.
+
+build_and_save_generated_data_artifact <- function(
+    data,
+    scenarios,
+    n_simulations = NULL,
+    output_dir = "data/processed",
+    overwrite = FALSE
+) {
+  if (is.null(n_simulations)) {
+    n_simulations <- infer_data_generation_n_simulations(data)
+  }
+  n_simulations <- as.integer(n_simulations)
+  if ("seed_base" %in% names(scenarios)) {
+    scenarios$seed_base <- as.integer(scenarios$seed_base)
+  }
+
+  canonical_meta <- build_data_generation_canonical_meta(
+    scenarios = scenarios,
+    n_simulations = n_simulations
+  )
+  hash <- compute_results_hash(canonical_meta)
+  metadata <- build_data_generation_metadata(
+    data = data,
+    scenarios = scenarios,
+    hash = hash,
+    n_simulations = n_simulations
+  )
+
+  artifact <- list(data = data, scenarios = scenarios, metadata = metadata)
+  paths <- save_generated_data_artifact(artifact, hash, dir = output_dir, overwrite = overwrite)
+
+  invisible(list(data = data, scenarios = scenarios, metadata = metadata, paths = paths))
+}
+
+
+#' Find an exact saved generated-data artifact by its identity inputs.
+#'
+#' Reuses the same canonicalization and hashing path as save-time logic. Missing
+#' artifacts raise a deterministic exact-not-found error with the expected hash
+#' and immutable path.
+#'
+#' @param scenarios     Scenario metadata data frame (one row per scenario_id).
+#' @param n_simulations Integer-ish scalar. Number of simulation replicates.
+#' @param output_dir    Directory containing saved data-generation artifacts.
+#'
+#' @return Named list with hash, immutable_path, and latest_path.
+
+find_generated_data_artifact_exact <- function(
+    scenarios,
+    n_simulations,
+    output_dir = "data/processed"
+) {
+  hash <- compute_data_generation_hash_from_spec(
+    scenarios = scenarios,
+    n_simulations = n_simulations
+  )
+  paths <- build_data_generation_artifact_paths(hash, dir = output_dir)
+
+  if (!file.exists(paths$immutable_path)) {
+    stop(
+      "Exact generated-data artifact not found. Hash: ", hash,
+      ". Expected path: ", paths$immutable_path
+    )
+  }
+
+  c(list(hash = hash), paths)
+}
+
+
+#' Load an exact saved generated-data artifact by its identity inputs.
+#'
+#' Thin exact-only wrapper around `find_generated_data_artifact_exact()` and
+#' `readRDS()`.
+#'
+#' @inheritParams find_generated_data_artifact_exact
+#'
+#' @return The saved generated-data artifact list.
+
+load_generated_data_artifact_exact <- function(
+    scenarios,
+    n_simulations,
+    output_dir = "data/processed"
+) {
+  artifact_info <- find_generated_data_artifact_exact(
+    scenarios = scenarios,
+    n_simulations = n_simulations,
+    output_dir = output_dir
+  )
+
+  readRDS(artifact_info$immutable_path)
 }
