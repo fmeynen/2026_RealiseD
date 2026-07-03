@@ -467,7 +467,7 @@ build_and_save_results <- function(
   metadata       <- build_results_metadata(results_data, hash)
 
   artifact <- list(results = results_data, scenarios = scenarios, metadata = metadata)
-  paths <- save_results_artifact(artifact, hash, dir = output_dir, overwrite = overwrite)
+  paths    <- save_results_artifact(artifact, hash, dir = output_dir, overwrite = overwrite)
 
   print_results_summary(metadata, paths)
 
