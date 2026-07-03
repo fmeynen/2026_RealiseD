@@ -262,13 +262,14 @@ build_canonical_meta <- function(results_data, scenarios) {
   if ("seed_base" %in% names(scenario_grid_sorted)) {
     scenario_grid_sorted$seed_base <- as.integer(scenario_grid_sorted$seed_base)
   }
-
+  
   list(
-    scenario_grid = scenario_grid_sorted,
-    methods = sort(unique(results_data$method)),
-    engines = sort(unique(results_data$engine)),
+    scenario_grid              = scenario_grid_sorted,
+    methods                    = sort(unique(results_data$method)),
+    engines                    = sort(unique(results_data$engine)),
+    n_simulations              = nrow(results_data) / nrow(scenarios),
     convergence_status_version = convergence_status_version,
-    results_schema_version = results_schema_version
+    results_schema_version     = results_schema_version
   )
 }
 
