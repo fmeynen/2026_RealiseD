@@ -11,7 +11,7 @@ out <- readRDS("results/data/sim_results_latest.rds")
 
 # Run aggregation --------------------------------------------------------------------------------------------------
 
-agg <- aggregate_results_layer(out)
+agg <- aggregate_results(out)
 
 cat("=== Aggregation layer validation ===\n")
 cat("Schema version:", agg$meta$aggregation_schema_version, "\n")
@@ -130,7 +130,7 @@ cat("Check passed: relative bias is NA when true beta is 0.\n")
 
 cat("\n=== Key metrics per group ===\n")
 display_cols <- c(
-  agg$meta$group_cols,
+  agg$meta$group_cols, "n",
   "n_total", "mean_convergence",
   "mean_abs_bias_beta3", "mean_rel_bias_beta3",
   "time_mean_seconds", "coverage95_beta3"
