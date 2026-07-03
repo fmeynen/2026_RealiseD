@@ -21,6 +21,8 @@
 #     build_results_metadata()
 #     save_results_artifact()
 #     print_results_summary()
+#   find_results_artifact_exact()
+#   load_results_artifact_exact()
 
 
 # Constants --------------------------------------------------------------------------------------------------------
@@ -239,6 +241,34 @@ order_results_columns <- function(data, scenario_cols) {
 
 ## Canonical metadata object ---------------------------------------------------------------------------------------
 
+canonicalize_results_scenarios_for_hash <- function(scenarios) {
+  scenario_grid_sorted <- scenarios[
+    order(scenarios$scenario_id),
+    sort(names(scenarios)),
+    drop = FALSE
+  ]
+  rownames(scenario_grid_sorted) <- NULL
+
+  # Coerce seed_base to integer so type differences do not affect the hash.
+  if ("seed_base" %in% names(scenario_grid_sorted)) {
+    scenario_grid_sorted$seed_base <- as.integer(scenario_grid_sorted$seed_base)
+  }
+
+  scenario_grid_sorted
+}
+
+
+build_results_hash_identity <- function(scenarios, methods, engines, n_simulations) {
+  list(
+    scenario_grid              = canonicalize_results_scenarios_for_hash(scenarios),
+    methods                    = sort(unique(methods)),
+    engines                    = sort(unique(engines)),
+    n_simulations              = n_simulations,
+    convergence_status_version = convergence_status_version,
+    results_schema_version     = results_schema_version
+  )
+}
+
 #' Build a canonical metadata object for deterministic hashing.
 #'
 #' Excludes runtime timestamps so that identical inputs always produce the same
@@ -251,25 +281,11 @@ order_results_columns <- function(data, scenario_cols) {
 #' @return Named list suitable for hashing with compute_results_hash().
 
 build_canonical_meta <- function(results_data, scenarios) {
-  scenario_grid_sorted <- scenarios[
-    order(scenarios$scenario_id),
-    sort(names(scenarios)),
-    drop = FALSE
-  ]
-  rownames(scenario_grid_sorted) <- NULL
-
-  # Coerce seed_base to integer so type differences do not affect the hash.
-  if ("seed_base" %in% names(scenario_grid_sorted)) {
-    scenario_grid_sorted$seed_base <- as.integer(scenario_grid_sorted$seed_base)
-  }
-  
-  list(
-    scenario_grid              = scenario_grid_sorted,
-    methods                    = sort(unique(results_data$method)),
-    engines                    = sort(unique(results_data$engine)),
-    n_simulations              = nrow(results_data) / nrow(scenarios),
-    convergence_status_version = convergence_status_version,
-    results_schema_version     = results_schema_version
+  build_results_hash_identity(
+    scenarios = scenarios,
+    methods = results_data$method,
+    engines = results_data$engine,
+    n_simulations = nrow(results_data) / nrow(scenarios)
   )
 }
 
@@ -324,6 +340,13 @@ build_results_metadata <- function(results_data, hash) {
 
 ## Save results artifacts ------------------------------------------------------------------------------------------
 
+build_results_artifact_paths <- function(hash, dir = "results/data") {
+  list(
+    immutable_path = file.path(dir, paste0("sim_results_", hash, ".rds")),
+    latest_path = file.path(dir, "sim_results_latest.rds")
+  )
+}
+
 #' Save the results artifact using the dual-file strategy.
 #'
 #' Writes an immutable hash-named .rds file and updates a stable latest-pointer
@@ -342,8 +365,9 @@ save_results_artifact <- function(artifact, hash, dir = "results/data", overwrit
     dir.create(dir, recursive = TRUE)
   }
 
-  immutable_path <- file.path(dir, paste0("sim_results_", hash, ".rds"))
-  latest_path <- file.path(dir, "sim_results_latest.rds")
+  paths <- build_results_artifact_paths(hash, dir = dir)
+  immutable_path <- paths$immutable_path
+  latest_path <- paths$latest_path
 
   if (file.exists(immutable_path) && !overwrite) {
     message("Immutable artifact already exists (overwrite = FALSE): ", immutable_path)
@@ -356,7 +380,7 @@ save_results_artifact <- function(artifact, hash, dir = "results/data", overwrit
   saveRDS(artifact, file = latest_path)
   message("Updated stable pointer:    ", latest_path)
 
-  list(immutable_path = immutable_path, latest_path = latest_path)
+  paths
 }
 
 
@@ -506,4 +530,117 @@ build_and_save_results <- function(
   print_results_summary(metadata, paths)
 
   invisible(list(results = results_data, metadata = metadata, paths = paths))
+}
+
+
+# Exact artifact retrieval -----------------------------------------------------------------------------------------
+
+## Compute the exact results hash from save-time identity inputs ---------------------------------------------------
+
+#' Compute the exact results artifact hash from the save-time identity inputs.
+#'
+#' This is a thin wrapper around the existing canonicalization and hashing
+#' helpers. `analysis_file` is accepted for caller symmetry but is intentionally
+#' excluded from the hash because the current save-time logic does not use it.
+#'
+#' @param scenarios      Scenario metadata data frame (one row per scenario_id).
+#' @param methods        Character vector of analysis methods.
+#' @param engines        Character vector of analysis engines.
+#' @param n_simulations  Integer-ish scalar. Number of simulation replicates.
+#' @param analysis_file  Optional analysis-file identifier. Accepted but ignored
+#'   to preserve exact save-time behavior.
+#'
+#' @return 16-character lowercase hex string.
+
+compute_results_hash_from_spec <- function(
+    scenarios,
+    methods,
+    engines,
+    n_simulations,
+    analysis_file = NULL
+) {
+  canonical_meta <- build_results_hash_identity(
+    scenarios = scenarios,
+    methods = methods,
+    engines = engines,
+    n_simulations = n_simulations
+  )
+  compute_results_hash(canonical_meta)
+}
+
+
+## Find exact results artifact -------------------------------------------------------------------------------------
+
+#' Find an exact saved results artifact by its identity inputs.
+#'
+#' Reuses the same canonicalization, hashing, and path-construction helpers as
+#' `build_and_save_results()`. Retrieval is exact-only: on a miss, this function
+#' raises a deterministic error containing the expected hash and path.
+#'
+#' @param scenarios      Scenario metadata data frame (one row per scenario_id).
+#' @param methods        Character vector of analysis methods.
+#' @param engines        Character vector of analysis engines.
+#' @param n_simulations  Integer-ish scalar. Number of simulation replicates.
+#' @param analysis_file  Optional analysis-file identifier. Accepted but ignored
+#'   to preserve exact save-time behavior.
+#' @param output_dir     Directory containing saved results artifacts.
+#'
+#' @return Named list with hash, immutable_path, and latest_path.
+
+find_results_artifact_exact <- function(
+    scenarios,
+    methods,
+    engines,
+    n_simulations,
+    analysis_file = NULL,
+    output_dir = "results/data"
+) {
+  hash <- compute_results_hash_from_spec(
+    scenarios = scenarios,
+    methods = methods,
+    engines = engines,
+    n_simulations = n_simulations,
+    analysis_file = analysis_file
+  )
+  paths <- build_results_artifact_paths(hash, dir = output_dir)
+
+  if (!file.exists(paths$immutable_path)) {
+    stop(
+      "Exact results artifact not found. Hash: ", hash,
+      ". Expected path: ", paths$immutable_path
+    )
+  }
+
+  c(list(hash = hash), paths)
+}
+
+
+## Load exact results artifact -------------------------------------------------------------------------------------
+
+#' Load an exact saved results artifact by its identity inputs.
+#'
+#' Thin exact-only wrapper around `find_results_artifact_exact()` and `readRDS()`.
+#'
+#' @inheritParams find_results_artifact_exact
+#'
+#' @return The saved results artifact list.
+
+load_results_artifact_exact <- function(
+    scenarios,
+    methods,
+    engines,
+    n_simulations,
+    analysis_file = NULL,
+    output_dir = "results/data"
+) {
+  artifact_info <- find_results_artifact_exact(
+    scenarios = scenarios,
+    methods = methods,
+    engines = engines,
+    n_simulations = n_simulations,
+    analysis_file = analysis_file,
+    output_dir = output_dir
+  )
+
+  readRDS(artifact_info$immutable_path)
 }
