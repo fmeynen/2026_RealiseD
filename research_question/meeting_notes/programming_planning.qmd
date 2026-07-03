@@ -77,7 +77,7 @@ Store analysis outputs in a tidy results structure.
     * includes scenario\_id, sim\_id, method, convergence/status, coefficient estimates & SE's, computation time
 
 ## Aggregation layer
-Take in the analyses from the analysis layer and create summary statistics
+Take in the analyses from the results layer and create summary statistics
 
 * Input:
   * Tidy results rows from results layer
