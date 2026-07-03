@@ -47,8 +47,11 @@
 #' @param sigma2_values       Numeric vector. Residual variance values.
 #' @param dropout_mechanism   String vector.  Dropout mechanism
 #' @param dropout_rate_values Numeric vector. Per-visit dropout probabilities.
+#' @param seed_base           Integer. Global base seed. Each scenario row is assigned a
+#'   deterministic seed as seed_base + scenario_id * 1000L, ensuring non-overlapping
+#'   per-replicate seed ranges across scenarios (with B <= 1000).
 #'
-#' @return Data frame with one row per scenario and a unique scenario_id column.
+#' @return Data frame with one row per scenario and unique scenario_id and seed_base columns.
 
 build_scenario_grid <- function(
     n_values,
@@ -62,7 +65,8 @@ build_scenario_grid <- function(
     d12_values = 0,
     sigma2_values = 1,
     dropout_mechanism = NULL,
-    dropout_rate_values = 0
+    dropout_rate_values = 0,
+    seed_base
 ) {
   grid <- expand.grid(
     n = n_values,
@@ -80,7 +84,8 @@ build_scenario_grid <- function(
     stringsAsFactors = FALSE
   )
   grid$scenario_id <- seq_len(nrow(grid))
-  grid[, c("scenario_id", setdiff(names(grid), "scenario_id"))]
+  grid$seed_base <- as.integer(seed_base + grid$scenario_id * 1000L)
+  grid[, c("scenario_id", "seed_base", setdiff(names(grid), c("scenario_id", "seed_base")))]
 }
 
 
@@ -98,7 +103,7 @@ build_scenario_grid <- function(
 
 validate_scenario_grid <- function(scenario_grid) {
   required_cols <- c(
-    "scenario_id", "n", "n_measures",
+    "scenario_id", "seed_base", "n", "n_measures",
     "beta0", "beta1", "beta2", "beta3",
     "d11", "d22", "d12",
     "sigma2", "dropout_rate"
@@ -106,6 +111,10 @@ validate_scenario_grid <- function(scenario_grid) {
   missing_cols <- setdiff(required_cols, names(scenario_grid))
   if (length(missing_cols) > 0) {
     stop("scenario_grid is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+  if (anyNA(scenario_grid$seed_base)) stop("seed_base must not contain missing values.")
+  if (!is.numeric(scenario_grid$seed_base) && !is.integer(scenario_grid$seed_base)) {
+    stop("seed_base must be numeric or integer.")
   }
   if (any(scenario_grid$n <= 0)) stop("All n values must be positive integers.")
   if (any(scenario_grid$n_measures < 2)) stop("n_measures must be >= 2 for all scenarios.")
@@ -430,13 +439,22 @@ simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL, ...) {
 #'
 #' @param scenario_row A single-row data frame from the scenario grid.
 #' @param B            Integer. Number of simulation replicates.
-#' @param seed_base    Integer or NULL. Base seed; replicate k uses seed_base + k.
-#'   Set to NULL for unseeded (non-reproducible) runs.
+#' @param seed_base    Integer or NULL. Overrides scenario_row$seed_base when supplied.
+#'   Replicate k uses seed_base + k. If NULL (default), seed_base is read from
+#'   scenario_row$seed_base when present. Set to NULL and omit from scenario_row
+#'   for unseeded (non-reproducible) runs.
 #'
 #' @return A stacked long-format data frame with B replicates identified by sim_id.
 
 simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
-  seeds <- if (!is.null(seed_base)) as.list(seed_base + seq_len(B)) else rep(list(NULL), B)
+  effective_seed <- if (!is.null(seed_base)) {
+    seed_base
+  } else if (!is.null(scenario_row$seed_base) && !is.na(scenario_row$seed_base)) {
+    scenario_row$seed_base
+  } else {
+    NULL
+  }
+  seeds <- if (!is.null(effective_seed)) as.list(effective_seed + seq_len(B)) else rep(list(NULL), B)
 
   replicates <- lapply(seq_len(B), function(b) {
     simulate_one_dataset(scenario_row, sim_id = b, seed = seeds[[b]])

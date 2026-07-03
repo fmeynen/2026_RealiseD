@@ -14,7 +14,8 @@ scenarios <- build_scenario_grid(
   d22_values = 1,
   d12_values = 0.4,
   sigma2_values = 1,
-  dropout_mechanism = "half-missing"
+  dropout_mechanism = "half-missing",
+  seed_base = 260925
 )
 
 validate_scenario_grid(scenarios)
@@ -41,15 +42,11 @@ one_result
 generated_stacked <- do.call(
   rbind,
   lapply(seq_len(nrow(scenarios)), function(i) {
-    simulate_scenario(
-      scenarios[i, , drop = FALSE],
-      B = 1000,
-      seed_base = 260925 + i * 1000
-    )
+    simulate_scenario(scenarios[i, , drop = FALSE], B = 1000)
   })
 )
 
-analysis_results <- analyze_generated_data_classical_ml(generated_stacked)
+analysis_results <- analyze_generated_data_classical_ml(generated_stacked, scenarios = scenarios)
 
 analysis_results[, c(
   "scenario_id", "sim_id",

@@ -480,12 +480,15 @@ analyze_one_dataset_classical_ml <- function(data) {
 #' Splits stacked canonical generated data by scenario and simulation replicate,
 #' analyzes each dataset separately, and row-binds the standardized results.
 #'
-#' @param data Stacked long-format data across one or more scenarios and sim_id
+#' @param data      Stacked long-format data across one or more scenarios and sim_id
 #'   values, as returned by the data-generation layer.
+#' @param scenarios Optional data frame of scenario metadata (as returned by
+#'   build_scenario_grid()). When supplied, the function warns if any scenario_id
+#'   in the results is absent from scenarios$scenario_id.
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_classical_ml <- function(data) {
+analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
   required_split_cols <- c("scenario_id", "sim_id")
   missing_cols <- setdiff(required_split_cols, names(data))
   if (length(missing_cols) > 0L) {
@@ -499,5 +502,17 @@ analyze_generated_data_classical_ml <- function(data) {
   split_data <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
   results <- lapply(split_data, analyze_one_dataset_classical_ml)
   combined_results <- do.call(rbind, results)
-  combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
+  combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
+
+  if (!is.null(scenarios)) {
+    unrecognized <- setdiff(combined_results$scenario_id, scenarios$scenario_id)
+    if (length(unrecognized) > 0L) {
+      warning(
+        "analysis_results contains scenario_id values not found in scenarios: ",
+        paste(unrecognized, collapse = ", ")
+      )
+    }
+  }
+
+  combined_results
 }

@@ -97,7 +97,7 @@ validate_results_layer_inputs <- function(analysis_results, scenarios) {
     "status", "converged", "singular",
     "warning_message", "error_message"
   )
-  required_scenario_cols <- "scenario_id"
+  required_scenario_cols <- c("scenario_id", "seed_base")
 
   missing_analysis <- setdiff(required_analysis_cols, names(analysis_results))
   if (length(missing_analysis) > 0L) {
@@ -123,6 +123,14 @@ validate_results_layer_inputs <- function(analysis_results, scenarios) {
 
   if (anyDuplicated(scenarios$scenario_id)) {
     stop("scenarios$scenario_id is not unique.")
+  }
+
+  if (anyNA(scenarios$seed_base)) {
+    stop("scenarios$seed_base contains missing values.")
+  }
+
+  if (!is.numeric(scenarios$seed_base) && !is.integer(scenarios$seed_base)) {
+    stop("scenarios$seed_base must be numeric or integer.")
   }
 
   invisible(TRUE)
@@ -200,7 +208,7 @@ join_scenario_metadata <- function(analysis_results, scenarios) {
 #'   3. Data-size / runtime:     n_rows, n_observed, n_subjects, elapsed_seconds
 #'   4. Fixed effects:           estimate_beta0..3, se_beta0..3
 #'   5. Random / error variance: var_b0, cov_b0b1, var_b1, sigma2_hat
-#'   6. Scenario metadata:       remaining scenario columns (excluding scenario_id)
+#'   6. Scenario metadata:       seed_base + remaining scenario columns (excluding scenario_id)
 #'
 #' Columns not in any group are appended at the end.
 #'
@@ -250,12 +258,17 @@ build_canonical_meta <- function(results_data, scenarios) {
   ]
   rownames(scenario_grid_sorted) <- NULL
 
+  # Coerce seed_base to integer so type differences do not affect the hash.
+  if ("seed_base" %in% names(scenario_grid_sorted)) {
+    scenario_grid_sorted$seed_base <- as.integer(scenario_grid_sorted$seed_base)
+  }
+
   list(
-    scenario_grid              = scenario_grid_sorted,
-    methods                    = sort(unique(results_data$method)),
-    engines                    = sort(unique(results_data$engine)),
+    scenario_grid = scenario_grid_sorted,
+    methods = sort(unique(results_data$method)),
+    engines = sort(unique(results_data$engine)),
     convergence_status_version = convergence_status_version,
-    results_schema_version     = results_schema_version
+    results_schema_version = results_schema_version
   )
 }
 
@@ -419,21 +432,33 @@ print_results_summary <- function(metadata, paths) {
 #' #   n_values = c(100, 50), n_measures = 12,
 #' #   beta0_values = 0, beta1_values = 0, beta2_values = 1, beta3_values = 0.5,
 #' #   d11_values = 2, d22_values = 1, d12_values = 0.4, sigma2_values = 1,
-#' #   dropout_mechanism = "half-missing"
+#' #   dropout_mechanism = "half-missing",
+#' #   seed_base = 260925
 #' # )
+#' # # scenarios$seed_base == c(261925L, 262925L) -- per-scenario seeds stored in grid
 #' #
 #' # generated <- do.call(rbind, lapply(seq_len(nrow(scenarios)), function(i) {
-#' #   simulate_scenario(scenarios[i, , drop = FALSE], B = 10, seed_base = 42 + i * 100)
+#' #   simulate_scenario(scenarios[i, , drop = FALSE], B = 10)
 #' # }))
-#' # analysis_results <- analyze_generated_data_classical_ml(generated)
+#' # analysis_results <- analyze_generated_data_classical_ml(generated, scenarios = scenarios)
 #' #
 #' # out <- build_and_save_results(analysis_results, scenarios)
 #' #
 #' # -- Inspect results --
-#' # str(out$results)         # tidy data frame, one row per sim x method
-#' # out$metadata$hash        # 16-character deterministic hash
-#' # out$paths                # paths to both saved files
+#' # str(out$results)              # tidy data frame, one row per sim x method
+#' # out$metadata$hash             # 16-character deterministic hash
+#' # out$results$seed_base         # per-row seed from joined scenario metadata
+#' # out$paths                     # paths to both saved files
 #' # table(out$results$convergence_status)
+#' #
+#' # -- Changing seed_base changes the hash --
+#' # scenarios2 <- build_scenario_grid(
+#' #   n_values = c(100, 50), n_measures = 12,
+#' #   beta0_values = 0, beta1_values = 0, beta2_values = 1, beta3_values = 0.5,
+#' #   d11_values = 2, d22_values = 1, d12_values = 0.4, sigma2_values = 1,
+#' #   dropout_mechanism = "half-missing",
+#' #   seed_base = 999999  # different seed_base => different hash => new immutable file
+#' # )
 #' #
 #' # -- Convergence status values (v1 mapping) --
 #' # "converged_ok"        success, converged, non-singular, no warning
@@ -441,6 +466,11 @@ print_results_summary <- function(metadata, paths) {
 #' # "converged_singular"  success, converged, singular fit
 #' # "not_converged"       success but converged == FALSE
 #' # "error"               status != "success" OR error_message present
+#' #
+#' # -- Missing seed_base hard stop --
+#' # no_seed_scenarios <- scenarios[, setdiff(names(scenarios), "seed_base")]
+#' # build_and_save_results(analysis_results, no_seed_scenarios)
+#' # # Error: scenarios is missing required columns: seed_base
 #' #
 #' # -- Duplicate key validation --
 #' # dup_results <- rbind(analysis_results[1L, ], analysis_results[1L, ])
@@ -457,6 +487,9 @@ build_and_save_results <- function(
     overwrite = FALSE
 ) {
   validate_results_layer_inputs(analysis_results, scenarios)
+
+  # Coerce seed_base to integer once, before downstream use and hashing.
+  scenarios$seed_base <- as.integer(scenarios$seed_base)
 
   results_data <- add_convergence_status(analysis_results)
   results_data <- join_scenario_metadata(results_data, scenarios)
