@@ -13,7 +13,7 @@
 # Relative bias returns NA when the true parameter value is zero.
 #
 # Function hierarchy:
-#   aggregate_results_layer()
+#   aggregate_results()
 #     validate_aggregation_inputs()
 #     compute_convergence_summary()
 #     compute_bias_summary()
@@ -228,8 +228,8 @@ compute_bias_summary <- function(results_df, group_cols) {
 
       bias_parts[[paste0("mean_abs_bias_beta", k)]] <- mean_abs_bias
       bias_parts[[paste0("mean_rel_bias_beta", k)]] <- mean_rel_bias
-      bias_parts[[paste0("n_bias_beta",         k)]] <- n_bias
-      bias_parts[[paste0("n_rel_bias_beta",     k)]] <- n_rel_bias
+      bias_parts[[paste0("n_bias_beta", k)]]        <- n_bias
+      bias_parts[[paste0("n_rel_bias_beta", k)]]    <- n_rel_bias
     }
 
     c(as.list(grp[1L, group_cols, drop = FALSE]), bias_parts)
@@ -378,18 +378,18 @@ merge_aggregation_summaries <- function(convergence_df, bias_df, time_df, covera
 #' # source("scripts/aggregation_layer.R")
 #' #
 #' # out <- readRDS("results/data/sim_results_latest.rds")
-#' # agg <- aggregate_results_layer(out)
+#' # agg <- aggregate_results(out)
 #' # str(agg$summary)
 #' # agg$meta$aggregation_schema_version  # "v1"
 #' #
 #' # -- Include engine as an extra grouping column --
-#' # agg_eng <- aggregate_results_layer(out, include_engine = TRUE)
+#' # agg_eng <- aggregate_results(out, include_engine = TRUE)
 #' #
 #' # -- True-beta fallback join from scenarios --
 #' # results_no_betas <- out$results[, setdiff(names(out$results), c("beta0","beta1","beta2","beta3"))]
-#' # agg2 <- aggregate_results_layer(list(results = results_no_betas, scenarios = out$scenarios))
+#' # agg2 <- aggregate_results(list(results = results_no_betas, scenarios = out$scenarios))
 
-aggregate_results_layer <- function(results_obj, include_engine = FALSE) {
+aggregate_results <- function(results_obj, include_engine = FALSE) {
   results_df  <- results_obj$results
   scenarios_df <- results_obj$scenarios
 
@@ -407,6 +407,7 @@ aggregate_results_layer <- function(results_obj, include_engine = FALSE) {
   coverage_df    <- compute_beta3_coverage_summary(results_df, group_cols)
 
   summary_df <- merge_aggregation_summaries(convergence_df, bias_df, time_df, coverage_df, group_cols)
+  summary_df <- merge(summary_df, scenarios_df, by = "scenario_id", all.x = TRUE, sort = FALSE)
 
   meta <- list(
     aggregation_schema_version = aggregation_schema_version,
