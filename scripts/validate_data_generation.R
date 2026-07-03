@@ -52,3 +52,9 @@ generated_stacked <- do.call(
   })
 )
 summarize_generated_data(generated_stacked[generated_stacked$sim_id == 1, ])
+
+# Check data saving -----------------------------------------------------------------------------------------------
+build_and_save_generated_data_artifact(generated_stacked, scenarios)
+build_and_save_generated_data_artifact(generated_stacked, scenarios, n_simulations = 10)
+load_generated_data_artifact_exact(scenarios, 10)
+
