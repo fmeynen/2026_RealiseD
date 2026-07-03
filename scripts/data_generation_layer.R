@@ -610,13 +610,13 @@ compute_data_generation_hash_from_spec <- function(scenarios, n_simulations) {
 
 build_data_generation_metadata <- function(data, scenarios, hash, n_simulations) {
   list(
-    hash = hash,
+    hash                           = hash,
     data_generation_schema_version = data_generation_schema_version,
-    created_at = Sys.time(),
-    n_rows = nrow(data),
-    n_scenarios = nrow(scenarios),
-    n_simulations = as.integer(n_simulations),
-    scenario_ids = as.integer(sort(unique(scenarios$scenario_id)))
+    created_at                     = Sys.time(),
+    n_rows                         = nrow(data),
+    n_scenarios                    = nrow(scenarios),
+    n_simulations                  = as.integer(n_simulations),
+    scenario_ids                   = as.integer(sort(unique(scenarios$scenario_id)))
   )
 }
 
@@ -677,6 +677,7 @@ build_and_save_generated_data_artifact <- function(
   if (is.null(n_simulations)) {
     n_simulations <- infer_data_generation_n_simulations(data)
   }
+  n_simulations <- as.integer(n_simulations)
   if ("seed_base" %in% names(scenarios)) {
     scenarios$seed_base <- as.integer(scenarios$seed_base)
   }
