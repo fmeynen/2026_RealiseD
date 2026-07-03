@@ -10,7 +10,7 @@
 #   - results/simulation_results_latest.rds  (stable pointer, updated each run)
 #
 # Function hierarchy:
-#   build_and_save_results_layer()
+#   build_and_save_results()
 #     validate_results_layer_inputs()
 #     add_convergence_status()
 #     join_scenario_metadata()
@@ -251,11 +251,11 @@ build_canonical_meta <- function(results_data, scenarios) {
   rownames(scenario_grid_sorted) <- NULL
 
   list(
-    scenario_grid = scenario_grid_sorted,
-    methods = sort(unique(results_data$method)),
-    engines = sort(unique(results_data$engine)),
+    scenario_grid              = scenario_grid_sorted,
+    methods                    = sort(unique(results_data$method)),
+    engines                    = sort(unique(results_data$engine)),
     convergence_status_version = convergence_status_version,
-    results_schema_version = results_schema_version
+    results_schema_version     = results_schema_version
   )
 }
 
@@ -317,7 +317,7 @@ build_results_metadata <- function(results_data, hash) {
 #' the stable pointer is updated.
 #'
 #' @param artifact  Named list with results (data frame) and metadata (list).
-#' @param hash      12-character hex hash string.
+#' @param hash      16-character hex hash string.
 #' @param dir       Output directory path (default: "results").
 #' @param overwrite Logical. Overwrite existing immutable file when TRUE (default: FALSE).
 #'
@@ -396,7 +396,7 @@ print_results_summary <- function(metadata, paths) {
 #'   2. Add standardized convergence_status (v1 mapping).
 #'   3. Left-join scenario metadata and validate post-join row count.
 #'   4. Reorder columns to canonical schema.
-#'   5. Compute a deterministic 12-character MD5 hash of the scenario grid,
+#'   5. Compute a deterministic 16-character MD5 hash of the scenario grid,
 #'      method/engine lists, and version strings (timestamp excluded).
 #'   6. Save immutable hash-named artifact and update stable latest pointer.
 #'   7. Print concise run summary.
@@ -427,11 +427,11 @@ print_results_summary <- function(metadata, paths) {
 #' # }))
 #' # analysis_results <- analyze_generated_data_classical_ml(generated)
 #' #
-#' # out <- build_and_save_results_layer(analysis_results, scenarios)
+#' # out <- build_and_save_results(analysis_results, scenarios)
 #' #
 #' # -- Inspect results --
 #' # str(out$results)         # tidy data frame, one row per sim x method
-#' # out$metadata$hash        # 12-character deterministic hash
+#' # out$metadata$hash        # 16-character deterministic hash
 #' # out$paths                # paths to both saved files
 #' # table(out$results$convergence_status)
 #' #
@@ -444,16 +444,16 @@ print_results_summary <- function(metadata, paths) {
 #' #
 #' # -- Duplicate key validation --
 #' # dup_results <- rbind(analysis_results[1L, ], analysis_results[1L, ])
-#' # build_and_save_results_layer(dup_results, scenarios)
+#' # build_and_save_results(dup_results, scenarios)
 #' # # Error: analysis_results has duplicate rows on (scenario_id, sim_id, method, engine).
 #' #
 #' # -- Overwrite existing immutable artifact --
-#' # out2 <- build_and_save_results_layer(analysis_results, scenarios, overwrite = TRUE)
+#' # out2 <- build_and_save_results(analysis_results, scenarios, overwrite = TRUE)
 
-build_and_save_results_layer <- function(
+build_and_save_results <- function(
     analysis_results,
     scenarios,
-    output_dir = "results",
+    output_dir = "results/data",
     overwrite = FALSE
 ) {
   validate_results_layer_inputs(analysis_results, scenarios)
@@ -463,10 +463,10 @@ build_and_save_results_layer <- function(
   results_data <- order_results_columns(results_data, names(scenarios))
 
   canonical_meta <- build_canonical_meta(results_data, scenarios)
-  hash <- compute_results_hash(canonical_meta)
-  metadata <- build_results_metadata(results_data, hash)
+  hash           <- compute_results_hash(canonical_meta)
+  metadata       <- build_results_metadata(results_data, hash)
 
-  artifact <- list(results = results_data, metadata = metadata)
+  artifact <- list(results = results_data, scenarios = scenarios, metadata = metadata)
   paths <- save_results_artifact(artifact, hash, dir = output_dir, overwrite = overwrite)
 
   print_results_summary(metadata, paths)
