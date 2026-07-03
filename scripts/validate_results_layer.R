@@ -28,6 +28,14 @@ analysis_results <- analyze_generated_data_classical_ml(generated)
 out <- build_and_save_results(analysis_results, scenarios)
 
 
+load_results_artifact_exact(
+  scenarios = scenarios,
+  methods = c("classical_ml"),
+  engines = c("lme4"),
+  n_simulations = 10,
+  analysis_file = "scripts/analysis_layer.R"
+)
+
 # Load file -------------------------------------------------------------------------------------------------------
 
 rm(out)
