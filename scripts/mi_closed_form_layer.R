@@ -12,7 +12,7 @@
 #       check_mi_group_integrity()        [internal]
 #       impute_mi_one_group()                [internal]
 #         build_mi_predictor_row()        [internal]
-#     fit_closed_form_on_imputations()     [placeholder]
+#     fit_closed_form()     [placeholder]
 #
 # Note: method_y = "2l.pmm" requires the 'miceadds' package to be attached
 #       (library(miceadds)) before calling impute_mi_by_sim_scenario().
@@ -377,8 +377,8 @@ impute_mi_by_sim_scenario <- function(
 #'   \code{message}. The return structure will be finalized once closed-form
 #'   fitting is implemented.
 
-fit_closed_form_on_imputations <- function(
-    imputed_long_data,
+fit_closed_form <- function(
+    long_data,
     id_cols = c("scenario_id", "sim_id"),
     imp_col = ".imp",
     row_id_col = ".id",
@@ -408,7 +408,7 @@ fit_closed_form_on_imputations <- function(
   list(
     status = "not_implemented",
     message = paste0(
-      "fit_closed_form_on_imputations() is a placeholder. ",
+      "fit_closed_form() is a placeholder. ",
       "Closed-form model fitting is not yet implemented. ",
       "See TODO comments in scripts/mi_closed_form_layer.R."
     )
@@ -421,14 +421,14 @@ fit_closed_form_on_imputations <- function(
 #' Run multiple imputation + closed-form analysis.
 #'
 #' A pipeline wrapper that calls \code{impute_mi_by_sim_scenario()} followed by
-#' the (placeholder) \code{fit_closed_form_on_imputations()}, and returns a
+#' the (placeholder) \code{fit_closed_form()}, and returns a
 #' structured result list.
 #'
 #' @param data        Long-format data frame with all scenarios and simulations.
 #' @param impute_args Named list of additional arguments forwarded to
 #'   \code{impute_mi_by_sim_scenario()}.
 #' @param fit_args    Named list of additional arguments forwarded to
-#'   \code{fit_closed_form_on_imputations()}.
+#'   \code{fit_closed_form()}.
 #'
 #' @return A list with:
 #' \describe{
@@ -451,7 +451,7 @@ analyze_mi_closed_form <- function(
   timing <- impute_result$timing
 
   model_results <- do.call(
-    fit_closed_form_on_imputations,
+    fit_closed_form,
     c(list(imputed_long_data = imputed_data), fit_args)
   )
 
