@@ -263,7 +263,7 @@ build_results_hash_identity <- function(scenarios, methods, engines, n_simulatio
     scenario_grid              = canonicalize_results_scenarios_for_hash(scenarios),
     methods                    = sort(unique(methods)),
     engines                    = sort(unique(engines)),
-    n_simulations              = n_simulations,
+    n_simulations              = as.integer(n_simulations),
     convergence_status_version = convergence_status_version,
     results_schema_version     = results_schema_version
   )
