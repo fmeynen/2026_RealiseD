@@ -168,36 +168,42 @@ expect_true_msg(
 cat("Test 10: happy path - runs without error\n")
 result <- impute_mi_by_sim_scenario(test_data, method_y = "2l.norm", m = m_val, maxit = 5L)
 
-cat("Test 11: output is a data frame\n")
-expect_true_msg(is.data.frame(result), "output must be a data.frame")
+cat("Test 11: output is a list with imputed_long and timing\n")
+expect_true_msg(is.list(result), "output must be a list")
+expect_true_msg("imputed_long" %in% names(result), "output must contain 'imputed_long'")
+expect_true_msg("timing" %in% names(result), "output must contain 'timing'")
+expect_true_msg(is.data.frame(result$imputed_long), "imputed_long must be a data.frame")
 
 cat("Test 12: output has required columns\n")
 required_cols <- c("scenario_id", "sim_id", "subject_id", "treatment", "time_value", "y", ".imp", ".id")
-missing_cols <- setdiff(required_cols, names(result))
+missing_cols <- setdiff(required_cols, names(result$imputed_long))
 expect_true_msg(
   length(missing_cols) == 0L,
   paste("output is missing columns:", paste(missing_cols, collapse = ", "))
 )
 
 cat("Test 13: .imp values are in expected range [1, m]\n")
-expect_true_msg(min(result[[".imp"]]) == 1L, ".imp minimum is 1")
-expect_true_msg(max(result[[".imp"]]) == m_val, paste(".imp maximum is", m_val))
+expect_true_msg(min(result$imputed_long[[".imp"]]) == 1L, ".imp minimum is 1")
+expect_true_msg(max(result$imputed_long[[".imp"]]) == m_val, paste(".imp maximum is", m_val))
 
 cat("Test 14: .id column is present and numeric\n")
-expect_true_msg(".id" %in% names(result), ".id column must be present")
-expect_true_msg(is.numeric(result[[".id"]]) || is.integer(result[[".id"]]), ".id must be numeric")
+expect_true_msg(".id" %in% names(result$imputed_long), ".id column must be present")
+expect_true_msg(
+  is.numeric(result$imputed_long[[".id"]]) || is.integer(result$imputed_long[[".id"]]),
+  ".id must be numeric"
+)
 
 cat("Test 15: row count equals n_rows_per_group * n_groups * m\n")
 n_groups <- length(unique(paste(test_data$scenario_id, test_data$sim_id)))
 expected_rows <- n_rows_per_group * n_groups * m_val
 expect_true_msg(
-  nrow(result) == expected_rows,
-  paste("expected", expected_rows, "rows, got", nrow(result))
+  nrow(result$imputed_long) == expected_rows,
+  paste("expected", expected_rows, "rows, got", nrow(result$imputed_long))
 )
 
 cat("Test 16: canonical column order\n")
 canonical_order <- c("scenario_id", "sim_id", "subject_id", "treatment", "time_value", "y", ".imp", ".id")
-actual_head <- names(result)[seq_len(length(canonical_order))]
+actual_head <- names(result$imputed_long)[seq_len(length(canonical_order))]
 expect_true_msg(
   identical(actual_head, canonical_order),
   paste("expected column order:", paste(canonical_order, collapse = ", "),
@@ -205,15 +211,15 @@ expect_true_msg(
 )
 
 cat("Test 17: no missingness in y after imputation (include_original = FALSE)\n")
-expect_true_msg(!anyNA(result$y), "imputed y must have no missing values")
+expect_true_msg(!anyNA(result$imputed_long$y), "imputed y must have no missing values")
 
 cat("Test 18: multiple scenario_id and sim_id groups are present\n")
 expect_true_msg(
-  length(unique(result$scenario_id)) == 2L,
+  length(unique(result$imputed_long$scenario_id)) == 2L,
   "output must contain 2 scenario_ids"
 )
 expect_true_msg(
-  length(unique(result$sim_id)) == 3L,
+  length(unique(result$imputed_long$sim_id)) == 3L,
   "output must contain 3 sim_ids"
 )
 
@@ -224,19 +230,23 @@ cat("Test 19: include_original = TRUE adds .imp = 0 rows\n")
 result_with_orig <- impute_mi_by_sim_scenario(
   test_data, method_y = "2l.norm", m = m_val, maxit = 5L, include_original = TRUE
 )
-expect_true_msg(0L %in% result_with_orig[[".imp"]], ".imp = 0 must be present when include_original = TRUE")
 expect_true_msg(
-  nrow(result_with_orig) == n_rows_per_group * n_groups * (m_val + 1L),
+  0L %in% result_with_orig$imputed_long[[".imp"]],
+  ".imp = 0 must be present when include_original = TRUE"
+)
+expect_true_msg(
+  nrow(result_with_orig$imputed_long) == n_rows_per_group * n_groups * (m_val + 1L),
   paste("with include_original, expected", n_rows_per_group * n_groups * (m_val + 1L), "rows")
 )
 
 
 # 5. return_mids = TRUE ---------------------------------------------------------------------------
 
-cat("Test 20: return_mids = TRUE returns list with imputed_long and mids_list\n")
+cat("Test 20: return_mids = TRUE returns list with imputed_long, timing, and mids_list\n")
 result_mids <- impute_mi_by_sim_scenario(test_data, method_y = "2l.norm", m = m_val, maxit = 5L, return_mids = TRUE)
 expect_true_msg(is.list(result_mids), "return_mids result must be a list")
 expect_true_msg("imputed_long" %in% names(result_mids), "result must contain 'imputed_long'")
+expect_true_msg("timing" %in% names(result_mids), "result must contain 'timing'")
 expect_true_msg("mids_list" %in% names(result_mids), "result must contain 'mids_list'")
 expect_true_msg(is.data.frame(result_mids$imputed_long), "imputed_long must be a data frame")
 expect_true_msg(
@@ -245,22 +255,50 @@ expect_true_msg(
 )
 
 
-# 6. fit_closed_form_on_imputations() placeholder -------------------------------------------------
+# 6. Timing data frame structure -------------------------------------------------------------------
 
-cat("Test 21: fit_closed_form raises error on non-data.frame input\n")
+cat("Test 21: timing is a data frame with one row per group\n")
+expect_true_msg(is.data.frame(result$timing), "timing must be a data.frame")
+expect_true_msg(
+  nrow(result$timing) == n_groups,
+  paste("timing must have", n_groups, "rows (one per group), got", nrow(result$timing))
+)
+
+cat("Test 22: timing contains id_cols and elapsed_seconds\n")
+timing_cols <- c("scenario_id", "sim_id", "elapsed_seconds")
+missing_timing_cols <- setdiff(timing_cols, names(result$timing))
+expect_true_msg(
+  length(missing_timing_cols) == 0L,
+  paste("timing is missing columns:", paste(missing_timing_cols, collapse = ", "))
+)
+
+cat("Test 23: timing elapsed_seconds is numeric and non-negative\n")
+expect_true_msg(
+  is.numeric(result$timing$elapsed_seconds),
+  "timing elapsed_seconds must be numeric"
+)
+expect_true_msg(
+  all(result$timing$elapsed_seconds >= 0),
+  "timing elapsed_seconds must be non-negative"
+)
+
+
+# 7. fit_closed_form_on_imputations() placeholder -------------------------------------------------
+
+cat("Test 24: fit_closed_form raises error on non-data.frame input\n")
 expect_error_contains(
   fit_closed_form_on_imputations(list()),
   "'imputed_long_data' must be a data.frame"
 )
 
-cat("Test 22: fit_closed_form raises error on missing required columns\n")
+cat("Test 25: fit_closed_form raises error on missing required columns\n")
 expect_error_contains(
   fit_closed_form_on_imputations(data.frame(x = 1)),
   "missing required columns"
 )
 
-cat("Test 23: fit_closed_form returns stub with status = 'not_implemented'\n")
-fit_result <- fit_closed_form_on_imputations(result)
+cat("Test 26: fit_closed_form returns stub with status = 'not_implemented'\n")
+fit_result <- fit_closed_form_on_imputations(result$imputed_long)
 expect_true_msg(is.list(fit_result), "fit_result must be a list")
 expect_true_msg(
   identical(fit_result$status, "not_implemented"),
@@ -276,19 +314,20 @@ expect_true_msg(
 )
 
 
-# 7. analyze_mi_closed_form() wrapper -------------------------------------------------------------
+# 8. analyze_mi_closed_form() wrapper -------------------------------------------------------------
 
-cat("Test 24: wrapper returns list with imputed_data, model_results, meta\n")
+cat("Test 27: wrapper returns list with imputed_data, timing, model_results, meta\n")
 wrapper_result <- analyze_mi_closed_form(
   test_data,
   impute_args = list(method_y = "2l.norm", m = m_val, maxit = 5L)
 )
 expect_true_msg(is.list(wrapper_result), "wrapper result must be a list")
 expect_true_msg("imputed_data" %in% names(wrapper_result), "must contain 'imputed_data'")
+expect_true_msg("timing" %in% names(wrapper_result), "must contain 'timing'")
 expect_true_msg("model_results" %in% names(wrapper_result), "must contain 'model_results'")
 expect_true_msg("meta" %in% names(wrapper_result), "must contain 'meta'")
 
-cat("Test 25: wrapper imputed_data matches direct call output\n")
+cat("Test 28: wrapper imputed_data matches direct call output\n")
 expect_true_msg(
   is.data.frame(wrapper_result$imputed_data),
   "wrapper imputed_data must be a data frame"
@@ -298,25 +337,36 @@ expect_true_msg(
   paste("wrapper imputed_data must have", expected_rows, "rows")
 )
 
-cat("Test 26: wrapper model_results is the placeholder stub\n")
+cat("Test 29: wrapper timing has correct structure\n")
+expect_true_msg(is.data.frame(wrapper_result$timing), "wrapper timing must be a data.frame")
+expect_true_msg(
+  nrow(wrapper_result$timing) == n_groups,
+  paste("wrapper timing must have", n_groups, "rows")
+)
+expect_true_msg(
+  "elapsed_seconds" %in% names(wrapper_result$timing),
+  "wrapper timing must contain 'elapsed_seconds'"
+)
+
+cat("Test 30: wrapper model_results is the placeholder stub\n")
 expect_true_msg(
   identical(wrapper_result$model_results$status, "not_implemented"),
   "wrapper model_results$status must be 'not_implemented'"
 )
 
-cat("Test 27: wrapper meta contains correct method label\n")
+cat("Test 31: wrapper meta contains correct method label\n")
 expect_true_msg(
   identical(wrapper_result$meta$method, "mi_closed_form"),
   "wrapper meta$method must be 'mi_closed_form'"
 )
 
 
-# 8. method_y = "2l.norm" -------------------------------------------------------------------------
+# 9. method_y = "2l.norm" -------------------------------------------------------------------------
 
-cat("Test 28: method_y = '2l.norm' runs without miceadds\n")
+cat("Test 32: method_y = '2l.norm' runs without miceadds\n")
 result_norm <- impute_mi_by_sim_scenario(test_data, method_y = "2l.norm", m = m_val, maxit = 5L)
-expect_true_msg(is.data.frame(result_norm), "2l.norm result must be a data frame")
-expect_true_msg(!anyNA(result_norm$y), "2l.norm: imputed y must have no missing values")
+expect_true_msg(is.data.frame(result_norm$imputed_long), "2l.norm result must contain a data frame")
+expect_true_msg(!anyNA(result_norm$imputed_long$y), "2l.norm: imputed y must have no missing values")
 
 
 cat("\n=== All validate_mi_closed_form_layer checks passed ===\n")

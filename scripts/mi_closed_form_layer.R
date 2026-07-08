@@ -214,13 +214,18 @@ validate_mi_imputation_input <- function(
 #' @param return_mids      Logical. If TRUE, return a list with \code{imputed_long}
 #'   and \code{mids_list}; if FALSE (default), return only the imputed data frame.
 #'
-#' @return If \code{return_mids = FALSE}: a data frame with columns
-#'   \code{scenario_id, sim_id, subject_id, treatment, time_value, y, .imp, .id}
-#'   (plus any additional columns in \code{impute_cols}).
-#'   Row count equals \code{nrow(original_group)} * \code{m} per group.
-#'   If \code{return_mids = TRUE}: a list with elements \code{imputed_long}
-#'   (the data frame described above) and \code{mids_list} (named list of
-#'   \code{mids} objects, one per group).
+#' @return A list with elements:
+#' \describe{
+#'   \item{imputed_long}{Data frame with columns
+#'     \code{scenario_id, sim_id, subject_id, treatment, time_value, y, .imp, .id}
+#'     (plus any additional columns in \code{impute_cols}).
+#'     Row count equals \code{nrow(original_group)} * \code{m} per group.}
+#'   \item{timing}{Data frame with one row per group (keyed by \code{id_cols})
+#'     and an \code{elapsed_seconds} column recording the wall-clock time spent
+#'     imputing that group.}
+#'   \item{mids_list}{(Only present when \code{return_mids = TRUE}) Named list of
+#'     \code{mids} objects, one per group.}
+#' }
 
 impute_mi_by_sim_scenario <- function(
     data,
@@ -261,6 +266,7 @@ impute_mi_by_sim_scenario <- function(
   imputed_groups <- vector("list", n_groups)
   mids_list <- vector("list", n_groups)
   group_labels <- character(n_groups)
+  elapsed_secs <- numeric(n_groups)
 
   for (i in seq_len(n_groups)) {
     group_id_vals <- vapply(
@@ -277,6 +283,7 @@ impute_mi_by_sim_scenario <- function(
 
     check_mi_group_integrity(current_group_df, group_label, cluster_col, strict_checks)
 
+    t_start <- proc.time()
     result <- impute_mi_one_group(
       group_df = current_group_df,
       group_label = group_label,
@@ -290,6 +297,7 @@ impute_mi_by_sim_scenario <- function(
       seed = seed,
       include_original = include_original
     )
+    elapsed_secs[i] <- (proc.time() - t_start)[["elapsed"]]
 
     completed <- result$completed
     for (col in id_cols) {
@@ -301,6 +309,9 @@ impute_mi_by_sim_scenario <- function(
   }
 
   names(mids_list) <- group_labels
+
+  timing <- as.data.frame(group_keys, stringsAsFactors = FALSE)
+  timing$elapsed_seconds <- elapsed_secs
 
   combined <- do.call(rbind, imputed_groups)
   rownames(combined) <- NULL
@@ -329,11 +340,15 @@ impute_mi_by_sim_scenario <- function(
   if (isTRUE(return_mids)) {
     return(list(
       imputed_long = combined,
+      timing = timing,
       mids_list = mids_list
     ))
   }
 
-  combined
+  list(
+    imputed_long = combined,
+    timing = timing
+  )
 }
 
 
@@ -418,6 +433,8 @@ fit_closed_form_on_imputations <- function(
 #' @return A list with:
 #' \describe{
 #'   \item{imputed_data}{Long-format imputed data frame from the imputation step.}
+#'   \item{timing}{Data frame with one row per simulation group recording
+#'     \code{elapsed_seconds} for the imputation step.}
 #'   \item{model_results}{Output from the closed-form fitting step (currently a
 #'     placeholder stub).}
 #'   \item{meta}{List with \code{method}, \code{impute_args}, and \code{fit_args}.}
@@ -429,7 +446,9 @@ analyze_mi_closed_form <- function(
     impute_args = list(),
     fit_args = list()
 ) {
-  imputed_data <- do.call(impute_mi_by_sim_scenario, c(list(data = data), impute_args))
+  impute_result <- do.call(impute_mi_by_sim_scenario, c(list(data = data), impute_args))
+  imputed_data <- impute_result$imputed_long
+  timing <- impute_result$timing
 
   model_results <- do.call(
     fit_closed_form_on_imputations,
@@ -438,6 +457,7 @@ analyze_mi_closed_form <- function(
 
   list(
     imputed_data = imputed_data,
+    timing = timing,
     model_results = model_results,
     meta = list(
       method = "mi_closed_form",
