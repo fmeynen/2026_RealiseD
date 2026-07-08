@@ -229,8 +229,8 @@ impute_mi_by_sim_scenario <- function(
     cluster_col = "subject_id",
     target_col = "y",
     method_y = c("2l.pmm", "2l.norm"),
-    m = 5,
-    maxit = 20,
+    m = 3,
+    maxit = 10,
     seed = 123,
     include_original = FALSE,
     strict_checks = TRUE,
@@ -425,6 +425,7 @@ fit_closed_form_on_imputations <- function(
 
 analyze_mi_closed_form <- function(
     data,
+    scenarios = NULL,
     impute_args = list(),
     fit_args = list()
 ) {
