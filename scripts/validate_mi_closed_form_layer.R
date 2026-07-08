@@ -283,40 +283,53 @@ expect_true_msg(
 )
 
 
-# 7. fit_closed_form_on_imputations() placeholder -------------------------------------------------
+# 7. fit_closed_form_on_imputations() validation and output structure ---------------------------------
 
-cat("Test 24: fit_closed_form raises error on non-data.frame input\n")
+cat("Test 24: fit_closed_form_on_imputations raises error on non-data.frame input\n")
 expect_error_contains(
   fit_closed_form_on_imputations(list()),
   "'imputed_long_data' must be a data.frame"
 )
 
-cat("Test 25: fit_closed_form raises error on missing required columns\n")
+cat("Test 25: fit_closed_form_on_imputations raises error on missing required columns\n")
 expect_error_contains(
   fit_closed_form_on_imputations(data.frame(x = 1)),
   "missing required columns"
 )
 
-cat("Test 26: fit_closed_form returns stub with status = 'not_implemented'\n")
-fit_result <- fit_closed_form_on_imputations(result$imputed_long)
-expect_true_msg(is.list(fit_result), "fit_result must be a list")
-expect_true_msg(
-  identical(fit_result$status, "not_implemented"),
-  "fit_result$status must be 'not_implemented'"
+cat("Test 26: fit_closed_form_on_imputations returns a data frame with expected structure\n")
+# CbCEstimator requires vech() from the 'ks' package; individual group failures are
+# caught by apply_cbc_to_group() and stored in error_message — the output is always a data frame.
+cbc_result <- fit_closed_form_on_imputations(result$imputed_long)
+expect_true_msg(is.data.frame(cbc_result), "fit result must be a data frame")
+expected_fit_cols <- c(
+  "scenario_id", "sim_id", ".imp",
+  "status", "beta0", "beta1", "beta2", "beta3",
+  "sigma2_hat", "elapsed_seconds", "error_message"
 )
+missing_fit_cols <- setdiff(expected_fit_cols, names(cbc_result))
 expect_true_msg(
-  is.character(fit_result$message) && nchar(fit_result$message) > 0L,
-  "fit_result$message must be a non-empty string"
+  length(missing_fit_cols) == 0L,
+  paste("fit result is missing columns:", paste(missing_fit_cols, collapse = ", "))
 )
+
+cat("Test 27: fit_closed_form_on_imputations has one row per (scenario_id, sim_id, .imp)\n")
+expected_fit_rows <- n_groups * m_val
 expect_true_msg(
-  grepl("placeholder", fit_result$message, fixed = TRUE),
-  "fit_result$message must mention 'placeholder'"
+  nrow(cbc_result) == expected_fit_rows,
+  paste("fit result must have", expected_fit_rows, "rows, got", nrow(cbc_result))
+)
+
+cat("Test 28: fit_closed_form_on_imputations status column contains only 'success' or 'failure'\n")
+expect_true_msg(
+  all(cbc_result$status %in% c("success", "failure")),
+  "status must be 'success' or 'failure' for every row"
 )
 
 
 # 8. analyze_mi_closed_form() wrapper -------------------------------------------------------------
 
-cat("Test 27: wrapper returns list with imputed_data, timing, model_results, meta\n")
+cat("Test 29: wrapper returns list with imputed_data, timing, model_results, meta\n")
 wrapper_result <- analyze_mi_closed_form(
   test_data,
   impute_args = list(method_y = "2l.norm", m = m_val, maxit = 5L)
@@ -327,7 +340,7 @@ expect_true_msg("timing" %in% names(wrapper_result), "must contain 'timing'")
 expect_true_msg("model_results" %in% names(wrapper_result), "must contain 'model_results'")
 expect_true_msg("meta" %in% names(wrapper_result), "must contain 'meta'")
 
-cat("Test 28: wrapper imputed_data matches direct call output\n")
+cat("Test 30: wrapper imputed_data matches direct call output\n")
 expect_true_msg(
   is.data.frame(wrapper_result$imputed_data),
   "wrapper imputed_data must be a data frame"
@@ -337,7 +350,7 @@ expect_true_msg(
   paste("wrapper imputed_data must have", expected_rows, "rows")
 )
 
-cat("Test 29: wrapper timing has correct structure\n")
+cat("Test 31: wrapper timing has correct structure\n")
 expect_true_msg(is.data.frame(wrapper_result$timing), "wrapper timing must be a data.frame")
 expect_true_msg(
   nrow(wrapper_result$timing) == n_groups,
@@ -348,13 +361,21 @@ expect_true_msg(
   "wrapper timing must contain 'elapsed_seconds'"
 )
 
-cat("Test 30: wrapper model_results is the placeholder stub\n")
+cat("Test 32: wrapper model_results is a data frame with one row per (scenario_id, sim_id, .imp)\n")
 expect_true_msg(
-  identical(wrapper_result$model_results$status, "not_implemented"),
-  "wrapper model_results$status must be 'not_implemented'"
+  is.data.frame(wrapper_result$model_results),
+  "wrapper model_results must be a data frame"
+)
+expect_true_msg(
+  nrow(wrapper_result$model_results) == n_groups * m_val,
+  paste("wrapper model_results must have", n_groups * m_val, "rows")
+)
+expect_true_msg(
+  all(wrapper_result$model_results$status %in% c("success", "failure")),
+  "wrapper model_results$status must be 'success' or 'failure'"
 )
 
-cat("Test 31: wrapper meta contains correct method label\n")
+cat("Test 33: wrapper meta contains correct method label\n")
 expect_true_msg(
   identical(wrapper_result$meta$method, "mi_closed_form"),
   "wrapper meta$method must be 'mi_closed_form'"
@@ -363,7 +384,7 @@ expect_true_msg(
 
 # 9. method_y = "2l.norm" -------------------------------------------------------------------------
 
-cat("Test 32: method_y = '2l.norm' runs without miceadds\n")
+cat("Test 34: method_y = '2l.norm' runs without miceadds\n")
 result_norm <- impute_mi_by_sim_scenario(test_data, method_y = "2l.norm", m = m_val, maxit = 5L)
 expect_true_msg(is.data.frame(result_norm$imputed_long), "2l.norm result must contain a data frame")
 expect_true_msg(!anyNA(result_norm$imputed_long$y), "2l.norm: imputed y must have no missing values")
