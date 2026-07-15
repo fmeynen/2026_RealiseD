@@ -14,9 +14,9 @@
 #         build_mi_predictor_row()        [internal]
 #     fit_closed_form_on_imputations()
 #       build_cbc_matrices()              [internal]
-#       apply_cbc_to_group()              [internal]
+#       apply_cbc()              [internal]
 #         CbCEstimator()
-#       extract_cbc_result_row()          [internal]
+#       extract_cbc_result()          [internal]
 #
 # Note: method_y = "2l.pmm" requires the 'miceadds' package to be attached
 #       (library(miceadds)) before calling impute_mi_by_sim_scenario().
@@ -125,6 +125,51 @@ impute_mi_one_group <- function(
   list(completed = completed, mids = imp)
 }
 
+set_impute_args <- function(
+    impute_cols = c("subject_id", "treatment", "time_value", "y"),
+    cluster_col = "subject_id",
+    target_col = "y",
+    method_y = c("2l.pmm", "2l.norm"),
+    m = 3,
+    maxit = 10,
+    seed = 123,
+    include_original = FALSE,
+    strict_checks = TRUE,
+    return_mids = FALSE
+    ){
+  
+  if (missing(method_y)) {
+    stop("method_y must be specified: choose one of \"2l.pmm\" or \"2l.norm\"")
+  }
+  method_y <- match.arg(method_y)
+  
+  list(
+    impute_cols = impute_cols,
+    cluster_col = cluster_col,
+    target_col = target_col,
+    method_y = method_y,
+    m = m,
+    maxit = maxit,
+    seed = seed,
+    include_original = include_original,
+    strict_checks = strict_checks,
+    return_mids = return_mids
+  )
+}
+
+set_fit_args <- function(
+    subject_col = "subject_id",
+    time_col = "time_value",
+    treatment_col = "treatment",
+    outcome_col = "y"){
+  list(
+    subject_col   = subject_col,
+    time_col      = time_col,
+    treatment_col = treatment_col,
+    outcome_col   = outcome_col
+  )
+}
+
 
 # Validation ---------------------------------------------------------------------------------------
 
@@ -184,6 +229,37 @@ validate_mi_imputation_input <- function(
 
 
 # Imputation ---------------------------------------------------------------------------------------
+
+impute_data <- function(data, impute_args = set_impute_args()){
+  impute_cols <- impute_args$impute_cols
+  target_col  <- impute_args$target_col
+  cluster_col <- impute_args$cluster_col
+  
+  sub_df <- data[, impute_cols, drop = FALSE]
+  
+  ini  <- mice::mice(sub_df, maxit = 0, print = FALSE)
+  meth <- ini$method
+  pred <- ini$predictorMatrix
+  
+  meth[]             <- ""
+  meth[[target_col]] <- impute_args$method_y
+  
+  pred_row                          <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
+  pred[target_col, names(pred_row)] <- pred_row
+  
+  imp <- mice::mice(
+    sub_df,
+    method          = meth,
+    predictorMatrix = pred,
+    m               = impute_args$m,
+    maxit           = impute_args$maxit,
+    seed            = impute_args$seed,
+    print           = FALSE
+  )
+  
+  completed <- mice::complete(imp, action = "long", include = impute_args$include_original)
+  completed
+}
 
 #' Perform multiple imputation grouped by (scenario_id, sim_id).
 #'
@@ -366,8 +442,6 @@ CbCEstimator = function(clusterID,Y,X,Z){
   # Y: Matrix of outcomes (rows: observations, columns: variables)
   # X: design matrix X
   # Z: design matrix Z
-  
-  t_start <- proc.time()
   ## function to compute overall estimates of Beta
   Weightedestimator = function(K_i,A_i,BetaH_i){ ### Calculates beta tilde as on p8
     N = nrow(BetaH_i)
@@ -477,13 +551,12 @@ CbCEstimator = function(clusterID,Y,X,Z){
     e <- Y-Z%*%BetaH    # Residual vector per patient is calculated
     SigmaH <- crossprod(e)/(n-2) # residual variance ((or MSE = RSS = e'e /n-2 when there are 2 parameters to be estimated (ie slope and intercept)
     
-    Output <- c(c(BetaH),vech(SigmaH)) #vech stacks the columns in a single vector
+    Output <- c(c(BetaH),ks::vech(SigmaH)) #vech stacks the columns in a single vector
     return(Output)
   },x=1:N) # Repeat this step for all patients. THIS function Est_i CORRESPONDS TO STAGE 1 patient specific OLS
   Est_i = t(Est_i) # transpose from 1 a vector to different columns
   BetaH_i = Est_i[,1:(q*m)] # extract the Beta coefficients which were first in the vector
   SigmaH_i = Est_i[,-c(1:(q*m))] # extract the variance from the vector which were last
-  browser()
   
   w_i = n/sum(n) # proportional weights (for Beta)
   w_i.2 = (n-2)/sum(n-2) # 2nd weights (2 = number of parameters) for Sigma
@@ -494,12 +567,10 @@ CbCEstimator = function(clusterID,Y,X,Z){
   BetaH = Overall[[1]] # Extract Beta tilde from the list called overall
   SigmaH <- ifelse(is.null(dim(SigmaH_i)),
                    weighted.mean(SigmaH_i, w_i.2),
-                   invvech(apply(SigmaH_i,2,weighted.mean,w=w_i.2)))
-  
-  Fit = list(BetaH=BetaH,SigmaH=SigmaH)
+                   ks::invvech(apply(SigmaH_i,2,weighted.mean,w=w_i.2)))
+  fit = list(BetaH=BetaH,SigmaH=SigmaH)
   # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma
-  timing <- (proc.time() - t_start)[["elapsed"]]
-  list(fit = Fit, timing = timing)
+  list(fit = fit)
 }
 
 
@@ -517,11 +588,11 @@ CbCEstimator = function(clusterID,Y,X,Z){
 # X (n x 4)  : fixed-effects design matrix cbind(1, treatment, time_value,
 #              treatment * time_value).
 
-build_cbc_matrices <- function(group_df, subject_col, time_col, treatment_col, outcome_col) {
-  clusterID <- group_df[[subject_col]]
-  Y <- matrix(as.numeric(group_df[[outcome_col]]), ncol = 1L)
-  trt <- as.numeric(group_df[[treatment_col]])
-  tme <- as.numeric(group_df[[time_col]])
+build_cbc_matrices <- function(data, subject_col, time_col, treatment_col, outcome_col) {
+  clusterID <- data[[subject_col]]
+  Y <- matrix(as.numeric(data[[outcome_col]]), ncol = 1L)
+  trt <- as.numeric(data[[treatment_col]])
+  tme <- as.numeric(data[[time_col]])
   X <- cbind(1, trt, tme, trt * tme)
   Z <- cbind(1, tme)
   list(clusterID = clusterID, Y = Y, X = X, Z = Z)
@@ -530,8 +601,23 @@ build_cbc_matrices <- function(group_df, subject_col, time_col, treatment_col, o
 # Call CbCEstimator for one group data frame; return a structured result list.
 # Errors from CbCEstimator are caught and stored in error_message.
 
-apply_cbc_to_group <- function(group_df, subject_col, time_col, treatment_col, outcome_col) {
-  mats <- build_cbc_matrices(group_df, subject_col, time_col, treatment_col, outcome_col)
+apply_cbc <- function(data, fit_args = set_fit_args) {
+  
+  subject_col   <- fit_args$subject_col
+  time_col      <- fit_args$time_col
+  treatment_col <- fit_args$treatment_col
+  outcome_col   <- fit_args$outcome_col
+  
+  required_cols <- unique(c(subject_col, time_col, treatment_col, outcome_col))
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0L) {
+    stop(
+      "imputed_long_data is missing required columns: ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+  
+  mats <- build_cbc_matrices(data, subject_col, time_col, treatment_col, outcome_col)
   error_msg <- NA_character_
   cbc_result <- tryCatch(
     CbCEstimator(mats$clusterID, mats$Y, mats$X, mats$Z),
@@ -541,12 +627,11 @@ apply_cbc_to_group <- function(group_df, subject_col, time_col, treatment_col, o
     }
   )
   if (is.null(cbc_result)) {
-    return(list(status = "failure", fit = NULL, elapsed_seconds = NA_real_, error_message = error_msg))
+    return(list(status = "failure", fit = NULL, error_message = error_msg))
   }
   list(
     status = "success",
     fit = cbc_result$fit,
-    elapsed_seconds = as.numeric(cbc_result$timing),
     error_message = NA_character_
   )
 }
@@ -554,31 +639,24 @@ apply_cbc_to_group <- function(group_df, subject_col, time_col, treatment_col, o
 # Convert a CbCEstimator result for one group into a one-row data frame.
 # beta0..beta3 correspond to intercept, treatment, time_value, treatment:time_value.
 
-extract_cbc_result_row <- function(group_key_df, apply_result) {
-  row <- as.data.frame(group_key_df, stringsAsFactors = FALSE)
-  row$status <- apply_result$status
-  row$beta0 <- NA_real_
-  row$beta1 <- NA_real_
-  row$beta2 <- NA_real_
-  row$beta3 <- NA_real_
-  row$sigma2_hat <- NA_real_
-  row$elapsed_seconds <- apply_result$elapsed_seconds
-  row$error_message <- apply_result$error_message
-
-  if (identical(apply_result$status, "success") && !is.null(apply_result$fit)) {
-    beta <- as.numeric(apply_result$fit$BetaH)
-    if (length(beta) >= 4L) {
-      row$beta0 <- beta[1L]
-      row$beta1 <- beta[2L]
-      row$beta2 <- beta[3L]
-      row$beta3 <- beta[4L]
+extract_cbc_result <- function(cbc_result) {
+  param_names <- c("estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
+                   "sigma2_hat")
+  res <- setNames(rep(NA_real_, length(param_names)), param_names)
+  
+  tryCatch({
+    if (identical(cbc_result$status, "success") && !is.null(cbc_result$fit)) {
+      res <- c(t(cbc_result$fit$BetaH), cbc_result$fit$SigmaH)
+      names(res) <- param_names
+    } else {
+      warning("cbc_result status is not 'success' or fit is NULL")
     }
-    if (!is.null(apply_result$fit$SigmaH)) {
-      row$sigma2_hat <- as.numeric(apply_result$fit$SigmaH)
-    }
-  }
-
-  row
+    res
+  }, 
+  error = function(e) {
+    warning("Error extracting CbC results: ", e$message)
+    res
+  })
 }
 
 
@@ -601,7 +679,6 @@ extract_cbc_result_row <- function(group_key_df, apply_result) {
 #'   by \code{impute_mi_by_sim_scenario()}.
 #' @param id_cols       Character. Grouping identifier column names.
 #'   Default: \code{c("scenario_id", "sim_id")}.
-#' @param imp_col       Character. Imputation index column. Default: \code{".imp"}.
 #' @param row_id_col    Character. Row-ID column (kept for API consistency).
 #'   Default: \code{".id"}.
 #' @param subject_col   Character. Level-2 cluster column. Default: \code{"subject_id"}.
@@ -616,52 +693,135 @@ extract_cbc_result_row <- function(group_key_df, apply_result) {
 
 fit_closed_form_on_imputations <- function(
     imputed_long_data,
-    id_cols = c("scenario_id", "sim_id"),
-    imp_col = ".imp",
-    row_id_col = ".id",
-    subject_col = "subject_id",
-    time_col = "time_value",
-    treatment_col = "treatment",
-    outcome_col = "y"
+    fit_args = set_fit_args()
 ) {
   if (!is.data.frame(imputed_long_data)) {
     stop("'imputed_long_data' must be a data.frame.")
   }
-
-  required_cols <- unique(c(id_cols, imp_col, row_id_col, subject_col, time_col, treatment_col, outcome_col))
-  missing_cols <- setdiff(required_cols, names(imputed_long_data))
-  if (length(missing_cols) > 0L) {
-    stop(
-      "imputed_long_data is missing required columns: ",
-      paste(missing_cols, collapse = ", ")
-    )
-  }
-
-  group_cols <- c(id_cols, imp_col)
-  groups <- unique(imputed_long_data[, group_cols, drop = FALSE])
-  groups <- groups[do.call(order, groups), , drop = FALSE]
-  n_groups <- nrow(groups)
-
-  data_key <- do.call(paste, c(lapply(group_cols, function(col) imputed_long_data[[col]]), list(sep = "\r")))
-
-  result_rows <- vector("list", n_groups)
-
-  for (i in seq_len(n_groups)) {
-    key_vals <- vapply(group_cols, function(col) as.character(groups[[col]][i]), character(1L))
-    current_key <- paste(key_vals, collapse = "\r")
-    group_df <- imputed_long_data[data_key == current_key, , drop = FALSE]
-
-    apply_result <- apply_cbc_to_group(group_df, subject_col, time_col, treatment_col, outcome_col)
-    result_rows[[i]] <- extract_cbc_result_row(groups[i, , drop = FALSE], apply_result)
-  }
-
-  combined <- do.call(rbind, result_rows)
-  rownames(combined) <- NULL
-  combined
+  
+  cbc <- apply_cbc(imputed_long_data, fit_args)
+  extract_cbc_result(cbc)
 }
 
 
-# Wrapper ------------------------------------------------------------------------------------------
+# Orchestration ------------------------------------------------------------------------------------------
+
+## Analyze Single Dataset ---------------------------------------------------------------------------------------
+
+analyze_mi_closed_form <- function(data,
+                                   impute_args = set_impute_args(),
+                                   fit_args = set_fit_args()) {
+  
+  method_y <- impute_args$method_y
+  
+  if (method_y == "2l.pmm" && !exists("mice.impute.2l.pmm", mode = "function")) {
+    stop(
+      "Function 'mice.impute.2l.pmm' not found. ",
+      "Attach the 'miceadds' package before calling with method_y = '2l.pmm': ",
+      "library(miceadds)"
+    )
+  }
+  metadata <- collect_analysis_metadata(data)
+  
+  tryCatch({
+    validate_analysis_data(data)
+    analysis_data <- prepare_analysis_data(data, type = "imputation")
+    fit_result    <- fit_mi_closed_form(analysis_data, impute_args, fit_args)
+    extract_mi_closed_form_results(fit_result, data, analysis_data)
+  }, error = function(error) {
+    build_result_row(
+      metadata = metadata,
+      method = "mi_closed_form",
+      status = "failure",
+      converged = FALSE,
+      singular = FALSE,
+      elapsed_seconds = NA_real_,
+      warning_message = NA_character_,
+      error_message = conditionMessage(error)
+    )
+  })
+}
+
+
+fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args = set_fit_args()){
+  warning_messages <- character(0)
+  error_message    <- NULL
+  start_time <- proc.time()[["elapsed"]]
+  
+  fit <- withCallingHandlers(
+    tryCatch(
+      {
+        imputed_data <- impute_data(data, impute_args)
+        fit_closed_form_on_imputations(imputed_data, fit_args)
+        },
+      error = function(error) {
+        error_message <<- conditionMessage(error)
+        NULL
+        }
+      ),
+    warning = function(warning) {
+      warning_messages <<- c(warning_messages, conditionMessage(warning))
+      invokeRestart("muffleWarning")
+    }
+  )
+  elapsed_seconds <- proc.time()[["elapsed"]] - start_time
+  
+  list(
+    fit = fit,
+    elapsed_seconds = as.numeric(elapsed_seconds),
+    warnings = unique(warning_messages),
+    error_message = error_message
+  )
+  
+  
+}
+
+extract_mi_closed_form_results <- function(fit_result, original_data, analysis_data) {
+  metadata <- collect_analysis_metadata(original_data)
+  
+  n_observed <- sum(!is.na(analysis_data$observed) & as.logical(analysis_data$observed) & !is.na(analysis_data$y))
+  
+  #status <- classify_fit_status(fit_result)
+  status <- "unknown"
+  warning_message <- if (length(fit_result$warnings) > 0L) {
+    paste(fit_result$warnings, collapse = " | ")
+  } else {
+    NA_character_
+  }
+  
+  result_row <- build_result_row(
+    metadata = metadata,
+    method = "mi_closed_form",
+    status = status,
+    converged = status != "failure",
+    singular = status == "singular_fit",
+    elapsed_seconds = fit_result$elapsed_seconds,
+    warning_message = warning_message,
+    error_message = if (is.null(fit_result$error_message)) NA_character_ else fit_result$error_message
+  )
+  
+  if (status == "failure") {
+    return(result_row)
+  }
+  result_row$n_observed <- as.integer(n_observed)
+  result_row$estimate_beta0 <- fit_result$fit["estimate_beta0"]
+  result_row$estimate_beta1 <- fit_result$fit["estimate_beta1"]
+  result_row$estimate_beta2 <- fit_result$fit["estimate_beta2"]
+  result_row$estimate_beta3 <- fit_result$fit["estimate_beta3"]
+  # result_row$se_beta0 <- extract_fixed_effect_value(coef_summary, "(Intercept)", "Std. Error")
+  # result_row$se_beta1 <- extract_fixed_effect_value(coef_summary, "treatment", "Std. Error")
+  # result_row$se_beta2 <- extract_fixed_effect_value(coef_summary, "time_value", "Std. Error")
+  # result_row$se_beta3 <- extract_fixed_effect_value(coef_summary, "treatment:time_value", "Std. Error")
+  # result_row$var_b0 <- extract_varcorr_value(varcorr_df, "subject_id", "(Intercept)")
+  # result_row$cov_b0b1 <- extract_varcorr_value(varcorr_df, "subject_id", "(Intercept)", "time_value")
+  # result_row$var_b1 <- extract_varcorr_value(varcorr_df, "subject_id", "time_value")
+  result_row$sigma2_hat <- fit_result$fit["sigma2_hat"]
+  result_row
+}
+
+
+## Analyze Generated dataset ---------------------------------------------------------------------------------------
+
 
 #' Run multiple imputation + closed-form analysis.
 #'
@@ -685,29 +845,37 @@ fit_closed_form_on_imputations <- function(
 #'   \item{meta}{List with \code{method}, \code{impute_args}, and \code{fit_args}.}
 #' }
 
-analyze_mi_closed_form <- function(
+analyze_generated_data_mi_closed_form <- function(
     data,
     scenarios = NULL,
-    impute_args = list(),
-    fit_args = list()
+    impute_args = set_impute_args(),
+    fit_args = set_fit_args
 ) {
-  impute_result <- do.call(impute_mi_by_sim_scenario, c(list(data = data), impute_args))
-  imputed_data <- impute_result$imputed_long
-  timing <- impute_result$timing
-
-  model_results <- do.call(
-    fit_closed_form_on_imputations,
-    c(list(imputed_long_data = imputed_data), fit_args)
-  )
-
-  list(
-    imputed_data = imputed_data,
-    timing = timing,
-    model_results = model_results,
-    meta = list(
-      method = "mi_closed_form",
-      impute_args = impute_args,
-      fit_args = fit_args
-    )
-  )
+  
+  required_split_cols <- c("scenario_id", "sim_id")
+  missing_cols        <- setdiff(required_split_cols, names(data))
+  
+  if (length(missing_cols) > 0L) {
+    stop("data is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+  if (nrow(data) == 0L) {
+    return(empty_results())
+  }
+  
+  split_data       <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
+  results          <- lapply(split_data, analyze_mi_closed_form, impute_args = impute_args, fit_args = fit_args)
+  combined_results <- do.call(rbind, results)
+  combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
+  
+  if (!is.null(scenarios)) {
+    unrecognized <- setdiff(combined_results$scenario_id, scenarios$scenario_id)
+    if (length(unrecognized) > 0L) {
+      warning(
+        "analysis_results contains scenario_id values not found in scenarios: ",
+        paste(unrecognized, collapse = ", ")
+      )
+    }
+  }
+  
+  combined_results
 }

@@ -10,10 +10,10 @@
 #
 # Function hierarchy:
 #   analyze_generated_data_classical_ml()
-#     analyze_one_dataset_classical_ml()
+#     analyze_classical_ml()
 #       validate_analysis_data()
 #       prepare_analysis_data()
-#       build_classical_ml_formula()
+#       build_formula()
 #       fit_classical_ml_model()
 #       classify_fit_status()
 #       extract_classical_ml_results()
@@ -21,7 +21,7 @@
 
 # Internal helpers -------------------------------------------------------------------------------------------------
 
-empty_classical_ml_results <- function() {
+empty_results <- function() {
   data.frame(
     scenario_id = integer(),
     sim_id = integer(),
@@ -79,8 +79,10 @@ collect_analysis_metadata <- function(data) {
   )
 }
 
-build_classical_ml_result_row <- function(
+build_result_row <- function(
     metadata,
+    method = NA_character_,
+    engine = NA_character_,
     status = "failure",
     converged = FALSE,
     singular = FALSE,
@@ -91,8 +93,8 @@ build_classical_ml_result_row <- function(
   data.frame(
     scenario_id = metadata$scenario_id,
     sim_id = metadata$sim_id,
-    method = "classical_ml",
-    engine = "lme4",
+    method = method,
+    engine = engine,
     status = status,
     converged = converged,
     singular = singular,
@@ -242,7 +244,6 @@ validate_analysis_data <- function(data) {
   invisible(data)
 }
 
-
 # Data preparation -------------------------------------------------------------------------------------------------
 
 ## Prepare analysis data -------------------------------------------------------------------------------------------
@@ -256,14 +257,28 @@ validate_analysis_data <- function(data) {
 #'
 #' @return Data frame ready for `lme4::lmer()`.
 
-prepare_analysis_data <- function(data) {
-  keep_rows <- !is.na(data$observed) & as.logical(data$observed) & !is.na(data$y)
-  analysis_data <- data[keep_rows, , drop = FALSE]
-  analysis_data$subject_id <- factor(analysis_data$subject_id)
-  analysis_data$treatment <- coerce_treatment_numeric(analysis_data$treatment)
+prepare_analysis_data <- function(data, type = c("imputation", "weighting", "classical_ml")) {
+  if (missing(type)) {
+    stop("type must be specified: choose one of \"imputation\", \"weighting\" or \"classical_ml\"")
+  }
+  type <- match.arg(type)
+  
+  analysis_data <- data[
+    if(type == "imputation") TRUE else !is.na(data$observed) & as.logical(data$observed) & !is.na(data$y),
+    ,
+    drop = FALSE
+  ]
+  
+  if(type == "imputation"){
+    analysis_data$subject_id <- as.integer(analysis_data$subject_id)
+  } else {
+    analysis_data$subject_id <- factor(analysis_data$subject_id)
+  }
+  
+  analysis_data$treatment  <- coerce_treatment_numeric(analysis_data$treatment)
   analysis_data$time_value <- as.numeric(analysis_data$time_value)
-  analysis_data$y <- as.numeric(analysis_data$y)
-  analysis_data$observed <- as.logical(analysis_data$observed)
+  analysis_data$y          <- as.numeric(analysis_data$y)
+  analysis_data$observed   <- as.logical(analysis_data$observed)
 
   if (anyNA(analysis_data$treatment)) {
     stop("treatment contains values that cannot be coerced to numeric.")
@@ -276,12 +291,11 @@ prepare_analysis_data <- function(data) {
   analysis_data[order(analysis_data$subject_id, analysis_data$time_value), , drop = FALSE]
 }
 
-
 # Model fitting ----------------------------------------------------------------------------------------------------
 
-## Build classical ML formula --------------------------------------------------------------------------------------
+## Build formula --------------------------------------------------------------------------------------
 
-#' Build the classical ML mixed-model formula.
+#' Build the mixed-model formula.
 #'
 #' @param outcome      Character. Outcome variable name.
 #' @param treatment    Character. Treatment variable name.
@@ -291,7 +305,7 @@ prepare_analysis_data <- function(data) {
 #'
 #' @return A model formula for `lme4::lmer()`.
 
-build_classical_ml_formula <- function(
+build_formula <- function(
     outcome = "y",
     treatment = "treatment",
     time = "time_value",
@@ -318,11 +332,11 @@ build_classical_ml_formula <- function(
 #' warnings or errors in a structured return object.
 #'
 #' @param data    Prepared analysis data as returned by prepare_analysis_data().
-#' @param formula Model formula, typically from build_classical_ml_formula().
+#' @param formula Model formula, typically from build_formula().
 #'
 #' @return A list with fit, formula, elapsed_seconds, warnings, and error_message.
 
-fit_classical_ml_model <- function(data, formula = build_classical_ml_formula()) {
+fit_classical_ml_model <- function(data, formula = build_formula()) {
   warning_messages <- character(0)
   error_message <- NULL
   start_time <- proc.time()[["elapsed"]]
@@ -404,8 +418,10 @@ extract_classical_ml_results <- function(fit_result, original_data, analysis_dat
     NA_character_
   }
 
-  result_row <- build_classical_ml_result_row(
+  result_row <- build_result_row(
     metadata = metadata,
+    method = "classical_ml",
+    engine = "lme4",
     status = status,
     converged = status != "failure",
     singular = status == "singular_fit",
@@ -451,17 +467,19 @@ extract_classical_ml_results <- function(fit_result, original_data, analysis_dat
 #'
 #' @return One-row data frame with standardized classical ML analysis results.
 
-analyze_one_dataset_classical_ml <- function(data) {
+analyze_classical_ml <- function(data) {
   metadata <- collect_analysis_metadata(data)
 
   tryCatch({
     validate_analysis_data(data)
-    analysis_data <- prepare_analysis_data(data)
-    fit_result <- fit_classical_ml_model(analysis_data, build_classical_ml_formula())
+    analysis_data <- prepare_analysis_data(data, type = "classical_ml")
+    fit_result <- fit_classical_ml_model(analysis_data, build_formula())
     extract_classical_ml_results(fit_result, data, analysis_data)
   }, error = function(error) {
-    build_classical_ml_result_row(
+    build_result_row(
       metadata = metadata,
+      method = "classical_ml",
+      engine = "lme4",
       status = "failure",
       converged = FALSE,
       singular = FALSE,
@@ -496,11 +514,11 @@ analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
   }
 
   if (nrow(data) == 0L) {
-    return(empty_classical_ml_results())
+    return(empty_results())
   }
-
+  
   split_data <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
-  results <- lapply(split_data, analyze_one_dataset_classical_ml)
+  results <- lapply(split_data, analyze_classical_ml)
   combined_results <- do.call(rbind, results)
   combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
 
