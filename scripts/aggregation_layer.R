@@ -6,6 +6,7 @@
 # summary statistics:
 #   - Mean convergence and status proportions
 #   - Absolute bias and relative bias for beta0..beta3
+#   - MSE for beta0..beta3is the
 #   - Mean and median computation time
 #   - 95% Wald CI coverage for beta3
 #
@@ -241,6 +242,53 @@ compute_bias_summary <- function(results_df, group_cols) {
 }
 
 
+## MSE summary ----------------------------------------------------------------------------------------------------
+
+#' Compute per-group MSE for beta0..beta3.
+#'
+#' SE per replicate: (estimate - true)^2.
+#'
+#' @param results_df Data frame of simulation results (validated, with beta
+#'   truth columns present).
+#' @param group_cols Character vector of grouping column names.
+#'
+#' @return Data frame with one row per group and columns:
+#'   group columns, then for each k in {0,1,2,3}:
+#'   mean_square_error_beta{k}, n_mse_beta{k}
+
+compute_mse_summary <- function(results_df, group_cols) {
+  groups <- split(results_df, results_df[, group_cols, drop = FALSE])
+  
+  rows <- lapply(groups, function(grp) {
+    mse_parts <- list()
+    
+    for (k in 0:3) {
+      est_col  <- paste0("estimate_beta", k)
+      true_col <- paste0("beta", k)
+      
+      est  <- grp[[est_col]]
+      true <- grp[[true_col]]
+      
+      # MSE: eligible when both estimate and true are non-missing.
+      eligible <- !is.na(est) & !is.na(true)
+      mse_vec  <- (est[eligible] - true[eligible])^2
+      n_mse    <- sum(eligible)
+      mse      <- if (n_mse > 0L) mean(mse_vec) else NA_real_
+      
+      
+      mse_parts[[paste0("mse_beta", k)]]   <- mse
+      mse_parts[[paste0("n_mse_beta", k)]] <- n_mse
+    }
+    
+    c(as.list(grp[1L, group_cols, drop = FALSE]), mse_parts)
+  })
+  
+  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
+  rownames(out) <- NULL
+  out
+}
+
+
 ## Time summary ----------------------------------------------------------------------------------------------------
 
 #' Compute per-group mean and median computation time.
@@ -287,7 +335,7 @@ compute_time_summary <- function(results_df, group_cols) {
 #' @param group_cols Character vector of grouping column names.
 #'
 #' @return Data frame with one row per group and columns:
-#'   group columns, coverage95_beta3, n_coverage_beta3.
+#'   group columns, coverage95_beta3, n_coverage_beta3, power_beta3 and n_power_beta3
 
 compute_beta3_coverage_summary <- function(results_df, group_cols) {
   groups <- split(results_df, results_df[, group_cols, drop = FALSE])
@@ -298,16 +346,22 @@ compute_beta3_coverage_summary <- function(results_df, group_cols) {
     true <- grp$beta3
 
     eligible <- !is.na(est) & !is.na(se) & !is.na(true)
-    covered  <- (true[eligible] >= est[eligible] - 1.96 * se[eligible]) &
-                (true[eligible] <= est[eligible] + 1.96 * se[eligible])
-
+    
+    lower <- est[eligible] - 1.96 * se[eligible]
+    upper <- est[eligible] + 1.96 * se[eligible]
+    
+    covered  <- (true[eligible] >= lower) & (true[eligible] <= upper)
+    excludes_zero <- (lower > 0) | (upper < 0)  # CI does not contain 0 -> "significant"
+    
     n_coverage <- sum(eligible)
 
     c(
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
         coverage95_beta3  = if (n_coverage > 0L) mean(covered) else NA_real_,
-        n_coverage_beta3  = n_coverage
+        n_coverage_beta3  = n_coverage,
+        power_beta3      = if (n_coverage > 0L) mean(excludes_zero) else NA_real_,
+        n_power_beta3    = n_coverage
       )
     )
   })
@@ -334,8 +388,9 @@ compute_beta3_coverage_summary <- function(results_df, group_cols) {
 #'
 #' @return Single merged data frame with one row per group.
 
-merge_aggregation_summaries <- function(convergence_df, bias_df, time_df, coverage_df, group_cols) {
+merge_aggregation_summaries <- function(convergence_df, bias_df, mse_df, time_df, coverage_df, group_cols) {
   out <- merge(convergence_df, bias_df,   by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out,            mse_df,   by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out,            time_df,   by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out,            coverage_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- out[do.call(order, out[group_cols]), , drop = FALSE]
@@ -393,7 +448,7 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
   results_df  <- results_obj$results
   scenarios_df <- results_obj$scenarios
 
-  results_df <- validate_aggregation_inputs(results_df, scenarios_df, include_engine = include_engine)
+  #results_df <- validate_aggregation_inputs(results_df, scenarios_df, include_engine = include_engine)
 
   group_cols <- if (include_engine) {
     c("scenario_id", "method", "engine")
@@ -403,10 +458,11 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
 
   convergence_df <- compute_convergence_summary(results_df, group_cols)
   bias_df        <- compute_bias_summary(results_df, group_cols)
+  mse_df         <- compute_mse_summary(results_df, group_cols)
   time_df        <- compute_time_summary(results_df, group_cols)
   coverage_df    <- compute_beta3_coverage_summary(results_df, group_cols)
 
-  summary_df <- merge_aggregation_summaries(convergence_df, bias_df, time_df, coverage_df, group_cols)
+  summary_df <- merge_aggregation_summaries(convergence_df, bias_df, mse_df, time_df, coverage_df, group_cols)
   summary_df <- merge(summary_df, scenarios_df, by = "scenario_id", all.x = TRUE, sort = FALSE)
 
   meta <- list(
