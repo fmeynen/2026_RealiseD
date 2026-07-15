@@ -1,0 +1,123 @@
+---
+title: "Update Joint Modeling 09/07"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(here)
+# Global chunk options
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+res <- readRDS(here::here("results", "data", "agg_results.Rds"))
+res <- rbind(res[[1]]$summary, res[[2]]$summary)
+```
+
+## Overview Methods:
+
+Three methods for estimating model parameters were suggested:
+
+1.  Classical maximum likelihood
+
+2.  Multiple imputation + closed form
+
+3.  Closed form + weighting
+
+Currently:
+
+1.  Classical ML completely implemented
+
+2.  MI + closed form partly implemented: Fixed effects and variance is implemented, RE and variance estimators of fixed effects not yet implemented **Q: current quick fix solution by using equal weights, is this ok?**
+
+3.  Closed form + weighting: not yet implemented
+
+## Preliminary Results
+
+### Simulation setup
+
+Formula: $$ y_{ij} = \beta_0 + \beta_1Treatment_i + \beta_2Time_j + \beta_3Treatment_i*Time_j + b_{0i} + b_{1i}*Time_j $$
+
+Parameters were taken from the toenail data:
+
+| Effect | Parameter | Size |
+|----|----|----|
+| Intercept | $\beta_0$ | 2.4562 |
+| Treatment Effect | $\beta_1$ | 0 **0.593 in toenail data (this was a dose effect)** |
+| Time Effect | $\beta_2$ | 0.2792 |
+| Treatment x Time | $\beta_3$ | 0.0350 |
+| Random intercept variance | $d_{11}$ | 7.3174 |
+| Random slope variance | $d_{22}$ | 0.2239 |
+| Random effects covariance | $d_{12}$ | -0.4985 |
+| Residual variance | $\sigma^2$ | 3.1508 |
+
+| Variable | Value |
+|------------------------------------|------------------------------------|
+| number of clusters | 100, 50, 20, 10 *(10.000 clusters was asked too, but currently excluded due to large computing time)* |
+| number of repeated measures | 12 |
+| missingness pattern | "half-missing" (half of the clusters have no missingness, other half have uniform probability to have 1-11 observations, dropout is monotone) |
+| number of simulations / scenario | 100 *(will use 1000 in the future, but restricted due to computing time)* |
+
+For the imputations: imputations were done within clusters, 3 imputations per clusters, with a maximum of 10 repetitions.
+
+## Results
+
+### Mean Absolute Bias
+
+Larger bias in classical ml
+
+```{r}
+res[order(-res$n), c(2, 33, grep("^mean_abs", names(res)))]
+```
+
+### Mean Relative Bias
+
+Note: probably better to use mean absolute relative bias?
+
+```{r}
+res[order(-res$n), c(2, 33, grep("^mean_rel", names(res)))]
+```
+
+\newpage
+
+### Convergence Rate
+
+Rate of convergence not yet implemented for mi + closed form. Convergence for classical ML needs checking
+
+```{r}
+res[order(-res$n), c(2, 33, grep("^prop_conv", names(res)))]
+```
+
+### Coverage rate of $\beta_3$
+
+Coverage rate for MI + closed form not yet implemented (no variance of estimates yet)
+
+```{r}
+res[order(-res$n), c(2, 33, grep("coverage95", names(res)))]
+```
+
+### Computation Time
+
+Classical ML is faster (due to time required for imputation)
+
+```{r}
+res[order(-res$n), c(2, 33, grep("seconds", names(res)))]
+```
+
+## Next steps
+
+1.  Check rate of convergence
+
+2.  Implement the calculation of RE variances and FE estimate variances for MI + closed form
+
+3.  Implement closed form + weighting
+
+4.  Present results with graphs
+
+5.  Joint model
