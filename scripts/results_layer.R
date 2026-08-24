@@ -511,7 +511,8 @@ build_and_save_results <- function(
     output_dir = "results/data",
     overwrite = FALSE
 ) {
-  validate_results_layer_inputs(analysis_results, scenarios)
+  #TODO update for MI
+  #validate_results_layer_inputs(analysis_results, scenarios)
 
   # Coerce seed_base to integer once, before downstream use and hashing.
   scenarios$seed_base <- as.integer(scenarios$seed_base)

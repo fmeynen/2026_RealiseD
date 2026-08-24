@@ -158,15 +158,19 @@ set_impute_args <- function(
 }
 
 set_fit_args <- function(
-    subject_col = "subject_id",
-    time_col = "time_value",
+    subject_col   = "subject_id",
+    time_col      = "time_value",
     treatment_col = "treatment",
-    outcome_col = "y"){
+    outcome_col   = "y",
+    formula       = build_formula(),
+    epsilon_D     = 1e-6){
   list(
     subject_col   = subject_col,
     time_col      = time_col,
     treatment_col = treatment_col,
-    outcome_col   = outcome_col
+    outcome_col   = outcome_col,
+    formula       = formula,
+    epsilon_D     = epsilon_D
   )
 }
 
@@ -436,177 +440,246 @@ impute_mi_by_sim_scenario <- function(
 
 # Closed-form estimator (CbCEstimator) -----------------------------------------------------------
 
+#helper formula inv_sum_kwk
+calculate_inv_sum_KWK <- function(K_mi, Weights){
+  KWK  <- mapply(function(K, W) {t(K) %*% W %*% K},
+                 K_mi, Weights,
+                 SIMPLIFY = FALSE)
+  solve(Reduce('+', KWK))
+}
+
+#stage 1
+calculate_stage1_results <- function(Z, Y, n, q){
+  mapply(
+    function(Z, Y, n) {
+      beta_hat  = solve(crossprod(Z),crossprod(Z,Y))
+      e         = Y-Z%*%beta_hat
+      Sigma_hat = crossprod(e)/(n-q)
+      list(
+        beta_hat  = beta_hat,
+        Sigma_hat = Sigma_hat
+      )
+    },
+    Z, Y, n,
+    SIMPLIFY = FALSE
+  )
+}
+
+#stage 2
+calculate_stage2_beta <- function(K_mi, Weights, beta_hats){
+  inv_sum_KWK <- calculate_inv_sum_KWK(K_mi, Weights)
+  KWB  <- mapply(function(K, W, B) {t(K) %*% W %*% B}, 
+                 K_mi, Weights, beta_hats,
+                 SIMPLIFY = FALSE)
+  sum_KWB <- Reduce('+', KWB)
+  inv_sum_KWK %*% sum_KWB
+}
+
+calculate_stage2_Sigma <- function(Sigma_hats, Weights){
+  vech_Sigma_hat <- as.data.frame(do.call(rbind, lapply(Sigma_hats, ks::vech)))
+  ks::invvech(apply(vech_Sigma_hat,2,weighted.mean,w=Weights))
+}
+
+calculate_stage2_Dmatrix <- function(K_mi, Weights, Z_i, N_clusters,
+                                     beta_hats,beta_tilde, Sigma_tilde){
+  #vec Sb
+  BetaH_Kmi_BetaT <- mapply(function(beta_hats, K_mi){
+    beta_hats - K_mi %*% beta_tilde},
+    beta_hats, K_mi, SIMPLIFY = F)
+  vec_sb <- ks::vec(Reduce('+', lapply(BetaH_Kmi_BetaT, tcrossprod)))
+  
+  # c and D
+  inv_sum_KWK   <- calculate_inv_sum_KWK(K_mi, Weights)
+  H_ik_part1    <- lapply(K_mi, function(K){K %*% inv_sum_KWK})
+  H_ik_part2    <- mapply(function(K, W){crossprod(K, W)}, K_mi, Weights, SIMPLIFY = F)
+  H_ii          <- mapply(function(part1, part2) {part1 %*% part2}, H_ik_part1, H_ik_part2, SIMPLIFY = F)
+  i_cols        <- ncol(H_ii[[1]])
+  identity_list <- replicate(N_clusters, diag(i_cols), simplify = F)
+  IxI           <- mapply(function(I){kronecker(I, I)}, identity_list, SIMPLIFY = F)
+  IxHii         <- mapply(function(I, H_ii){kronecker(I, H_ii)}, identity_list, H_ii, SIMPLIFY = F)
+  HiixI         <- mapply(function(H_ii, I){kronecker(H_ii, I)}, H_ii, identity_list, SIMPLIFY = F)
+  HiixHii       <- lapply(H_ii, function(X){kronecker(X,X)})
+  
+  Sum_Ai_Sum_Bk <- Reduce('+', mapply(function(H_ik1){kronecker(H_ik1, H_ik1)}, H_ik_part1, SIMPLIFY = F)) %*%
+    Reduce('+', mapply(function(H_ik2){kronecker(H_ik2, H_ik2)}, H_ik_part2, SIMPLIFY = F))
+  
+  vec_Sigma_Z <- lapply(Z_i, function(Z){
+    ks::vec(kronecker(Sigma_tilde, solve(crossprod(Z))))
+  })
+  
+  ## c
+  c = Reduce('+',
+             mapply(function(IxI, IxHii, HiixI, HiixHii, SASB, vSz)
+             {(IxI - IxHii - HiixI + HiixHii + SASB - Reduce('+', HiixHii)) %*% vSz},
+             IxI, IxHii, HiixI, HiixHii, list(Sum_Ai_Sum_Bk), vec_Sigma_Z,
+             SIMPLIFY = F)
+  )
+  Denom <- Reduce('+', IxI) - Reduce('+', IxHii) - Reduce('+', HiixI) + Sum_Ai_Sum_Bk
+  
+  
+  ## D
+  vec_D_tilde = solve(Denom) %*% (vec_sb - c)
+
+  ks::invvec(vec_D_tilde, sqrt(length(vec_D_tilde)))
+}
+
+calculate_stage2_varbeta <- function(K_mi, Weights, Z_i, D_tilde, Sigma_tilde){
+  var_beta_i     <- mapply(function(Z)
+    {D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))},
+    Z_i, SIMPLIFY = F)
+  var_beta_part1 <- solve(Reduce('+', mapply(function(K_mi, Weights)
+    {crossprod(K_mi, Weights) %*% K_mi},
+    K_mi, Weights, SIMPLIFY = F)))
+  var_beta_part2 <- Reduce('+', mapply(function(K_mi, Weights, VB_i)
+    {crossprod(K_mi, Weights) %*% VB_i %*% crossprod(Weights, K_mi)},
+    K_mi, Weights, var_beta_i, SIMPLIFY = F))
+  
+  var_beta_part1 %*% var_beta_part2 %*% var_beta_part1
+}
+
 # Cluster-by-cluster estimator
-CbCEstimator = function(clusterID,Y,X,Z){
-  # clusterID: indicator for cluster
-  # Y: Matrix of outcomes (rows: observations, columns: variables)
-  # X: design matrix X
-  # Z: design matrix Z
-  ## function to compute overall estimates of Beta
-  Weightedestimator = function(K_i,A_i,BetaH_i){ ### Calculates beta tilde as on p8
-    N = nrow(BetaH_i)
-    BetaH_i = split(BetaH_i,1:N)
-    ## computing ki'*A*Ki 
-    Kit = mapply(t,K_i,SIMPLIFY = FALSE)
-    KtA = mapply(crossprod,K_i,A_i,SIMPLIFY = FALSE)
-    KAK = mapply(tcrossprod,KtA,Kit,SIMPLIFY=FALSE)
-    ## computing the inverse
-    KAKinv = solve(Reduce('+',KAK))
-    ### computing (Ki'*Ai*Ki)^-1*Ki'*Ai
-    HHi = mapply('%*%',list(KAKinv),KtA,SIMPLIFY = FALSE)
-    ### estimating beta with proportional weights
-    BetaTilde = Reduce('+',mapply('%*%',HHi,BetaH_i,SIMPLIFY = FALSE))  
-    return(list(BetaTilde,HHi))  
+CbCEstimator = function(mats, epsilon_D = NULL, reweighting = TRUE){
+  
+  Z_i <- mats$Z
+  Y_i <- mats$Y
+  X_i <- mats$X
+  q   <- mats$q
+  p   <- mats$p
+  m   <- mats$m
+  n_i <- mats$n_i
+  n_c <- mats$n_c
+  if(is.null(epsilon_D)){epsilon_D <- 1e-6}
+  
+  stage1_results <- calculate_stage1_results(Z_i, Y_i, n_i, q)
+  
+  B_i        <- lapply(stage1_results, `[[`, "beta_hat")
+  beta_hats  <- lapply(B_i, ks::vec)
+  Sigma_hats <- lapply(stage1_results, `[[`, "Sigma_hat")
+  
+  # K matrix:
+  K_i <- mapply(function(Z_i, X_i) {
+    solve(crossprod(Z_i), crossprod(Z_i, X_i))
+  }, Z_i, X_i, SIMPLIFY = FALSE)
+  K_mi <- lapply(K_i, function(K_i) {kronecker(diag(m), K_i)})
+  
+  #W matrix
+  total_obs <- Reduce('+', n_i)
+  w_i       <- lapply(n_i, function(n) n / total_obs) #simple first proportional weights
+  W_1i      <- mapply(diag,w_i,list(q*m),SIMPLIFY = FALSE)
+  denom     <- Reduce('+', lapply(n_i, function(x){x-2}))
+  w_i2      <- unlist(lapply(n_i, function(n) (n-q) / denom))
+  
+  #2nd stage calculations
+  beta_tilde  <- calculate_stage2_beta(K_mi, W_1i, beta_hats)
+  Sigma_tilde <- calculate_stage2_Sigma(Sigma_hats, w_i2)
+  D_tilde     <- calculate_stage2_Dmatrix(K_mi, W_1i, Z_i, n_c, beta_hats, beta_tilde, Sigma_tilde)
+  #adjust D_tilde for positive definiteness
+  adjust_D_pd <- function(D_tilde, epsilon = 1e-6){
+    eig         <- eigen(D_tilde)
+    eigenvalues <- eig$values
+    eigenvalues[eigenvalues < 0] <- epsilon
+    
+    E <- diag(eigenvalues)
+    L <- eig$vectors
+    
+    L %*% E %*% t(L)
   }
   
-  Kmatrix = function(X,Z,m){ # m = number of columns of Y
-    if(identical(X,Z)){ # design matrix of FE and RE - they model the same components, ie intercept and slope. 
-      # the matrix K (which serves as a bridge matrix) it connects the patient-specific parameters obtained by Z matrix to th overall 
-      # population parameters using the design matrix X
-      p = ncol(X) 
-      K = diag(p*m) 
-    }else{                      # if you have different components in FE than RE, the code runs the else block <-- THIS will be our case (2 RE and 4 FE)
-      Z = kronecker(diag(m),Z)  # makes bivariate design matrces. bivariate since m in this example is =2
-      X = kronecker(diag(m),X) 
-      ZtZ = solve(crossprod(Z)) # Calculates the OLS projection
-      K = crossprod(ZtZ,crossprod(Z,X))
-    }
-    return(K)
+  if(min(eigen(D_tilde,only.values = T)$values) < 0 ){
+    warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
+    D_tilde = adjust_D_pd(D_tilde, epsilon_D)
   }
-  prodL = function(XL,YL){
-    R = mapply('%*%',XL,YL,SIMPLIFY = FALSE)
-    return(R)
-  }
-  Bmatrix = function(Ki,Inner){
-    Ki%*%Inner%*%t(Ki)
-  }
-  ## Method of moments estimator of D ----> this is was is found in the article on p9 (Here, it gets quite complicated for me, so i did not go through it in detail. )
-  MME.D = function(w_i,K_i,HHi,BetaH_i,BetaH,R_i){
-    
-    q = ncol(K_i[[1]])
-    
-    N = length(w_i)
-    b_i <- BetaH_i- tcrossprod(matrix(1,N,1),BetaH)  
-    b_i = b_i*matrix(sqrt(w_i),N,q)
-    Sb = crossprod(b_i)
-    sum.HHi = Reduce('+',HHi)
-    
-    H_ii = mapply('%*%',K_i,HHi,SIMPLIFY = FALSE)      
-    
-    kron.HHi = mapply(function(X,w){w*kronecker(X,X)},HHi,w_i,SIMPLIFY = F)
-    kron.K_i = mapply(function(X){kronecker(X,X)},K_i,SIMPLIFY = F)
-    
-    
-    Denom.inv = diag((q)^2) - Reduce('+',mapply(function(X,w){w*kronecker(diag(ncol(X)),X)},H_ii,w_i,SIMPLIFY = F)) -
-      Reduce('+',mapply(function(X,w){w*kronecker(X,diag(ncol(X)))},H_ii,w_i,SIMPLIFY = F)) +   
-      Reduce('+',kron.K_i)%*%Reduce('+',kron.HHi)
-    
-    R_i.w = mapply('*',R_i,w_i,SIMPLIFY = F)
-    Inner = Reduce('+',mapply(Bmatrix,HHi,R_i.w,SIMPLIFY = F))
-    part1 = prodL(H_ii,R_i.w)
-    part2 = prodL(R_i.w,H_ii)
-    part3 = mapply(Bmatrix,K_i,list(Inner),SIMPLIFY = FALSE)
-    c = Reduce('+',R_i.w) - Reduce('+',part1) - Reduce('+',part2) + Reduce('+',part3)  
-    vec.c = vec(c)
-    Denom = solve(Denom.inv)
-    vec.D = Denom%*%(vec(Sb)- vec.c)
-    q = ncol(Sb)
-    D = invvec(vec.D,nrow=q,ncol=q)
-    return(D)
-  }
-  ## function to estimate the variance of the overall estimator of Beta
-  VarBetaH.fun = function(Ki,Ai,VarBetai){
-    KA = mapply(crossprod,Ki,Ai,SIMPLIFY = FALSE)
-    WW = solve(Reduce('+',mapply('%*%',KA,Ki,SIMPLIFY = FALSE)))
-    II = Reduce('+',mapply(tcrossprod,mapply('%*%',KA,VarBetai,SIMPLIFY=FALSE),KA,SIMPLIFY = FALSE))
-    VarBetaH = WW%*%tcrossprod(II,WW)
-    return(VarBetaH)
-  }
-  #Data processing
-  p = ncol(X)
-  q = ncol(Z)
-  m = ncol(Y) # bivariate response vector (surogate and true endpoint)
-  Y_i = split(Y, clusterID) # split the response vector into groups, meaning that each patient becomes a separate group --> returns a list
-  n = c(table(clusterID)) # 'n' defines the size of each group
-  N = length(n) # Number of groups
-  if(m>1){
-    Y_i = mapply(function(x){matrix(x,length(x)/m,m)},Y_i,SIMPLIFY = F) # for each element in Y_i, you get a matrix with length(elemente)/m rows , and m columns.
-  }  
-  X_i = split(X,clusterID)
-  if(p>1){
-    X_i = mapply(function(x){matrix(x,length(x)/p,p)},X_i,SIMPLIFY = F)
-  }
-  Z_i = split(Z,clusterID)
-  if(q>1){
-    Z_i = mapply(function(x){matrix(x,length(x)/q,q)},Z_i,SIMPLIFY = F)
-  }
-  Est_i = mapply(function(x){
-    Y = Y_i[[x]]
-    n <- ifelse(is.null(dim(Y)), length(Y), nrow(Y))
-    Z = Z_i[[x]]
-    BetaH <- solve(crossprod(Z),crossprod(Z,Y))   ## LS regression coefficients are calculated here.
-    ## crossprod (Z)  = Z'Z
-    ## crossprod (Z,Y) = Z'Y
-    ## solve does (Z'Z)^{-1}Z'Y
-    e <- Y-Z%*%BetaH    # Residual vector per patient is calculated
-    SigmaH <- crossprod(e)/(n-2) # residual variance ((or MSE = RSS = e'e /n-2 when there are 2 parameters to be estimated (ie slope and intercept)
-    
-    Output <- c(c(BetaH),ks::vech(SigmaH)) #vech stacks the columns in a single vector
-    return(Output)
-  },x=1:N) # Repeat this step for all patients. THIS function Est_i CORRESPONDS TO STAGE 1 patient specific OLS
-  Est_i = t(Est_i) # transpose from 1 a vector to different columns
-  BetaH_i = Est_i[,1:(q*m)] # extract the Beta coefficients which were first in the vector
-  SigmaH_i = Est_i[,-c(1:(q*m))] # extract the variance from the vector which were last
+  variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_1i, Z_i, D_tilde, Sigma_tilde)
   
-  w_i = n/sum(n) # proportional weights (for Beta)
-  w_i.2 = (n-2)/sum(n-2) # 2nd weights (2 = number of parameters) for Sigma
-  A_i = mapply(diag,w_i,list(q*m),SIMPLIFY = FALSE) # proportional weights to the diagonal elements of a matrix. --> I THINK this is needed for the variance of of the variance components.
-  K_i = mapply(Kmatrix,X_i,Z_i,list(m),SIMPLIFY = FALSE) # See Kmatrix function and calculations on paper. 
-  Overall = Weightedestimator(K_i,A_i,BetaH_i)
-  HHi = Overall[[2]] # Exctract this computation : (Ki'*Ai*Ki)^-1*Ki'*Ai from the ist called overall. 
-  BetaH = Overall[[1]] # Extract Beta tilde from the list called overall
-  SigmaH <- ifelse(is.null(dim(SigmaH_i)),
-                   weighted.mean(SigmaH_i, w_i.2),
-                   ks::invvech(apply(SigmaH_i,2,weighted.mean,w=w_i.2)))
-  fit = list(BetaH=BetaH,SigmaH=SigmaH)
-  # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma
-  list(fit = fit)
+  #Reweighting
+  while(reweighting){
+    var_beta_i     <- mapply(function(Z)
+      {D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))},
+      Z_i, SIMPLIFY = F)
+    inv_Sum_V_i <- solve(Reduce('+',lapply(var_beta_i, solve)))
+    W_opt_1i <- lapply(var_beta_i, function(V){inv_Sum_V_i %*% solve(V)})
+    
+    beta_tilde          <- calculate_stage2_beta(K_mi, W_opt_1i, beta_hats)
+    D_tilde             <- calculate_stage2_Dmatrix(K_mi, W_opt_1i, Z_i, n_c, beta_hats, beta_tilde, Sigma_tilde)
+    variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_opt_1i, Z_i, D_tilde, Sigma_tilde)
+    
+    reweighting <- FALSE
+  }
+  
+  # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma (3) Estimates D,
+  # and (4) variance of estimates for fixed effects
+  list(beta_tilde          = beta_tilde,
+       Sigma_tilde         = Sigma_tilde,
+       D_tilde             = D_tilde,
+       variance_beta_tilde = variance_beta_tilde)
+  
 }
 
 
 # Closed-form fit helpers --------------------------------------------------------------------------
 
-# Build the Y, X, Z matrices and clusterID vector needed by CbCEstimator from one imputed group.
-#
-# The model structure mirrors the data-generation layer:
-#   y_ij = beta0 + beta1*treatment_i + beta2*time_ij + beta3*treatment_i*time_ij
-#          + b0_i + b1_i*time_ij + epsilon_ij
-#
-# Y (n x 1)  : outcome column vector.
-# Z (n x 2)  : random-effects design matrix cbind(1, time_value) for the per-subject
-#              OLS stage (random intercept + random slope for time).
-# X (n x 4)  : fixed-effects design matrix cbind(1, treatment, time_value,
-#              treatment * time_value).
+# Build the Y, X, Z matrices and clusterID vector needed by CbCEstimator
 
-build_cbc_matrices <- function(data, subject_col, time_col, treatment_col, outcome_col) {
+build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
+  
+  # helper function to split dataframe into lists
+  split_data <- function(clusterID, X){
+    data_list <- lapply(unique(clusterID), function(id) {
+      X[clusterID == id, , drop = FALSE]
+    })
+    names(data_list) <- unique(clusterID)
+    data_list
+  }
+  
+  # Cluster Information
   clusterID <- data[[subject_col]]
-  Y <- matrix(as.numeric(data[[outcome_col]]), ncol = 1L)
-  trt <- as.numeric(data[[treatment_col]])
-  tme <- as.numeric(data[[time_col]])
-  X <- cbind(1, trt, tme, trt * tme)
-  Z <- cbind(1, tme)
-  list(clusterID = clusterID, Y = Y, X = X, Z = Z)
+  n_c       <- length(unique(clusterID))
+  
+  # Extract fixed effects design matrix
+  fixed_formula <- lme4::nobars(formula)
+  X             <- model.matrix(fixed_formula, data = data)
+  p             <- ncol(X)
+  X_list        <- split_data(clusterID, X)
+  
+  # Extract outcome
+  outcome_col <- all.vars(formula)[1]
+  Y           <- matrix(as.numeric(data[[outcome_col]]), ncol = 1L)
+  m           <- ncol(Y)
+  Y_list      <- split_data(clusterID, Y)
+  
+  # Extract random effects
+  re_bars         <- lme4::findbars(formula)  # Returns list of bar notation expressions
+  re_formula_char <- deparse(re_bars[[1]][[2]])
+  Z               <- model.matrix(as.formula(paste("~", re_formula_char)), data = data)
+  q               <- ncol(Z)
+  Z_list          <- split_data(clusterID, Z)
+  
+  #observations per cluster
+  n_i <- lapply(Y_list, nrow)
+  
+  list(
+    clusterID = clusterID, 
+    Y = Y_list, 
+    X = X_list, 
+    Z = Z_list,
+    p = p,
+    q = q,
+    m = m,
+    n_c = n_c,
+    n_i = n_i
+  )
 }
 
 # Call CbCEstimator for one group data frame; return a structured result list.
 # Errors from CbCEstimator are caught and stored in error_message.
 
-apply_cbc <- function(data, fit_args = set_fit_args) {
-  
+apply_cbc <- function(data, fit_args = set_fit_args(), reweighting = FALSE) {
   subject_col   <- fit_args$subject_col
   time_col      <- fit_args$time_col
   treatment_col <- fit_args$treatment_col
   outcome_col   <- fit_args$outcome_col
+  formula       <- fit_args$formula
+  epsilon_D     <- fit_args$epsilon_D
   
   required_cols <- unique(c(subject_col, time_col, treatment_col, outcome_col))
   missing_cols <- setdiff(required_cols, names(data))
@@ -616,11 +689,10 @@ apply_cbc <- function(data, fit_args = set_fit_args) {
       paste(missing_cols, collapse = ", ")
     )
   }
-  
-  mats <- build_cbc_matrices(data, subject_col, time_col, treatment_col, outcome_col)
+  mats <- build_cbc_matrices(data, subject_col, formula)
   error_msg <- NA_character_
   cbc_result <- tryCatch(
-    CbCEstimator(mats$clusterID, mats$Y, mats$X, mats$Z),
+    CbCEstimator(mats, epsilon_D, reweighting),
     error = function(e) {
       error_msg <<- conditionMessage(e)
       NULL
@@ -631,7 +703,7 @@ apply_cbc <- function(data, fit_args = set_fit_args) {
   }
   list(
     status = "success",
-    fit = cbc_result$fit,
+    fit = cbc_result,
     error_message = NA_character_
   )
 }
@@ -641,12 +713,18 @@ apply_cbc <- function(data, fit_args = set_fit_args) {
 
 extract_cbc_result <- function(cbc_result) {
   param_names <- c("estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
-                   "sigma2_hat")
+                   "sigma2_hat",
+                   "se_beta0", "se_beta1", "se_beta2", "se_beta3",
+                   "var_b0", "cov_b0b1", "var_b1"
+                   )
   res <- setNames(rep(NA_real_, length(param_names)), param_names)
   
   tryCatch({
     if (identical(cbc_result$status, "success") && !is.null(cbc_result$fit)) {
-      res <- c(t(cbc_result$fit$BetaH), cbc_result$fit$SigmaH)
+      res <- c(t(cbc_result$fit$beta_tilde),
+               cbc_result$fit$Sigma_tilde,
+               sqrt(diag(cbc_result$fit$variance_beta_tilde)),
+               cbc_result$fit$D_tilde[upper.tri(cbc_result$fit$D_tilde, diag = TRUE)])
       names(res) <- param_names
     } else {
       warning("cbc_result status is not 'success' or fit is NULL")
@@ -698,8 +776,7 @@ fit_closed_form_on_imputations <- function(
   if (!is.data.frame(imputed_long_data)) {
     stop("'imputed_long_data' must be a data.frame.")
   }
-  
-  cbc <- apply_cbc(imputed_long_data, fit_args)
+  cbc <- apply_cbc(imputed_long_data, fit_args, reweighting = FALSE)
   extract_cbc_result(cbc)
 }
 
@@ -710,8 +787,7 @@ fit_closed_form_on_imputations <- function(
 
 analyze_mi_closed_form <- function(data,
                                    impute_args = set_impute_args(),
-                                   fit_args = set_fit_args()) {
-  
+                                   fit_args    = set_fit_args()) {
   method_y <- impute_args$method_y
   
   if (method_y == "2l.pmm" && !exists("mice.impute.2l.pmm", mode = "function")) {
@@ -721,12 +797,17 @@ analyze_mi_closed_form <- function(data,
       "library(miceadds)"
     )
   }
-  metadata <- collect_analysis_metadata(data)
   
+  if (is.null(formula)) {
+    stop(
+      "Formula not provided"
+    )
+  }
+  metadata <- collect_analysis_metadata(data)
   tryCatch({
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "imputation")
-    fit_result    <- fit_mi_closed_form(analysis_data, impute_args, fit_args)
+    fit_result    <- fit_mi_closed_form(analysis_data, impute_args)
     extract_mi_closed_form_results(fit_result, data, analysis_data)
   }, error = function(error) {
     build_result_row(
@@ -747,12 +828,11 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
   warning_messages <- character(0)
   error_message    <- NULL
   start_time <- proc.time()[["elapsed"]]
-  
   fit <- withCallingHandlers(
     tryCatch(
       {
         imputed_data <- impute_data(data, impute_args)
-        fit_closed_form_on_imputations(imputed_data, fit_args)
+        fit_closed_form_on_imputations(imputed_long_data = imputed_data, fit_args = fit_args)
         },
       error = function(error) {
         error_message <<- conditionMessage(error)
@@ -803,19 +883,8 @@ extract_mi_closed_form_results <- function(fit_result, original_data, analysis_d
   if (status == "failure") {
     return(result_row)
   }
-  result_row$n_observed <- as.integer(n_observed)
-  result_row$estimate_beta0 <- fit_result$fit["estimate_beta0"]
-  result_row$estimate_beta1 <- fit_result$fit["estimate_beta1"]
-  result_row$estimate_beta2 <- fit_result$fit["estimate_beta2"]
-  result_row$estimate_beta3 <- fit_result$fit["estimate_beta3"]
-  # result_row$se_beta0 <- extract_fixed_effect_value(coef_summary, "(Intercept)", "Std. Error")
-  # result_row$se_beta1 <- extract_fixed_effect_value(coef_summary, "treatment", "Std. Error")
-  # result_row$se_beta2 <- extract_fixed_effect_value(coef_summary, "time_value", "Std. Error")
-  # result_row$se_beta3 <- extract_fixed_effect_value(coef_summary, "treatment:time_value", "Std. Error")
-  # result_row$var_b0 <- extract_varcorr_value(varcorr_df, "subject_id", "(Intercept)")
-  # result_row$cov_b0b1 <- extract_varcorr_value(varcorr_df, "subject_id", "(Intercept)", "time_value")
-  # result_row$var_b1 <- extract_varcorr_value(varcorr_df, "subject_id", "time_value")
-  result_row$sigma2_hat <- fit_result$fit["sigma2_hat"]
+  common_names <- intersect(names(result_row), names(fit_result$fit))
+  result_row[common_names] <- fit_result$fit[common_names]
   result_row
 }
 
@@ -849,9 +918,59 @@ analyze_generated_data_mi_closed_form <- function(
     data,
     scenarios = NULL,
     impute_args = set_impute_args(),
-    fit_args = set_fit_args
+    fit_args = set_fit_args()
 ) {
+  required_split_cols <- c("scenario_id", "sim_id")
+  missing_cols        <- setdiff(required_split_cols, names(data))
   
+  if (length(missing_cols) > 0L) {
+    stop("data is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+  if (nrow(data) == 0L) {
+    return(empty_results())
+  }
+  split_data       <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
+  results          <- lapply(split_data, analyze_mi_closed_form, impute_args = impute_args, fit_args = fit_args)
+  combined_results <- do.call(rbind, results)
+  combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
+  
+  if (!is.null(scenarios)) {
+    unrecognized <- setdiff(combined_results$scenario_id, scenarios$scenario_id)
+    if (length(unrecognized) > 0L) {
+      warning(
+        "analysis_results contains scenario_id values not found in scenarios: ",
+        paste(unrecognized, collapse = ", ")
+      )
+    }
+  }
+  combined_results
+}
+
+#' Run closed-form analysis + reweighting.
+#'
+#' A pipeline wrapper that calls \code{fit_closed_form_on_imputations()}, and returns a structured result list.
+#'
+#' @param data        Long-format data frame with all scenarios and simulations.
+#' @param scenarios   Optional scenario metadata data frame (currently unused).
+#' @param fit_args    Named list of additional arguments forwarded to
+#'   \code{fit_closed_form_on_imputations()}.
+#'
+#' @return A list with:
+#' \describe{
+#'   \item{imputed_data}{Long-format imputed data frame from the imputation step.}
+#'   \item{timing}{Data frame with one row per simulation group recording
+#'     \code{elapsed_seconds} for the imputation step.}
+#'   \item{model_results}{Data frame returned by \code{fit_closed_form_on_imputations()},
+#'     with one row per \code{(scenario_id, sim_id, .imp)} group.}
+#'   \item{meta}{List with \code{method}, \code{impute_args}, and \code{fit_args}.}
+#' }
+
+analyze_generated_data_closed_form_weights <- function(
+    data,
+    scenarios = NULL,
+    impute_args = set_impute_args(),
+    fit_args = set_fit_args()
+) {
   required_split_cols <- c("scenario_id", "sim_id")
   missing_cols        <- setdiff(required_split_cols, names(data))
   
