@@ -1,5 +1,5 @@
-source("scripts/data_generation_layer.R")
-source("scripts/results_layer.R")
+source("scripts/Simulation Layer/data_generation_layer.R")
+source("scripts/Simulation Layer/results_layer.R")
 
 # Check random effects --------------------------------------------------------------------------------------------
 

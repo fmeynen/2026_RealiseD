@@ -1019,7 +1019,13 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
 #'
 #' @return One-row data frame for the fitted simulation replicate.
 
-extract_classical_ml_results <- function(fit_result, original_data, analysis_data) {
+extract_classical_ml_results <- function(
+    fit_result,
+    original_data,
+    analysis_data,
+    method = "classical_ml",
+    engine = "lme4"
+) {
   metadata        <- collect_analysis_metadata(original_data)
   status          <- classify_fit_status(fit_result, type = "classical_ml")
   warning_message <- if (length(fit_result$warnings) > 0L) {
@@ -1030,8 +1036,8 @@ extract_classical_ml_results <- function(fit_result, original_data, analysis_dat
 
   result_row <- build_result_row(
     metadata = metadata,
-    method = "classical_ml",
-    engine = "lme4",
+    method = method,
+    engine = engine,
     status = status,
     converged = status != "failure",
     singular = status == "singular_fit",
@@ -1063,11 +1069,18 @@ extract_classical_ml_results <- function(fit_result, original_data, analysis_dat
   result_row
 }
 
-extract_mi_closed_form_results <- function(fit_result, original_data, analysis_data) {
+extract_mi_closed_form_results <- function(
+    fit_result,
+    original_data,
+    analysis_data,
+    method = "multiple_imputation",
+    engine = "mice_cbc",
+    fit_type = c("imputation", "reweighting")
+) {
+  fit_type <- match.arg(fit_type)
   metadata <- collect_analysis_metadata(original_data)
-  n_observed <- sum(!is.na(analysis_data$observed) & as.logical(analysis_data$observed) & !is.na(analysis_data$y))
   
-  status <- classify_fit_status(fit_result, type = "imputation")
+  status <- classify_fit_status(fit_result, type = fit_type)
   warning_message <- if (length(fit_result$warnings) > 0L) {
     paste(fit_result$warnings, collapse = " | ")
   } else {
@@ -1076,7 +1089,8 @@ extract_mi_closed_form_results <- function(fit_result, original_data, analysis_d
   
   result_row <- build_result_row(
     metadata        = metadata,
-    method          = "mi_closed_form",
+    method          = method,
+    engine          = engine,
     status          = status,
     converged       = status != "failure",
     singular        = status == "singular_fit",

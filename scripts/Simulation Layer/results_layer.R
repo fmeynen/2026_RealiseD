@@ -275,15 +275,20 @@ build_results_hash_identity <- function(scenarios, methods, engines, n_simulatio
 #'
 #' @param results_data Final tidy results data frame.
 #' @param scenarios    Scenario metadata data frame.
+#' @param n_simulations Integer-ish scalar. Number of simulation replicates.
+#'   If NULL, inferred from unique sim_id values in results_data.
 #'
 #' @return Named list suitable for hashing with compute_results_hash().
 
-build_canonical_meta <- function(results_data, scenarios) {
+build_canonical_meta <- function(results_data, scenarios, n_simulations = NULL) {
+  if (is.null(n_simulations)) {
+    n_simulations <- length(unique(results_data$sim_id))
+  }
   build_results_hash_identity(
     scenarios = scenarios,
     methods = results_data$method,
     engines = results_data$engine,
-    n_simulations = nrow(results_data) / nrow(scenarios)
+    n_simulations = as.integer(n_simulations)
   )
 }
 
@@ -442,6 +447,8 @@ print_results_summary <- function(metadata, paths) {
 #' @param scenarios        Data frame of scenario metadata (one row per scenario_id).
 #' @param output_dir       Directory for output files (default: "results").
 #' @param overwrite        Logical. Overwrite existing immutable file (default: FALSE).
+#' @param n_simulations    Integer-ish scalar. Number of simulation replicates.
+#'   If NULL, inferred from unique sim_id values in analysis_results.
 #'
 #' @return Invisibly: named list with results (data frame), metadata (list),
 #'   and paths (list with immutable_path and latest_path).
@@ -507,19 +514,22 @@ build_and_save_results <- function(
     analysis_results,
     scenarios,
     output_dir = "results/data",
-    overwrite = FALSE
+    overwrite = FALSE,
+    n_simulations = NULL
 ) {
-  #TODO update for MI
-  #validate_results_layer_inputs(analysis_results, scenarios)
+  validate_results_layer_inputs(analysis_results, scenarios)
 
   # Coerce seed_base to integer once, before downstream use and hashing.
   scenarios$seed_base <- as.integer(scenarios$seed_base)
+  if (is.null(n_simulations)) {
+    n_simulations <- length(unique(analysis_results$sim_id))
+  }
 
   results_data <- add_convergence_status(analysis_results)
   results_data <- join_scenario_metadata(results_data, scenarios)
   results_data <- order_results_columns(results_data, names(scenarios))
 
-  canonical_meta <- build_canonical_meta(results_data, scenarios)
+  canonical_meta <- build_canonical_meta(results_data, scenarios, n_simulations = n_simulations)
   hash           <- compute_results_hash(canonical_meta)
   metadata       <- build_results_metadata(results_data, hash)
 

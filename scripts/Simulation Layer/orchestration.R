@@ -192,7 +192,13 @@ analyze_classical_ml <- function(data) {
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "classical_ml")
     fit_result    <- fit_classical_ml_model(analysis_data, build_formula())
-    extract_classical_ml_results(fit_result, data, analysis_data)
+    extract_classical_ml_results(
+      fit_result = fit_result,
+      original_data = data,
+      analysis_data = analysis_data,
+      method = "classical_ml",
+      engine = "lme4"
+    )
   }, error = function(error) {
     build_result_row(
       metadata = metadata,
@@ -225,12 +231,20 @@ analyze_mi_closed_form <- function(data,
   tryCatch({
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "imputation")
-    fit_result    <- fit_mi_closed_form(analysis_data, impute_args)
-    extract_mi_closed_form_results(fit_result, data, analysis_data)
+    fit_result    <- fit_mi_closed_form(analysis_data, impute_args, fit_args)
+    extract_mi_closed_form_results(
+      fit_result = fit_result,
+      original_data = data,
+      analysis_data = analysis_data,
+      method = "multiple_imputation",
+      engine = "mice_cbc",
+      fit_type = "imputation"
+    )
   }, error = function(error) {
     build_result_row(
       metadata = metadata,
-      method = "mi_closed_form",
+      method = "multiple_imputation",
+      engine = "mice_cbc",
       status = "failure",
       converged = FALSE,
       singular = FALSE,
@@ -248,11 +262,19 @@ analyze_closed_form_reweighting <- function(data,
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "weighting")
     fit_result    <-  fit_closed_form_reweighting(analysis_data, fit_args)
-    extract_mi_closed_form_results(fit_result, data, analysis_data)
+    extract_mi_closed_form_results(
+      fit_result = fit_result,
+      original_data = data,
+      analysis_data = analysis_data,
+      method = "reweighting",
+      engine = "cbc",
+      fit_type = "reweighting"
+    )
   }, error = function(error) {
     build_result_row(
       metadata = metadata,
-      method = "mi_closed_form",
+      method = "reweighting",
+      engine = "cbc",
       status = "failure",
       converged = FALSE,
       singular = FALSE,
@@ -265,6 +287,35 @@ analyze_closed_form_reweighting <- function(data,
 
 
 # Analyze Generated dataset ---------------------------------------------------------------------------------------
+
+run_analysis_over_groups <- function(data, scenarios = NULL, analyzer_fn, ...) {
+  required_split_cols <- c("scenario_id", "sim_id")
+  missing_cols <- setdiff(required_split_cols, names(data))
+  if (length(missing_cols) > 0L) {
+    stop("data is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  if (nrow(data) == 0L) {
+    return(empty_results())
+  }
+
+  split_data <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
+  results <- lapply(split_data, analyzer_fn, ...)
+  combined_results <- do.call(rbind, results)
+  combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
+
+  if (!is.null(scenarios)) {
+    unrecognized <- setdiff(combined_results$scenario_id, scenarios$scenario_id)
+    if (length(unrecognized) > 0L) {
+      warning(
+        "analysis_results contains scenario_id values not found in scenarios: ",
+        paste(unrecognized, collapse = ", ")
+      )
+    }
+  }
+
+  combined_results
+}
 
 #' Run the classical ML analysis layer across generated simulation datasets.
 #'
@@ -280,39 +331,14 @@ analyze_closed_form_reweighting <- function(data,
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
 analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
-  required_split_cols <- c("scenario_id", "sim_id")
-  missing_cols <- setdiff(required_split_cols, names(data))
-  if (length(missing_cols) > 0L) {
-    stop("data is missing required columns: ", paste(missing_cols, collapse = ", "))
-  }
-  
-  if (nrow(data) == 0L) {
-    return(empty_results())
-  }
-  
-  split_data <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
-  results <- lapply(split_data, analyze_classical_ml)
-  combined_results <- do.call(rbind, results)
-  combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
-  
-  if (!is.null(scenarios)) {
-    unrecognized <- setdiff(combined_results$scenario_id, scenarios$scenario_id)
-    if (length(unrecognized) > 0L) {
-      warning(
-        "analysis_results contains scenario_id values not found in scenarios: ",
-        paste(unrecognized, collapse = ", ")
-      )
-    }
-  }
-  
-  combined_results
+  run_analysis_over_groups(data, scenarios, analyze_classical_ml)
 }
 
 
 #' Run multiple imputation + closed-form analysis.
 #'
-#' A pipeline wrapper that calls \code{impute_mi_by_sim_scenario()} followed by
-#' \code{fit_closed_form()}, and returns a structured result list.
+#' A pipeline wrapper that runs grouped MI + closed-form fitting and returns
+#' one standardized result row per scenario_id x sim_id.
 #'
 #' @param data        Long-format data frame with all scenarios and simulations.
 #' @param scenarios   Optional scenario metadata data frame (currently unused).
@@ -321,15 +347,7 @@ analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
 #' @param fit_args    Named list of additional arguments forwarded to
 #'   \code{fit_closed_form()}.
 #'
-#' @return A list with:
-#' \describe{
-#'   \item{imputed_data}{Long-format imputed data frame from the imputation step.}
-#'   \item{timing}{Data frame with one row per simulation group recording
-#'     \code{elapsed_seconds} for the imputation step.}
-#'   \item{model_results}{Data frame returned by \code{fit_closed_form()},
-#'     with one row per \code{(scenario_id, sim_id, .imp)} group.}
-#'   \item{meta}{List with \code{method}, \code{impute_args}, and \code{fit_args}.}
-#' }
+#' @return Tidy data frame with one results row per scenario_id x sim_id.
 
 analyze_generated_data_mi_closed_form <- function(
     data,
@@ -337,83 +355,115 @@ analyze_generated_data_mi_closed_form <- function(
     impute_args = set_impute_args(),
     fit_args = set_fit_args()
 ) {
-  required_split_cols <- c("scenario_id", "sim_id")
-  missing_cols        <- setdiff(required_split_cols, names(data))
-  
-  if (length(missing_cols) > 0L) {
-    stop("data is missing required columns: ", paste(missing_cols, collapse = ", "))
-  }
-  if (nrow(data) == 0L) {
-    return(empty_results())
-  }
-  split_data       <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
-  results          <- lapply(split_data, analyze_mi_closed_form, impute_args = impute_args, fit_args = fit_args)
-  combined_results <- do.call(rbind, results)
-  combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
-  
-  if (!is.null(scenarios)) {
-    unrecognized <- setdiff(combined_results$scenario_id, scenarios$scenario_id)
-    if (length(unrecognized) > 0L) {
-      warning(
-        "analysis_results contains scenario_id values not found in scenarios: ",
-        paste(unrecognized, collapse = ", ")
-      )
-    }
-  }
-  combined_results
+  run_analysis_over_groups(
+    data = data,
+    scenarios = scenarios,
+    analyzer_fn = analyze_mi_closed_form,
+    impute_args = impute_args,
+    fit_args = fit_args
+  )
 }
 
 #' Run closed-form analysis + reweighting.
 #'
-#' A pipeline wrapper that calls \code{fit_closed_form()}, and returns a structured result list.
+#' A pipeline wrapper that runs grouped closed-form reweighting and returns
+#' one standardized result row per scenario_id x sim_id.
 #'
 #' @param data        Long-format data frame with all scenarios and simulations.
 #' @param scenarios   Optional scenario metadata data frame (currently unused).
 #' @param fit_args    Named list of additional arguments forwarded to
 #'   \code{fit_closed_form()}.
 #'
-#' @return A list with:
-#' \describe{
-#'   \item{imputed_data}{Long-format imputed data frame from the imputation step.}
-#'   \item{timing}{Data frame with one row per simulation group recording
-#'     \code{elapsed_seconds} for the imputation step.}
-#'   \item{model_results}{Data frame returned by \code{fit_closed_form()},
-#'     with one row per \code{(scenario_id, sim_id, .imp)} group.}
-#'   \item{meta}{List with \code{method}, \code{impute_args}, and \code{fit_args}.}
-#' }
+#' @return Tidy data frame with one results row per scenario_id x sim_id.
 
 analyze_generated_data_closed_form_weights <- function(
     data,
     scenarios = NULL,
     fit_args = set_fit_args()
 ) {
-  
-  required_split_cols <- c("scenario_id", "sim_id")
-  missing_cols        <- setdiff(required_split_cols, names(data))
-  
-  if (length(missing_cols) > 0L) {
-    stop("data is missing required columns: ", paste(missing_cols, collapse = ", "))
-  }
-  if (nrow(data) == 0L) {
-    return(empty_results())
-  }
-  
-  split_data       <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
-  results          <- lapply(split_data, analyze_closed_form_reweighting, fit_args = fit_args)
-  combined_results <- do.call(rbind, results)
-  combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
-  
-  if (!is.null(scenarios)) {
-    unrecognized <- setdiff(combined_results$scenario_id, scenarios$scenario_id)
-    if (length(unrecognized) > 0L) {
-      warning(
-        "analysis_results contains scenario_id values not found in scenarios: ",
-        paste(unrecognized, collapse = ", ")
-      )
-    }
-  }
-  
-  combined_results
+  run_analysis_over_groups(
+    data = data,
+    scenarios = scenarios,
+    analyzer_fn = analyze_closed_form_reweighting,
+    fit_args = fit_args
+  )
 }
 
 
+run_requested_analyses <- function(
+    data,
+    scenarios,
+    analyses = c("classical_ml", "multiple_imputation", "reweighting"),
+    n_simulations = NULL,
+    analysis_configs = list(),
+    output_dir = "results/data",
+    overwrite = FALSE
+) {
+  available_analyses <- c("classical_ml", "multiple_imputation", "reweighting")
+  unknown_analyses <- setdiff(analyses, available_analyses)
+  if (length(unknown_analyses) > 0L) {
+    stop("Unknown analyses requested: ", paste(unknown_analyses, collapse = ", "))
+  }
+
+  if (is.null(n_simulations)) {
+    n_simulations <- length(unique(data$sim_id))
+  }
+
+  output <- list()
+  for (analysis_name in analyses) {
+    user_config <- analysis_configs[[analysis_name]]
+    if (is.null(user_config)) {
+      user_config <- list()
+    }
+    if (identical(analysis_name, "classical_ml")) {
+      analysis_results <- analyze_generated_data_classical_ml(data, scenarios)
+    } else if (identical(analysis_name, "multiple_imputation")) {
+      mi_config <- utils::modifyList(
+        list(impute_args = set_impute_args(method_y = "2l.pmm"), fit_args = set_fit_args()),
+        user_config
+      )
+      analysis_results <- analyze_generated_data_mi_closed_form(
+        data = data,
+        scenarios = scenarios,
+        impute_args = mi_config$impute_args,
+        fit_args = mi_config$fit_args
+      )
+    } else if (identical(analysis_name, "reweighting")) {
+      rw_config <- utils::modifyList(
+        list(fit_args = set_fit_args(reweighting = TRUE)),
+        user_config
+      )
+      analysis_results <- analyze_generated_data_closed_form_weights(
+        data = data,
+        scenarios = scenarios,
+        fit_args = rw_config$fit_args
+      )
+    }
+
+    saved_results <- build_and_save_results(
+      analysis_results = analysis_results,
+      scenarios = scenarios,
+      output_dir = output_dir,
+      overwrite = overwrite,
+      n_simulations = n_simulations
+    )
+    results_artifact <- load_results_artifact_exact(
+      scenarios = scenarios,
+      methods = unique(analysis_results$method),
+      engines = unique(analysis_results$engine),
+      n_simulations = n_simulations,
+      output_dir = output_dir
+    )
+    aggregated <- aggregate_results(results_artifact)
+
+    output[[analysis_name]] <- list(
+      analysis_results = analysis_results,
+      results_artifact = results_artifact,
+      aggregated = aggregated,
+      hash = saved_results$metadata$hash,
+      paths = saved_results$paths
+    )
+  }
+
+  output
+}

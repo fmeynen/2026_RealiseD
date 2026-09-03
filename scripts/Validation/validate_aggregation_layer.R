@@ -1,12 +1,48 @@
-source("scripts/data_generation_layer.R")
-source("scripts/analysis_layer.R")
-source("scripts/results_layer.R")
-source("scripts/aggregation_layer.R")
+source("scripts/Simulation Layer/data_generation_layer.R")
+source("scripts/Simulation Layer/validation.R")
+source("scripts/Simulation Layer/analysis_layer.R")
+source("scripts/Simulation Layer/orchestration.R")
+source("scripts/Simulation Layer/results_layer.R")
+source("scripts/Simulation Layer/aggregation_layer.R")
 
 
-# Load latest results artifact -------------------------------------------------------------------------------------
+# Build exact results artifact -------------------------------------------------------------------------------------
 
-out <- readRDS("results/data/sim_results_latest.rds")
+scenarios <- build_scenario_grid(
+  n_values = c(20, 10),
+  n_measures = 4,
+  beta0_values = 0,
+  beta1_values = 0,
+  beta2_values = 1,
+  beta3_values = 0.5,
+  d11_values = 2,
+  d22_values = 1,
+  d12_values = 0.4,
+  sigma2_values = 1,
+  dropout_mechanism = "half-missing",
+  seed_base = 2609
+)
+validate_scenario_grid(scenarios)
+
+n_simulations <- 2L
+generated <- do.call(rbind, lapply(seq_len(nrow(scenarios)), function(i) {
+  simulate_scenario(scenarios[i, , drop = FALSE], B = n_simulations)
+}))
+analysis_results <- analyze_generated_data_classical_ml(generated, scenarios = scenarios)
+saved_results <- build_and_save_results(
+  analysis_results = analysis_results,
+  scenarios = scenarios,
+  output_dir = file.path(tempdir(), "validate_aggregation_layer"),
+  overwrite = TRUE,
+  n_simulations = n_simulations
+)
+out <- load_results_artifact_exact(
+  scenarios = scenarios,
+  methods = unique(saved_results$results$method),
+  engines = unique(saved_results$results$engine),
+  n_simulations = n_simulations,
+  output_dir = file.path(tempdir(), "validate_aggregation_layer")
+)
 
 
 # Run aggregation --------------------------------------------------------------------------------------------------
