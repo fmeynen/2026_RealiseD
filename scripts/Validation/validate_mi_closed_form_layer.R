@@ -283,24 +283,24 @@ expect_true_msg(
 )
 
 
-# 7. fit_closed_form_on_imputations() validation and output structure ---------------------------------
+# 7. fit_closed_form() validation and output structure ---------------------------------
 
-cat("Test 24: fit_closed_form_on_imputations raises error on non-data.frame input\n")
+cat("Test 24: fit_closed_form raises error on non-data.frame input\n")
 expect_error_contains(
-  fit_closed_form_on_imputations(list()),
+  fit_closed_form(list()),
   "'imputed_long_data' must be a data.frame"
 )
 
-cat("Test 25: fit_closed_form_on_imputations raises error on missing required columns\n")
+cat("Test 25: fit_closed_form raises error on missing required columns\n")
 expect_error_contains(
-  fit_closed_form_on_imputations(data.frame(x = 1)),
+  fit_closed_form(data.frame(x = 1)),
   "missing required columns"
 )
 
-cat("Test 26: fit_closed_form_on_imputations returns a data frame with expected structure\n")
+cat("Test 26: fit_closed_form returns a data frame with expected structure\n")
 # CbCEstimator requires vech() from the 'ks' package; individual group failures are
 # caught by apply_cbc_to_group() and stored in error_message — the output is always a data frame.
-cbc_result <- fit_closed_form_on_imputations(result$imputed_long)
+cbc_result <- fit_closed_form(result$imputed_long)
 expect_true_msg(is.data.frame(cbc_result), "fit result must be a data frame")
 expected_fit_cols <- c(
   "scenario_id", "sim_id", ".imp",
@@ -313,14 +313,14 @@ expect_true_msg(
   paste("fit result is missing columns:", paste(missing_fit_cols, collapse = ", "))
 )
 
-cat("Test 27: fit_closed_form_on_imputations has one row per (scenario_id, sim_id, .imp)\n")
+cat("Test 27: fit_closed_form has one row per (scenario_id, sim_id, .imp)\n")
 expected_fit_rows <- n_groups * m_val
 expect_true_msg(
   nrow(cbc_result) == expected_fit_rows,
   paste("fit result must have", expected_fit_rows, "rows, got", nrow(cbc_result))
 )
 
-cat("Test 28: fit_closed_form_on_imputations status column contains only 'success' or 'failure'\n")
+cat("Test 28: fit_closed_form status column contains only 'success' or 'failure'\n")
 expect_true_msg(
   all(cbc_result$status %in% c("success", "failure")),
   "status must be 'success' or 'failure' for every row"

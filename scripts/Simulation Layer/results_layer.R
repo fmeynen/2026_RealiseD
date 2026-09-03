@@ -1,6 +1,4 @@
 # results_layer.R
-# Results layer for the simulation experiment described in
-# research_question/meeting_notes/programming_planning.qmd.
 #
 # Assembles a canonical results artifact from analysis outputs and scenario
 # metadata. Adds a standardized convergence_status label (while preserving
@@ -51,14 +49,14 @@ results_schema_version <- "v1"
 #' @return data with a new convergence_status character column appended.
 
 add_convergence_status <- function(data) {
-  is_success    <- !is.na(data$status) & data$status == "success"
+  is_failure    <- !is.na(data$status) & data$status == "failure"
   has_error_msg <- !is.na(data$error_message)
   is_converged  <- !is.na(data$converged) & as.logical(data$converged)
   is_singular   <- !is.na(data$singular) & as.logical(data$singular)
   has_warning   <- !is.na(data$warning_message)
 
   data$convergence_status <- ifelse(
-    !is_success | has_error_msg,
+    is_failure | has_error_msg,
     "error",
     ifelse(
       !is_converged,

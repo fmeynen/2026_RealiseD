@@ -47,7 +47,7 @@ Formula: $$ y_{ij} = \beta_0 + \beta_1Treatment_i + \beta_2Time_j + \beta_3Treat
 Parameters were taken from the toenail data:
 
 | Effect | Parameter | Size |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | Intercept | $\beta_0$ | 2.4562 |
 | Treatment Effect | $\beta_1$ | 0 *(0.593 in toenail data (this was a dose effect))* |
 | Time Effect | $\beta_2$ | 0.2792 |
@@ -58,7 +58,7 @@ Parameters were taken from the toenail data:
 | Residual variance | $\sigma^2$ | 3.1508 |
 
 | Variable | Value |
-|------------------------------------|------------------------------------|
+|----|----|
 | number of clusters | 100, 50, 20, 10 *(10.000 clusters was asked too, but currently excluded due to large computing time)* |
 | number of repeated measures | 12 |
 | missingness pattern | "half-missing" (half of the clusters have no missingness, other half have uniform probability to have 1-11 observations, dropout is monotone) |
@@ -79,7 +79,6 @@ For the imputations: imputations were done within clusters, 3 imputations per cl
 5.  Joint model
 
 ## Results
-
 
 ### Mean Squared Error
 
@@ -112,7 +111,6 @@ res[order(-res$n), c(2, 43, grep("^prop_conv", names(res)))]
 ```
 
 ### Coverage rate of $\beta_3$
-
 
 ```{r}
 res[order(-res$n), c(2, 43, grep("coverage95", names(res)))]
