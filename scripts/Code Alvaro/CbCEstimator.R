@@ -50,6 +50,7 @@ Sim.data <- function(N,mu_n,frac,delta=1,Seed=NULL){
 
 # Cluster-by-cluster estimator
 CbCEstimator = function(clusterID,Y,X,Z){
+  
   # clusterID: indicator for cluster
   # Y: Matrix of outcomes (rows: observations, columns: variables)
   # X: design matrix X
@@ -93,19 +94,19 @@ CbCEstimator = function(clusterID,Y,X,Z){
   }
   ## Method of moments estimator of D
   MME.D = function(w_i,K_i,HHi,BetaH_i,BetaH,R_i){
+    # browser()
     q = ncol(K_i[[1]])
     
     N = length(w_i)
     b_i <- BetaH_i- tcrossprod(matrix(1,N,1),BetaH)  
     b_i = b_i*matrix(sqrt(w_i),N,q)
     Sb = crossprod(b_i)
-    sum.HHi = Reduce('+',HHi)
     
+    sum.HHi = Reduce('+',HHi)
     H_ii = mapply('%*%',K_i,HHi,SIMPLIFY = FALSE)      
     
     kron.HHi = mapply(function(X,w){w*kronecker(X,X)},HHi,w_i,SIMPLIFY = F)
     kron.K_i = mapply(function(X){kronecker(X,X)},K_i,SIMPLIFY = F)
-    
     
     Denom.inv = diag((q)^2) - Reduce('+',mapply(function(X,w){w*kronecker(diag(ncol(X)),X)},H_ii,w_i,SIMPLIFY = F)) -
       Reduce('+',mapply(function(X,w){w*kronecker(X,diag(ncol(X)))},H_ii,w_i,SIMPLIFY = F)) +   
@@ -122,6 +123,8 @@ CbCEstimator = function(clusterID,Y,X,Z){
     vec.D = Denom%*%(vec(Sb)- vec.c)
     q = ncol(Sb)
     D = invvec(vec.D,nrow=q,ncol=q)
+    # vec.c_alv <<- vec.c
+    browser()
     return(D)
   }
   ## function to estimate the variance of the overall estimator of Beta
@@ -169,12 +172,11 @@ CbCEstimator = function(clusterID,Y,X,Z){
   w_i.2 = (n-2)/sum(n-2)
   A_i = mapply(diag,w_i,list(q*m),SIMPLIFY = FALSE)
   K_i = mapply(Kmatrix,X_i,Z_i,list(m),SIMPLIFY = FALSE)
-  
   Overall = Weightedestimator(K_i,A_i,BetaH_i)
   HHi = Overall[[2]]
   BetaH = Overall[[1]]
   SigmaH = invvech(apply(SigmaH_i,2,weighted.mean,w=w_i.2))
-  
+  # browser()
   R_i = mapply(function(x){
     kronecker(SigmaH,solve(crossprod(Z_i[[x]])))
   },x=1:N,SIMPLIFY = F)
@@ -183,7 +185,8 @@ CbCEstimator = function(clusterID,Y,X,Z){
   if(min(eigen(DH,only.values = T)$values) < 0 ){
     DH = pdDajustment(DH)
   }
-  
+  # browser()
+  BetaH1 <- BetaH
   Var.BetaH_i = mapply('+',R_i, MoreArgs = list(DH=DH),SIMPLIFY = F)
   VarBetaH_i.inv = mapply(solve,Var.BetaH_i,SIMPLIFY = FALSE)
   A_i.denom = solve(Reduce('+',VarBetaH_i.inv))
@@ -191,13 +194,11 @@ CbCEstimator = function(clusterID,Y,X,Z){
   Overall = Weightedestimator(K_i,A_i,BetaH_i)
   BetaH = Overall[[1]]
   VarBetaH = VarBetaH.fun(K_i,A_i,Var.BetaH_i)
-  Fit = list(BetaH=BetaH,SigmaH=SigmaH,DH=DH,VarBetaH = VarBetaH)
+  Fit = list(BetaH=BetaH,SigmaH=SigmaH,DH=DH,VarBetaH = VarBetaH, BetaH1 = BetaH1)
   # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma, (3) Estimates D,
   # and (4) variance of estimates for fixed effects
   return(Fit)
 }
-
-
 
 #### example
 Data = Sim.data(50,100,0.25,1,123)
@@ -211,4 +212,7 @@ Est$BetaH ## estimation of fixed effects
 Est$SigmaH # variance of errors
 Est$DH # variance of random effects
 Est$VarBetaH # variance of beta estimators
+Est$BetaH1
+
+
 

@@ -1,0 +1,405 @@
+\documentclass{article}\usepackage[]{graphicx}\usepackage[]{xcolor}
+% maxwidth is the original width if it is less than linewidth
+% otherwise use linewidth (to make sure the graphics do not exceed the margin)
+\makeatletter
+\def\maxwidth{ %
+  \ifdim\Gin@nat@width>\linewidth
+    \linewidth
+  \else
+    \Gin@nat@width
+  \fi
+}
+\makeatother
+
+\definecolor{fgcolor}{rgb}{0.345, 0.345, 0.345}
+\newcommand{\hlnum}[1]{\textcolor[rgb]{0.686,0.059,0.569}{#1}}%
+\newcommand{\hlsng}[1]{\textcolor[rgb]{0.192,0.494,0.8}{#1}}%
+\newcommand{\hlcom}[1]{\textcolor[rgb]{0.678,0.584,0.686}{\textit{#1}}}%
+\newcommand{\hlopt}[1]{\textcolor[rgb]{0,0,0}{#1}}%
+\newcommand{\hldef}[1]{\textcolor[rgb]{0.345,0.345,0.345}{#1}}%
+\newcommand{\hlkwa}[1]{\textcolor[rgb]{0.161,0.373,0.58}{\textbf{#1}}}%
+\newcommand{\hlkwb}[1]{\textcolor[rgb]{0.69,0.353,0.396}{#1}}%
+\newcommand{\hlkwc}[1]{\textcolor[rgb]{0.333,0.667,0.333}{#1}}%
+\newcommand{\hlkwd}[1]{\textcolor[rgb]{0.737,0.353,0.396}{\textbf{#1}}}%
+\let\hlipl\hlkwb
+
+\usepackage{framed}
+\makeatletter
+\newenvironment{kframe}{%
+ \def\at@end@of@kframe{}%
+ \ifinner\ifhmode%
+  \def\at@end@of@kframe{\end{minipage}}%
+  \begin{minipage}{\columnwidth}%
+ \fi\fi%
+ \def\FrameCommand##1{\hskip\@totalleftmargin \hskip-\fboxsep
+ \colorbox{shadecolor}{##1}\hskip-\fboxsep
+     % There is no \\@totalrightmargin, so:
+     \hskip-\linewidth \hskip-\@totalleftmargin \hskip\columnwidth}%
+ \MakeFramed {\advance\hsize-\width
+   \@totalleftmargin\z@ \linewidth\hsize
+   \@setminipage}}%
+ {\par\unskip\endMakeFramed%
+ \at@end@of@kframe}
+\makeatother
+
+\definecolor{shadecolor}{rgb}{.97, .97, .97}
+\definecolor{messagecolor}{rgb}{0, 0, 0}
+\definecolor{warningcolor}{rgb}{1, 0, 1}
+\definecolor{errorcolor}{rgb}{1, 0, 0}
+\newenvironment{knitrout}{}{} % an empty environment to be redefined in TeX
+
+\usepackage{alltt}
+\usepackage[sc]{mathpazo}
+\renewcommand{\sfdefault}{lmss}
+\renewcommand{\ttdefault}{lmtt}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{verbose,tmargin=2.5cm,bmargin=2.5cm,lmargin=2.5cm,rmargin=2.5cm}
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{2}
+\usepackage[unicode=true,pdfusetitle,
+ bookmarks=true,bookmarksnumbered=true,bookmarksopen=true,bookmarksopenlevel=2,
+ breaklinks=false,pdfborder={0 0 1},backref=false,colorlinks=false]
+ {hyperref}
+\hypersetup{
+ pdfstartview={XYZ null null 1}}
+
+\makeatletter
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% User specified LaTeX commands.
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\topfraction}{0.8}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\floatpagefraction}{0.75}
+
+\makeatother
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\begin{document}
+
+
+
+\title{\title{}}
+
+
+
+\maketitle
+The results below are generated from an R script.
+
+\begin{knitrout}
+\definecolor{shadecolor}{rgb}{0.969, 0.969, 0.969}\color{fgcolor}\begin{kframe}
+\begin{alltt}
+\hlkwd{library}\hldef{(ks)}
+\hlcom{### function for simulating Data}
+\hldef{Sim.data} \hlkwb{<-} \hlkwa{function}\hldef{(}\hlkwc{N}\hldef{,}\hlkwc{mu_n}\hldef{,}\hlkwc{frac}\hldef{,}\hlkwc{delta}\hldef{=}\hlnum{1}\hldef{,}\hlkwc{Seed}\hldef{=}\hlkwa{NULL}\hldef{)\{}
+  \hlcom{# N: number of clusters}
+  \hlcom{# mu_n: mean number of members per cluster}
+  \hlcom{# frac: fraction of the mean to determine the standard deviation of number of member per cluster (Var = frac*mean)}
+  \hlcom{# delta: multiplier for the variance of random effects}
+  \hldef{n} \hlkwb{<-} \hlkwd{round}\hldef{(}\hlkwd{rnorm}\hldef{(N,mu_n,mu_n}\hlopt{*}\hldef{frac))}
+  \hldef{n[n}\hlopt{<}\hlnum{10}\hldef{]} \hlkwb{=} \hlnum{10}
+  \hlkwa{if}\hldef{(}\hlopt{!}\hlkwd{is.null}\hldef{(Seed))\{}\hlkwd{set.seed}\hldef{(Seed)\}}
+
+  \hldef{Beta} \hlkwb{<-} \hlkwd{matrix}\hldef{(}\hlkwd{c}\hldef{(}\hlnum{450}\hldef{,}\hlnum{300}\hldef{,}\hlnum{500}\hldef{,}\hlnum{500}\hldef{),}\hlnum{1}\hldef{,}\hlnum{4}\hldef{)}
+  \hldef{D} \hlkwb{<-} \hlkwd{matrix}\hldef{(}\hlkwd{rep}\hldef{(}\hlnum{0}\hldef{,} \hlkwc{times}\hldef{=}\hlnum{16}\hldef{),} \hlkwc{ncol}\hldef{=}\hlnum{4}\hldef{)}
+  \hlkwd{diag}\hldef{(D)} \hlkwb{<-} \hlkwd{c}\hldef{(}\hlnum{1}\hldef{,} \hlnum{1}\hldef{,} \hlnum{1}\hldef{,} \hlnum{1}\hldef{);D[}\hlnum{1}\hldef{,} \hlnum{3}\hldef{]} \hlkwb{<-} \hldef{D[}\hlnum{3}\hldef{,} \hlnum{1}\hldef{]} \hlkwb{<-} \hlnum{.4}\hldef{; D[}\hlnum{2}\hldef{,} \hlnum{4}\hldef{]} \hlkwb{<-} \hldef{D[}\hlnum{4}\hldef{,} \hlnum{2}\hldef{]} \hlkwb{<-} \hlkwd{sqrt}\hldef{(}\hlnum{.5}\hldef{)}
+  \hldef{Sigma} \hlkwb{<-} \hlkwd{matrix}\hldef{(}\hlkwd{c}\hldef{(}\hlnum{300}\hldef{,}\hlnum{212.132}\hldef{,}\hlnum{212.132}\hldef{,}\hlnum{300}\hldef{),}\hlnum{2}\hldef{,}\hlnum{2}\hldef{)}
+  \hldef{D[}\hlnum{2}\hldef{,}\hlnum{4}\hldef{]} \hlkwb{=} \hldef{D[}\hlnum{4}\hldef{,}\hlnum{2}\hldef{]} \hlkwb{=} \hldef{D[}\hlnum{4}\hldef{,}\hlnum{2}\hldef{]}\hlopt{*}\hlkwd{sqrt}\hldef{(}\hlnum{1.5}\hldef{)}
+  \hldef{Sigma[}\hlnum{1}\hldef{,}\hlnum{2}\hldef{]} \hlkwb{=} \hldef{Sigma[}\hlnum{2}\hldef{,}\hlnum{1}\hldef{]} \hlkwb{=} \hldef{Sigma[}\hlnum{1}\hldef{,}\hlnum{2}\hldef{]}\hlopt{*}\hlkwd{sqrt}\hldef{(}\hlnum{1.5}\hldef{)}
+
+  \hldef{D} \hlkwb{<-} \hldef{D} \hlopt{*}\hlnum{100}\hlopt{*}\hldef{delta}
+
+
+  \hldef{b} \hlkwb{=} \hldef{mvnfast}\hlopt{::}\hlkwd{rmvn}\hldef{(N,} \hlkwd{c}\hldef{(}\hlnum{0}\hldef{,}\hlnum{0}\hldef{,}\hlnum{0}\hldef{,}\hlnum{0}\hldef{), D)}
+  \hldef{ID.ind} \hlkwb{=} \hlkwd{c}\hldef{(}\hlnum{0}\hldef{,}\hlkwd{cumsum}\hldef{(n)[}\hlopt{-}\hldef{N])}
+  \hldef{DataL} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{i}\hldef{)\{}
+    \hlkwa{if}\hldef{(frac}\hlopt{!=}\hlnum{0}\hldef{)\{}
+      \hldef{n1} \hlkwb{<-} \hlkwd{rbinom}\hldef{(}\hlnum{1}\hldef{,n[i],}\hlnum{0.5}\hldef{)}
+      \hlkwa{if}\hldef{(n1}\hlopt{<}\hlnum{2}\hldef{)\{n1}\hlkwb{=}\hlnum{2}\hldef{\}}
+      \hlkwa{if}\hldef{(n1}\hlopt{>}\hldef{n[i]}\hlopt{-}\hlnum{2}\hldef{)\{n1} \hlkwb{=} \hldef{n[i]}\hlopt{-}\hlnum{2}\hldef{\}}
+
+    \hldef{\}}\hlkwa{else}\hldef{\{}
+      \hldef{n1} \hlkwb{=} \hldef{n[i]}\hlopt{/}\hlnum{2}
+    \hldef{\}}
+
+    \hldef{Treat} \hlkwb{<-} \hlkwd{c}\hldef{(}\hlkwd{rep}\hldef{(}\hlopt{-}\hlnum{1}\hldef{,n1),}\hlkwd{rep}\hldef{(}\hlnum{1}\hldef{,n[i]}\hlopt{-}\hldef{n1))}
+    \hldef{X} \hlkwb{<-} \hlkwd{cbind}\hldef{(}\hlnum{1}\hldef{,Treat)}
+    \hldef{Z} \hlkwb{<-} \hlkwd{kronecker}\hldef{(}\hlkwd{diag}\hldef{(}\hlnum{2}\hldef{),}\hlkwd{t}\hldef{(X))}
+    \hldef{Mu} \hlkwb{<-} \hldef{Beta}\hlopt{%*%}\hldef{Z}
+    \hldef{V} \hlkwb{<-} \hlkwd{kronecker}\hldef{(Sigma,}\hlkwd{diag}\hldef{(n[i]))}\hlopt{+}\hlkwd{t}\hldef{(Z)}\hlopt{%*%}\hldef{D}\hlopt{%*%}\hldef{Z}
+    \hldef{y} \hlkwb{<-} \hlkwd{c}\hldef{(mvnfast}\hlopt{::}\hlkwd{rmvn}\hldef{(}\hlnum{1}\hldef{,Mu,V))}
+    \hldef{Y} \hlkwb{=} \hlkwd{matrix}\hldef{(y,}\hlkwc{ncol}\hldef{=}\hlnum{2}\hldef{)}
+    \hldef{Endpoint} \hlkwb{<-} \hlkwd{c}\hldef{(}\hlkwd{rep}\hldef{(}\hlnum{0}\hldef{,n[i]),}\hlkwd{rep}\hldef{(}\hlnum{1}\hldef{,n[i]))}
+    \hldef{data} \hlkwb{=} \hlkwd{cbind}\hldef{(i,ID.ind[i]}\hlopt{+}\hlnum{1}\hlopt{:}\hldef{n[i],Treat,Y)}
+    \hlkwd{return}\hldef{(data)}
+  \hldef{\},}\hlkwc{i}\hldef{=}\hlnum{1}\hlopt{:}\hldef{N,}\hlkwc{SIMPLIFY} \hldef{= F)}
+  \hldef{Data} \hlkwb{=} \hlkwd{do.call}\hldef{(}\hlsng{'rbind'}\hldef{,DataL)}
+  \hlkwd{colnames}\hldef{(Data)} \hlkwb{=} \hlkwd{c}\hldef{(}\hlsng{'clusterID'}\hldef{,}\hlsng{'ID'}\hldef{,}\hlsng{'treat'}\hldef{,}\hlsng{'T'}\hldef{,}\hlsng{'S'}\hldef{)}
+  \hldef{Data} \hlkwb{=} \hlkwd{as.data.frame}\hldef{(Data)}
+  \hlkwd{return}\hldef{(Data)}
+\hldef{\}}
+
+\hlcom{# Cluster-by-cluster estimator}
+\hldef{CbCEstimator} \hlkwb{=} \hlkwa{function}\hldef{(}\hlkwc{clusterID}\hldef{,}\hlkwc{Y}\hldef{,}\hlkwc{X}\hldef{,}\hlkwc{Z}\hldef{)\{}
+
+  \hlcom{# clusterID: indicator for cluster}
+  \hlcom{# Y: Matrix of outcomes (rows: observations, columns: variables)}
+  \hlcom{# X: design matrix X}
+  \hlcom{# Z: design matrix Z}
+
+  \hlcom{## function to compute overall estimates of Beta}
+  \hldef{Weightedestimator} \hlkwb{=} \hlkwa{function}\hldef{(}\hlkwc{K_i}\hldef{,}\hlkwc{A_i}\hldef{,}\hlkwc{BetaH_i}\hldef{)\{}
+    \hldef{N} \hlkwb{=} \hlkwd{nrow}\hldef{(BetaH_i)}
+    \hldef{BetaH_i} \hlkwb{=} \hlkwd{split}\hldef{(BetaH_i,}\hlnum{1}\hlopt{:}\hldef{N)}
+    \hlcom{## computing ki'*A*Ki}
+    \hldef{Kit} \hlkwb{=} \hlkwd{mapply}\hldef{(t,K_i,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+    \hldef{KtA} \hlkwb{=} \hlkwd{mapply}\hldef{(crossprod,K_i,A_i,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+    \hldef{KAK} \hlkwb{=} \hlkwd{mapply}\hldef{(tcrossprod,KtA,Kit,}\hlkwc{SIMPLIFY}\hldef{=}\hlnum{FALSE}\hldef{)}
+    \hlcom{## computing the inverse}
+    \hldef{KAKinv} \hlkwb{=} \hlkwd{solve}\hldef{(}\hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,KAK))}
+    \hlcom{### computing (Ki'*Ai*Ki)^-1*Ki'*Ai}
+    \hldef{HHi} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlsng{'%*%'}\hldef{,}\hlkwd{list}\hldef{(KAKinv),KtA,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+    \hlcom{### estimating beta with proportional weights}
+    \hldef{BetaTilde} \hlkwb{=} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,}\hlkwd{mapply}\hldef{(}\hlsng{'%*%'}\hldef{,HHi,BetaH_i,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{))}
+    \hlkwd{return}\hldef{(}\hlkwd{list}\hldef{(BetaTilde,HHi))}
+  \hldef{\}}
+
+  \hldef{Kmatrix} \hlkwb{=} \hlkwa{function}\hldef{(}\hlkwc{X}\hldef{,}\hlkwc{Z}\hldef{,}\hlkwc{m}\hldef{)\{}
+    \hlkwa{if}\hldef{(}\hlkwd{identical}\hldef{(X,Z))\{}
+      \hldef{p} \hlkwb{=} \hlkwd{ncol}\hldef{(X)}
+      \hldef{K} \hlkwb{=} \hlkwd{diag}\hldef{(p}\hlopt{*}\hldef{m)}
+    \hldef{\}}\hlkwa{else}\hldef{\{}
+      \hldef{Z} \hlkwb{=} \hlkwd{kronecker}\hldef{(}\hlkwd{diag}\hldef{(m),Z)}
+      \hldef{X} \hlkwb{=} \hlkwd{kronecker}\hldef{(}\hlkwd{diag}\hldef{(m),X)}
+      \hldef{ZtZ} \hlkwb{=} \hlkwd{solve}\hldef{(}\hlkwd{crossprod}\hldef{(Z))}
+      \hldef{K} \hlkwb{=} \hlkwd{crossprod}\hldef{(ZtZ,}\hlkwd{crossprod}\hldef{(Z,X))}
+    \hldef{\}}
+    \hlkwd{return}\hldef{(K)}
+  \hldef{\}}
+  \hldef{prodL} \hlkwb{=} \hlkwa{function}\hldef{(}\hlkwc{XL}\hldef{,}\hlkwc{YL}\hldef{)\{}
+    \hldef{R} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlsng{'%*%'}\hldef{,XL,YL,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+    \hlkwd{return}\hldef{(R)}
+  \hldef{\}}
+  \hldef{Bmatrix} \hlkwb{=} \hlkwa{function}\hldef{(}\hlkwc{Ki}\hldef{,}\hlkwc{Inner}\hldef{)\{}
+    \hldef{Ki}\hlopt{%*%}\hldef{Inner}\hlopt{%*%}\hlkwd{t}\hldef{(Ki)}
+  \hldef{\}}
+  \hlcom{## Method of moments estimator of D}
+  \hldef{MME.D} \hlkwb{=} \hlkwa{function}\hldef{(}\hlkwc{w_i}\hldef{,}\hlkwc{K_i}\hldef{,}\hlkwc{HHi}\hldef{,}\hlkwc{BetaH_i}\hldef{,}\hlkwc{BetaH}\hldef{,}\hlkwc{R_i}\hldef{)\{}
+    \hldef{q} \hlkwb{=} \hlkwd{ncol}\hldef{(K_i[[}\hlnum{1}\hldef{]])}
+
+    \hldef{N} \hlkwb{=} \hlkwd{length}\hldef{(w_i)}
+    \hldef{b_i} \hlkwb{<-} \hldef{BetaH_i}\hlopt{-} \hlkwd{tcrossprod}\hldef{(}\hlkwd{matrix}\hldef{(}\hlnum{1}\hldef{,N,}\hlnum{1}\hldef{),BetaH)}
+    \hldef{b_i} \hlkwb{=} \hldef{b_i}\hlopt{*}\hlkwd{matrix}\hldef{(}\hlkwd{sqrt}\hldef{(w_i),N,q)}
+    \hldef{Sb} \hlkwb{=} \hlkwd{crossprod}\hldef{(b_i)}
+    \hldef{sum.HHi} \hlkwb{=} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,HHi)}
+
+    \hldef{H_ii} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlsng{'%*%'}\hldef{,K_i,HHi,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+
+    \hldef{kron.HHi} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{X}\hldef{,}\hlkwc{w}\hldef{)\{w}\hlopt{*}\hlkwd{kronecker}\hldef{(X,X)\},HHi,w_i,}\hlkwc{SIMPLIFY} \hldef{= F)}
+    \hldef{kron.K_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{X}\hldef{)\{}\hlkwd{kronecker}\hldef{(X,X)\},K_i,}\hlkwc{SIMPLIFY} \hldef{= F)}
+
+
+    \hldef{Denom.inv} \hlkwb{=} \hlkwd{diag}\hldef{((q)}\hlopt{^}\hlnum{2}\hldef{)} \hlopt{-} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,}\hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{X}\hldef{,}\hlkwc{w}\hldef{)\{w}\hlopt{*}\hlkwd{kronecker}\hldef{(}\hlkwd{diag}\hldef{(}\hlkwd{ncol}\hldef{(X)),X)\},H_ii,w_i,}\hlkwc{SIMPLIFY} \hldef{= F))} \hlopt{-}
+      \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,}\hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{X}\hldef{,}\hlkwc{w}\hldef{)\{w}\hlopt{*}\hlkwd{kronecker}\hldef{(X,}\hlkwd{diag}\hldef{(}\hlkwd{ncol}\hldef{(X)))\},H_ii,w_i,}\hlkwc{SIMPLIFY} \hldef{= F))} \hlopt{+}
+      \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,kron.K_i)}\hlopt{%*%}\hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,kron.HHi)}
+
+    \hldef{R_i.w} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlsng{'*'}\hldef{,R_i,w_i,}\hlkwc{SIMPLIFY} \hldef{= F)}
+    \hldef{Inner} \hlkwb{=} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,}\hlkwd{mapply}\hldef{(Bmatrix,HHi,R_i.w,}\hlkwc{SIMPLIFY} \hldef{= F))}
+    \hldef{part1} \hlkwb{=} \hlkwd{prodL}\hldef{(H_ii,R_i.w)}
+    \hldef{part2} \hlkwb{=} \hlkwd{prodL}\hldef{(R_i.w,H_ii)}
+    \hldef{part3} \hlkwb{=} \hlkwd{mapply}\hldef{(Bmatrix,K_i,}\hlkwd{list}\hldef{(Inner),}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+    \hldef{c} \hlkwb{=} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,R_i.w)} \hlopt{-} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,part1)} \hlopt{-} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,part2)} \hlopt{+} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,part3)}
+    \hldef{vec.c} \hlkwb{=} \hlkwd{vec}\hldef{(c)}
+    \hldef{Denom} \hlkwb{=} \hlkwd{solve}\hldef{(Denom.inv)}
+    \hldef{vec.D} \hlkwb{=} \hldef{Denom}\hlopt{%*%}\hldef{(}\hlkwd{vec}\hldef{(Sb)}\hlopt{-} \hldef{vec.c)}
+    \hldef{q} \hlkwb{=} \hlkwd{ncol}\hldef{(Sb)}
+    \hldef{D} \hlkwb{=} \hlkwd{invvec}\hldef{(vec.D,}\hlkwc{nrow}\hldef{=q,}\hlkwc{ncol}\hldef{=q)}
+    \hlcom{# browser()}
+    \hlkwd{return}\hldef{(D)}
+  \hldef{\}}
+  \hlcom{## function to estimate the variance of the overall estimator of Beta}
+  \hldef{VarBetaH.fun} \hlkwb{=} \hlkwa{function}\hldef{(}\hlkwc{Ki}\hldef{,}\hlkwc{Ai}\hldef{,}\hlkwc{VarBetai}\hldef{)\{}
+    \hldef{KA} \hlkwb{=} \hlkwd{mapply}\hldef{(crossprod,Ki,Ai,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+    \hldef{WW} \hlkwb{=} \hlkwd{solve}\hldef{(}\hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,}\hlkwd{mapply}\hldef{(}\hlsng{'%*%'}\hldef{,KA,Ki,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)))}
+    \hldef{II} \hlkwb{=} \hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,}\hlkwd{mapply}\hldef{(tcrossprod,}\hlkwd{mapply}\hldef{(}\hlsng{'%*%'}\hldef{,KA,VarBetai,}\hlkwc{SIMPLIFY}\hldef{=}\hlnum{FALSE}\hldef{),KA,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{))}
+    \hldef{VarBetaH} \hlkwb{=} \hldef{WW}\hlopt{%*%}\hlkwd{tcrossprod}\hldef{(II,WW)}
+    \hlkwd{return}\hldef{(VarBetaH)}
+  \hldef{\}}
+
+  \hldef{p} \hlkwb{=} \hlkwd{ncol}\hldef{(X)}
+  \hldef{q} \hlkwb{=} \hlkwd{ncol}\hldef{(Z)}
+  \hldef{m} \hlkwb{=} \hlkwd{ncol}\hldef{(Y)}
+  \hldef{Y_i} \hlkwb{=} \hlkwd{split}\hldef{(Y,clusterID)}
+  \hldef{n} \hlkwb{=} \hlkwd{c}\hldef{(}\hlkwd{table}\hldef{(clusterID))}
+  \hldef{N} \hlkwb{=} \hlkwd{length}\hldef{(n)}
+  \hlkwa{if}\hldef{(m}\hlopt{>}\hlnum{1}\hldef{)\{}
+    \hldef{Y_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{x}\hldef{)\{}\hlkwd{matrix}\hldef{(x,}\hlkwd{length}\hldef{(x)}\hlopt{/}\hldef{m,m)\},Y_i,}\hlkwc{SIMPLIFY} \hldef{= F)}
+  \hldef{\}}
+  \hldef{X_i} \hlkwb{=} \hlkwd{split}\hldef{(X,clusterID)}
+  \hlkwa{if}\hldef{(p}\hlopt{>}\hlnum{1}\hldef{)\{}
+    \hldef{X_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{x}\hldef{)\{}\hlkwd{matrix}\hldef{(x,}\hlkwd{length}\hldef{(x)}\hlopt{/}\hldef{p,p)\},X_i,}\hlkwc{SIMPLIFY} \hldef{= F)}
+  \hldef{\}}
+  \hldef{Z_i} \hlkwb{=} \hlkwd{split}\hldef{(Z,clusterID)}
+  \hlkwa{if}\hldef{(q}\hlopt{>}\hlnum{1}\hldef{)\{}
+    \hldef{Z_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{x}\hldef{)\{}\hlkwd{matrix}\hldef{(x,}\hlkwd{length}\hldef{(x)}\hlopt{/}\hldef{q,q)\},Z_i,}\hlkwc{SIMPLIFY} \hldef{= F)}
+  \hldef{\}}
+
+  \hldef{Est_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{x}\hldef{)\{}
+    \hldef{Y} \hlkwb{=} \hldef{Y_i[[x]]}
+    \hldef{n} \hlkwb{=} \hlkwd{nrow}\hldef{(Y)}
+    \hldef{Z} \hlkwb{=} \hldef{Z_i[[x]]}
+    \hldef{BetaH} \hlkwb{<-} \hlkwd{solve}\hldef{(}\hlkwd{crossprod}\hldef{(Z),}\hlkwd{crossprod}\hldef{(Z,Y))}
+    \hldef{e} \hlkwb{<-} \hldef{Y}\hlopt{-}\hldef{Z}\hlopt{%*%}\hldef{BetaH}
+    \hldef{SigmaH} \hlkwb{<-} \hlkwd{crossprod}\hldef{(e)}\hlopt{/}\hldef{(n}\hlopt{-}\hlnum{2}\hldef{)}
+
+    \hldef{Output} \hlkwb{<-} \hlkwd{c}\hldef{(}\hlkwd{c}\hldef{(BetaH),}\hlkwd{vech}\hldef{(SigmaH))}
+    \hlkwd{return}\hldef{(Output)}
+  \hldef{\},}\hlkwc{x}\hldef{=}\hlnum{1}\hlopt{:}\hldef{N)}
+  \hldef{Est_i} \hlkwb{=} \hlkwd{t}\hldef{(Est_i)}
+  \hldef{BetaH_i} \hlkwb{=} \hldef{Est_i[,}\hlnum{1}\hlopt{:}\hldef{(q}\hlopt{*}\hldef{m)]}
+  \hldef{SigmaH_i} \hlkwb{=} \hldef{Est_i[,}\hlopt{-}\hlkwd{c}\hldef{(}\hlnum{1}\hlopt{:}\hldef{(q}\hlopt{*}\hldef{m))]}
+  \hldef{w_i} \hlkwb{=} \hldef{n}\hlopt{/}\hlkwd{sum}\hldef{(n)}
+  \hldef{w_i.2} \hlkwb{=} \hldef{(n}\hlopt{-}\hlnum{2}\hldef{)}\hlopt{/}\hlkwd{sum}\hldef{(n}\hlopt{-}\hlnum{2}\hldef{)}
+  \hldef{A_i} \hlkwb{=} \hlkwd{mapply}\hldef{(diag,w_i,}\hlkwd{list}\hldef{(q}\hlopt{*}\hldef{m),}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+  \hldef{K_i} \hlkwb{=} \hlkwd{mapply}\hldef{(Kmatrix,X_i,Z_i,}\hlkwd{list}\hldef{(m),}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+  \hldef{Overall} \hlkwb{=} \hlkwd{Weightedestimator}\hldef{(K_i,A_i,BetaH_i)}
+  \hldef{HHi} \hlkwb{=} \hldef{Overall[[}\hlnum{2}\hldef{]]}
+  \hldef{BetaH} \hlkwb{=} \hldef{Overall[[}\hlnum{1}\hldef{]]}
+  \hldef{SigmaH} \hlkwb{=} \hlkwd{invvech}\hldef{(}\hlkwd{apply}\hldef{(SigmaH_i,}\hlnum{2}\hldef{,weighted.mean,}\hlkwc{w}\hldef{=w_i.2))}
+  \hlcom{# browser()}
+  \hldef{R_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlkwa{function}\hldef{(}\hlkwc{x}\hldef{)\{}
+    \hlkwd{kronecker}\hldef{(SigmaH,}\hlkwd{solve}\hldef{(}\hlkwd{crossprod}\hldef{(Z_i[[x]])))}
+  \hldef{\},}\hlkwc{x}\hldef{=}\hlnum{1}\hlopt{:}\hldef{N,}\hlkwc{SIMPLIFY} \hldef{= F)}
+  \hldef{w_i.temp} \hlkwb{=} \hlkwd{rep}\hldef{(}\hlnum{1}\hlopt{/}\hldef{N,N)}
+  \hldef{DH} \hlkwb{=} \hlkwd{MME.D}\hldef{(w_i,K_i,HHi,BetaH_i,BetaH,R_i)}
+  \hlkwa{if}\hldef{(}\hlkwd{min}\hldef{(}\hlkwd{eigen}\hldef{(DH,}\hlkwc{only.values} \hldef{= T)}\hlopt{$}\hldef{values)} \hlopt{<} \hlnum{0} \hldef{)\{}
+    \hldef{DH} \hlkwb{=} \hlkwd{pdDajustment}\hldef{(DH)}
+  \hldef{\}}
+  \hlcom{# browser()}
+  \hldef{BetaH1} \hlkwb{<-} \hldef{BetaH}
+  \hldef{Var.BetaH_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlsng{'+'}\hldef{,R_i,} \hlkwc{MoreArgs} \hldef{=} \hlkwd{list}\hldef{(}\hlkwc{DH}\hldef{=DH),}\hlkwc{SIMPLIFY} \hldef{= F)}
+  \hldef{VarBetaH_i.inv} \hlkwb{=} \hlkwd{mapply}\hldef{(solve,Var.BetaH_i,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+  \hldef{A_i.denom} \hlkwb{=} \hlkwd{solve}\hldef{(}\hlkwd{Reduce}\hldef{(}\hlsng{'+'}\hldef{,VarBetaH_i.inv))}
+  \hldef{A_i} \hlkwb{=} \hlkwd{mapply}\hldef{(}\hlsng{'%*%'}\hldef{,}\hlkwd{list}\hldef{(A_i.denom),VarBetaH_i.inv,}\hlkwc{SIMPLIFY} \hldef{=} \hlnum{FALSE}\hldef{)}
+  \hldef{Overall} \hlkwb{=} \hlkwd{Weightedestimator}\hldef{(K_i,A_i,BetaH_i)}
+  \hldef{BetaH} \hlkwb{=} \hldef{Overall[[}\hlnum{1}\hldef{]]}
+  \hldef{VarBetaH} \hlkwb{=} \hlkwd{VarBetaH.fun}\hldef{(K_i,A_i,Var.BetaH_i)}
+  \hldef{Fit} \hlkwb{=} \hlkwd{list}\hldef{(}\hlkwc{BetaH}\hldef{=BetaH,}\hlkwc{SigmaH}\hldef{=SigmaH,}\hlkwc{DH}\hldef{=DH,}\hlkwc{VarBetaH} \hldef{= VarBetaH,} \hlkwc{BetaH1} \hldef{= BetaH1)}
+  \hlcom{# return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma, (3) Estimates D,}
+  \hlcom{# and (4) variance of estimates for fixed effects}
+  \hlkwd{return}\hldef{(Fit)}
+\hldef{\}}
+
+\hlcom{#### example}
+\hldef{Data} \hlkwb{=} \hlkwd{Sim.data}\hldef{(}\hlnum{50}\hldef{,}\hlnum{100}\hldef{,}\hlnum{0.25}\hldef{,}\hlnum{1}\hldef{,}\hlnum{123}\hldef{)}
+\hldef{Y} \hlkwb{=} \hlkwd{cbind}\hldef{(Data}\hlopt{$}\hldef{T,Data}\hlopt{$}\hldef{S)}
+\hldef{X} \hlkwb{=} \hlkwd{cbind}\hldef{(}\hlnum{1}\hldef{,Data}\hlopt{$}\hldef{treat)}
+\hldef{Z} \hlkwb{=} \hldef{X}
+\hldef{clusterID} \hlkwb{=} \hldef{Data}\hlopt{$}\hldef{clusterID}
+
+\hldef{Est} \hlkwb{=} \hlkwd{CbCEstimator}\hldef{(clusterID,Y,X,Z)}
+\hldef{Est}\hlopt{$}\hldef{BetaH} \hlcom{## estimation of fixed effects}
+\end{alltt}
+\begin{verbatim}
+##          [,1]
+## [1,] 449.1153
+## [2,] 301.1674
+## [3,] 499.0259
+## [4,] 500.9150
+\end{verbatim}
+\begin{alltt}
+\hldef{Est}\hlopt{$}\hldef{SigmaH} \hlcom{# variance of errors}
+\end{alltt}
+\begin{verbatim}
+##          [,1]     [,2]
+## [1,] 301.8559 261.2946
+## [2,] 261.2946 299.6321
+\end{verbatim}
+\begin{alltt}
+\hldef{Est}\hlopt{$}\hldef{DH} \hlcom{# variance of random effects}
+\end{alltt}
+\begin{verbatim}
+##           [,1]     [,2]     [,3]      [,4]
+## [1,] 78.538781 12.36627 19.82643  5.322564
+## [2,] 12.366270 76.00486 13.31561 65.633542
+## [3,] 19.826432 13.31561 72.24998 13.127020
+## [4,]  5.322564 65.63354 13.12702 89.067364
+\end{verbatim}
+\begin{alltt}
+\hldef{Est}\hlopt{$}\hldef{VarBetaH} \hlcom{# variance of beta estimators}
+\end{alltt}
+\begin{verbatim}
+##           [,1]      [,2]      [,3]      [,4]
+## [1,] 1.6400981 0.2491457 0.4564508 0.1080061
+## [2,] 0.2491457 1.5895736 0.2678918 1.3727982
+## [3,] 0.4564508 0.2678918 1.5138055 0.2643294
+## [4,] 0.1080061 1.3727982 0.2643294 1.8503611
+\end{verbatim}
+\begin{alltt}
+\hldef{Est}\hlopt{$}\hldef{BetaH1}
+\end{alltt}
+\begin{verbatim}
+##          [,1]
+## [1,] 448.4762
+## [2,] 300.7024
+## [3,] 499.0129
+## [4,] 500.7705
+\end{verbatim}
+\end{kframe}
+\end{knitrout}
+
+The R session information (including the OS info, R version and all
+packages used):
+
+\begin{knitrout}
+\definecolor{shadecolor}{rgb}{0.969, 0.969, 0.969}\color{fgcolor}\begin{kframe}
+\begin{alltt}
+\hlkwd{sessionInfo}\hldef{()}
+\end{alltt}
+\begin{verbatim}
+## R version 4.6.0 (2026-04-24 ucrt)
+## Platform: x86_64-w64-mingw32/x64
+## Running under: Windows 11 x64 (build 26200)
+## 
+## Matrix products: default
+##   LAPACK version 3.12.1
+## 
+## locale:
+## [1] LC_COLLATE=Dutch_Belgium.utf8  LC_CTYPE=Dutch_Belgium.utf8   
+## [3] LC_MONETARY=Dutch_Belgium.utf8 LC_NUMERIC=C                  
+## [5] LC_TIME=Dutch_Belgium.utf8    
+## 
+## time zone: Europe/Brussels
+## tzcode source: internal
+## 
+## attached base packages:
+## [1] stats     graphics  grDevices utils     datasets  methods   base     
+## 
+## other attached packages:
+## [1] knitr_1.51  dplyr_1.2.1 ks_1.15.2  
+## 
+## loaded via a namespace (and not attached):
+##  [1] generics_0.1.4     tidyr_1.3.2        KernSmooth_2.23-26 shape_1.4.6.1     
+##  [5] lattice_0.22-9     pracma_2.4.6       lme4_2.0-1         magrittr_2.0.5    
+##  [9] mitml_0.4-5        evaluate_1.0.5     grid_4.6.0         iterators_1.0.14  
+## [13] mice_3.19.0        mvtnorm_1.4-2      foreach_1.5.2      jomo_2.7-6        
+## [17] glmnet_5.0         Matrix_1.7-5       nnet_7.3-20        backports_1.5.1   
+## [21] tinytex_0.60       survival_3.8-6     mclust_6.1.3       purrr_1.2.2       
+## [25] codetools_0.2-20   reformulas_0.4.4   Rdpack_2.6.6       cli_3.6.6         
+## [29] rlang_1.3.0        rbibutils_2.4.1    splines_4.6.0      withr_3.0.3       
+## [33] otel_0.2.0         pan_2.0            tools_4.6.0        nloptr_2.2.1      
+## [37] minqa_1.2.8        boot_1.3-32        broom_1.0.13       vctrs_0.7.3       
+## [41] R6_2.6.1           rpart_4.1.27       lifecycle_1.0.5    MASS_7.3-65       
+## [45] pkgconfig_2.0.3    pillar_1.11.1      glue_1.8.1         Rcpp_1.1.2        
+## [49] highr_0.12         xfun_0.60          tibble_3.3.1       tidyselect_1.2.1  
+## [53] rstudioapi_0.19.0  nlme_3.1-169       compiler_4.6.0     mvnfast_0.2.8
+\end{verbatim}
+\begin{alltt}
+\hlkwd{Sys.time}\hldef{()}
+\end{alltt}
+\begin{verbatim}
+## [1] "2026-08-10 11:11:53 CEST"
+\end{verbatim}
+\end{kframe}
+\end{knitrout}
+
+
+\end{document}
