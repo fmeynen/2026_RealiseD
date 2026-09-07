@@ -1,5 +1,7 @@
-source("scripts/data_generation_layer.R")
-source("scripts/analysis_layer.R")
+source("scripts/Simulation Layer/data_generation_layer.R")
+source("scripts/Simulation Layer/validation.R")
+source("scripts/Simulation Layer/analysis_layer.R")
+source("scripts/Simulation Layer/orchestration.R")
 
 # Example scenario setup -------------------------------------------------------------------------------------------
 
@@ -27,9 +29,9 @@ scenario_one <- scenarios[1, , drop = FALSE]
 generated_one <- simulate_one_dataset(scenario_one, sim_id = 1, seed = 260925)
 
 validate_analysis_data(generated_one)
-prepared_one <- prepare_analysis_data(generated_one)
-classical_ml_formula <- build_classical_ml_formula()
-one_result <- analyze_one_dataset_classical_ml(generated_one)
+prepared_one <- prepare_analysis_data(generated_one, type = "classical_ml")
+classical_ml_formula <- build_formula()
+one_result <- analyze_classical_ml(generated_one)
 
 head(generated_one)
 head(prepared_one)

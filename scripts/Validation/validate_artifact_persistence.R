@@ -1,6 +1,8 @@
-source("scripts/data_generation_layer.R")
-source("scripts/analysis_layer.R")
-source("scripts/results_layer.R")
+source("scripts/Simulation Layer/data_generation_layer.R")
+source("scripts/Simulation Layer/validation.R")
+source("scripts/Simulation Layer/analysis_layer.R")
+source("scripts/Simulation Layer/orchestration.R")
+source("scripts/Simulation Layer/results_layer.R")
 
 expect_error_contains <- function(expr, expected_text) {
   error_message <- tryCatch(
@@ -57,7 +59,6 @@ found_results <- find_results_artifact_exact(
   methods = rev(unique(analysis_results$method)),
   engines = rev(unique(analysis_results$engine)),
   n_simulations = n_simulations,
-  analysis_file = "scripts/analysis_layer.R",
   output_dir = results_dir
 )
 
@@ -69,7 +70,6 @@ loaded_results <- load_results_artifact_exact(
   methods = unique(analysis_results$method),
   engines = unique(analysis_results$engine),
   n_simulations = n_simulations,
-  analysis_file = "scripts/analysis_layer.R",
   output_dir = results_dir
 )
 

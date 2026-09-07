@@ -448,7 +448,7 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
   results_df  <- results_obj$results
   scenarios_df <- results_obj$scenarios
 
-  #results_df <- validate_aggregation_inputs(results_df, scenarios_df, include_engine = include_engine)
+  results_df <- validate_aggregation_inputs(results_df, scenarios_df, include_engine = include_engine)
 
   group_cols <- if (include_engine) {
     c("scenario_id", "method", "engine")
