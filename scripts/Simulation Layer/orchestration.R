@@ -287,9 +287,11 @@ analyze_closed_form_reweighting <- function(data,
 
 # Analyze Generated dataset ---------------------------------------------------------------------------------------
 
-run_analysis_over_groups <- function(data, scenarios = NULL, analyzer_fn, ...) {
+run_analysis_over_groups <- function(data, scenarios = NULL, analyzer_fn,
+                                     parallel = FALSE, n_cores = max(1L, parallel::detectCores(logical = FALSE) - 1L),
+                                     ...) {
   required_split_cols <- c("scenario_id", "sim_id")
-  missing_cols <- setdiff(required_split_cols, names(data))
+  missing_cols        <- setdiff(required_split_cols, names(data))
   if (length(missing_cols) > 0L) {
     stop("data is missing required columns: ", paste(missing_cols, collapse = ", "))
   }
@@ -299,7 +301,18 @@ run_analysis_over_groups <- function(data, scenarios = NULL, analyzer_fn, ...) {
   }
 
   split_data <- split(data, interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE))
-  results <- lapply(split_data, analyzer_fn, ...)
+  if (isTRUE(parallel)) {
+    if (.Platform$OS.type == "windows") {
+      warning("parallel=TRUE requested, but mclapply is not supported on Windows; falling back to lapply.")
+      results <- lapply(split_data, analyzer_fn, ...)
+    } else {
+      mc_cores <- min(as.integer(n_cores), length(split_data))
+      mc_cores <- max(1L, mc_cores)
+      results  <- parallel::mclapply(split_data, analyzer_fn, ..., mc.cores = mc_cores)
+    }
+  } else {
+    results <- lapply(split_data, analyzer_fn, ...)
+  }
   combined_results <- do.call(rbind, results)
   combined_results <- combined_results[order(combined_results$scenario_id, combined_results$sim_id), , drop = FALSE]
 
@@ -330,7 +343,7 @@ run_analysis_over_groups <- function(data, scenarios = NULL, analyzer_fn, ...) {
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
 analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
-  run_analysis_over_groups(data, scenarios, analyze_classical_ml)
+  run_analysis_over_groups(data, scenarios, analyze_classical_ml, parallel = .Platform$OS.type != "windows")
 }
 
 
@@ -358,6 +371,7 @@ analyze_generated_data_mi_closed_form <- function(
     data = data,
     scenarios = scenarios,
     analyzer_fn = analyze_mi_closed_form,
+    parallel = .Platform$OS.type != "windows",
     impute_args = impute_args,
     fit_args = fit_args
   )
@@ -384,6 +398,7 @@ analyze_generated_data_closed_form_weights <- function(
     data = data,
     scenarios = scenarios,
     analyzer_fn = analyze_closed_form_reweighting,
+    parallel = .Platform$OS.type != "windows",
     fit_args = fit_args
   )
 }
