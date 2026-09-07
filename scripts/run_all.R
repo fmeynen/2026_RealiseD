@@ -63,7 +63,7 @@ paths <- build_results_artifact_paths(hash, dir = "results/data")
 
 if(!file.exists(paths$immutable_path)){
   analysis_ml_results <- analyze_generated_data_classical_ml(data$data, data$scenarios)
-  saveRDS(analysis_ml_results, "results/data/ml_results.R")
+  saveRDS(analysis_ml_results, "results/data/ml_results.rds")
   build_and_save_results(analysis_ml_results, scenarios, output_dir = "results/data", overwrite = TRUE)
 }
 results_ml <- load_results_artifact_exact(scenarios = scenarios,
@@ -88,7 +88,7 @@ if(!file.exists(paths$immutable_path)){
   analysis_mi_results <- analyze_generated_data_mi_closed_form(data$data,
                                                                fit_args = set_fit_args(),
                                                                impute_args = set_impute_args(method_y = "2l.pmm"))
-  saveRDS(analysis_mi_results, "results/data/mi_results.R")
+  saveRDS(analysis_mi_results, "results/data/mi_results.rds")
   build_and_save_results(analysis_mi_results, scenarios, output_dir = "results/data", overwrite = TRUE)
 }
 results_mi <- readRDS("results/data/sim_results_latest.rds")
@@ -116,14 +116,14 @@ if(!file.exists(paths$immutable_path)){
   build_and_save_results(analysis_weighting_results, scenarios, output_dir = "results/data", overwrite = TRUE)
 }
 results_weighting <- readRDS("results/data/sim_results_latest.rds")
+results_weighting$results$method <- "closed_form_weighting"
 ## Aggregate Results -----------------------------------------------------------------------------------------------
 
 aggregated_results_w <- aggregate_results(results_weighting)
 
 
-
-
 # Scratchpad ------------------------------------------------------------------------------------------------------
 
-saveRDS(aggregated_results_w, aggregated_results_mi, aggregated_results_ml, "results/data/res.R")
-  
+saveRDS(list(aggregated_results_w, aggregated_results_mi, aggregated_results_ml), file = "results/data/res.rds")
+
+
