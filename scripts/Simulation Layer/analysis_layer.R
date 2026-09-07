@@ -555,7 +555,7 @@ impute_data <- function(data, impute_args = set_impute_args()){
 
 #helper formula inv_sum_kwk
 calculate_inv_sum_KWK <- function(K_mi, weights) {
-  KWK  <- mapply(function(K, W) {t(K) %*% W %*% K},
+  KWK  <- mapply(function(K, W) {crossprod(K, W) %*% K},
                  K_mi, weights,
                  SIMPLIFY = FALSE)
   solve(Reduce('+', KWK))
@@ -581,10 +581,9 @@ calculate_stage1_results <- function(Z, Y, n, q) {
 #stage 2
 calculate_stage2_beta <- function(K_mi, weights, beta_hats) {
   inv_sum_KWK <- calculate_inv_sum_KWK(K_mi, weights)
-  KWB  <- mapply(function(K, W, B) {t(K) %*% W %*% B}, 
-                 K_mi, weights, beta_hats,
-                 SIMPLIFY = FALSE)
-  sum_KWB <- Reduce('+', KWB)
+  KWB         <- mapply(function(K, W, B) {crossprod(K, W) %*% B}, 
+                        K_mi, weights, beta_hats, SIMPLIFY = FALSE)
+  sum_KWB     <- Reduce('+', KWB)
   inv_sum_KWK %*% sum_KWB
 }
 
@@ -598,31 +597,22 @@ calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i, N_clusters,
   #square root of weights to use for matrix multiplication
   sqrt_W <- lapply(weights, expm::sqrtm)
   #vec Sb: formula 5
-    #\tilde b_i = \hat \beta_i - K_{mi} \tilde \beta
-    #vec_sb = S_b = \sum_{i=1}^n \tilde b_i \tilde b_i'
-      # with weighting: S_b = \sum_{i=1}^n \sqrt{W} \tilde b_i \tilde b_i' \sqrt{W}'
   b_i_tilde <- mapply(function(beta_hats, K_mi){beta_hats - K_mi %*% beta_tilde},
                       beta_hats, K_mi, SIMPLIFY = F)
   vec_sb    <- ks::vec(Reduce('+', mapply(function(b, W){tcrossprod(W %*% b)},
                                        b_i_tilde, sqrt_W, SIMPLIFY = F))) ##
   
-  # vec_sb <- ks::vec(Reduce('+', mapply(function(b, W){ W %*% tcrossprod(b)},
-  #                                      b_i_tilde, weights, SIMPLIFY = F))) ## 
-  # vec_sb <- ks::vec(Reduce('+', lapply(b_i_tilde, tcrossprod)))
-  
+
   # D: formula 9, c: formula 9b
   #Hii
   inv_sum_KWK <- calculate_inv_sum_KWK(K_mi, weights)
   HH_i        <- mapply(function(K, W) {inv_sum_KWK %*% crossprod(K, W)}, K_mi, weights, SIMPLIFY = F)
   H_ii        <- mapply(function(K, H) {K %*% H}, K_mi, HH_i, SIMPLIFY = F)
-  # H_ik_part1    <- lapply(K_mi, function(K){K %*% inv_sum_KWK})
-  # H_ik_part2    <- mapply(function(K, W){(t(K) %*% W)}, K_mi, weights, SIMPLIFY = F)
-  
-  
+
   # denom part 1
   identity  <- lapply(H_ii, function(H){diag(1, dim(H))})
   I_min_Hii <- lapply(H_ii, function(H){diag(1, dim(H)) - H})
-  denom_p1  <- Reduce('+', mapply(function(X, W){kronecker(W %*% X, X %*% t(W))},
+  denom_p1  <- Reduce('+', mapply(function(X, W){kronecker(W %*% X, tcrossprod(X, W))},
                                   I_min_Hii, sqrt_W, SIMPLIFY = F))
   
   # denom part 2
@@ -639,78 +629,19 @@ calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i, N_clusters,
   denom <- denom_p1 + denom_p2
   #c
   R_i   <- lapply(Z_i, function(Z){ks::vec(kronecker(Sigma_tilde, solve(crossprod(Z))))})
-  vec_c <- Reduce('+',mapply(function(W, IH, R){(kronecker(W %*% IH, IH %*% t(W)) + denom_p2) %*% ks::vec(R)},
+  vec_c <- Reduce('+',mapply(function(W, IH, R){(kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% ks::vec(R)},
                              sqrt_W, I_min_Hii, R_i, SIMPLIFY = F))
   
   
   vec_D_tilde = solve(denom) %*% (vec_sb - vec_c)
   ks::invvec(vec_D_tilde, sqrt(length(vec_D_tilde)))
-  # 
-  # 
-  # sum_part2 <- Reduce('+', lapply(H_ik_part2, function(X){kronecker(X, X)}))
-  # kron_part1 <- lapply(H_ik_part1, function(X){kronecker(X,X)})
-  # sum_Hij <- Reduce('+', mapply(function(W, part1, I){kronecker(W, I) %*% part1 %*% sum_part2 %*% kronecker(I, W)},
-  #                               sqrt_W, kron_part1, identity, SIMPLIFY = F ))
-  # sum_Hii <- Reduce('+', lapply(H_ii, function(X){kronecker(X, X)}))
-  # 
-  # Denom = wkron_I_min_Hii + sum_Hij - sum_Hii
-  # 
-  # browser()
-  # 
-  # 
-  # i_cols        <- ncol(H_ii[[1]])
-  # identity_list <- replicate(N_clusters, diag(i_cols), simplify = F)
-  # IxI           <- mapply(function(I){kronecker(I, I)}, identity_list, SIMPLIFY = F)
-  # IxHii         <- mapply(function(I, H_ii){kronecker(I, H_ii)}, identity_list, H_ii, SIMPLIFY = F)
-  # HiixI         <- mapply(function(H_ii, I){kronecker(H_ii, I)}, H_ii, identity_list, SIMPLIFY = F)
-  # HiixHii       <- mapply(function(H_ii){kronecker(H_ii,H_ii)}, H_ii, SIMPLIFY = F)
-  # # IxHii         <- mapply(function(I, H_ii, W){W * kronecker(I, H_ii)}, identity_list, H_ii, weights, SIMPLIFY = F)
-  # # HiixI         <- mapply(function(H_ii, I, W){W * kronecker(H_ii, I)}, H_ii, identity_list, weights, SIMPLIFY = F)
-  # # HiixHii       <- mapply(function(H_ii,W){W * kronecker(H_ii,H_ii)}, H_ii, weights, SIMPLIFY = F)
-  # 
-  # Sum_Ki_Sum_HHi <- Reduce('+', mapply(function(K){kronecker(K,K)}, K_mi, SIMPLIFY = F)) %*%
-  #   Reduce('+', mapply(function(K, W){kronecker(inv_sum_KWK %*% t(K) %*% W, inv_sum_KWK %*% t(K) %*% W)},
-  #                      K_mi, weights, SIMPLIFY = F))
-  # # Sum_Ai_Sum_Bk <- Reduce('+', mapply(function(H_ik1){kronecker(H_ik1, H_ik1)}, H_ik_part1, SIMPLIFY = F)) %*%
-  # #   Reduce('+', mapply(function(H_ik2, W){W %*% kronecker(H_ik2, H_ik2)}, H_ik_part2, weights, SIMPLIFY = F))
-  # 
-  # Sum_Hi_not_k <- Sum_Ki_Sum_HHi - Reduce('+', HiixHii)
-  # 
-  # vec_Sigma_Z <- lapply(Z_i, function(Z){
-  #   ks::vec(kronecker(Sigma_tilde, solve(crossprod(Z))))
-  # })
-  # 
-  # 
-  # ## c
-  # # c <- Reduce('+',
-  # #             mapply(function(IxI, IxHii, HiixI, HiixHii, vSz, W)
-  # #             {W%*%(IxI - IxHii - HiixI + HiixHii +Sum_Hi_not_k) %*% vSz},
-  # #             IxI, IxHii, HiixI, HiixHii,vec_Sigma_Z, weights,
-  # #             SIMPLIFY = F)
-  # # )
-  # c <- Reduce('+',
-  #             mapply(function(IxI, IxHii, HiixI, HiixHii, vSz)
-  #             {(IxI - IxHii - HiixI + HiixHii +Sum_Hi_not_k) %*% vSz},
-  #             IxI, IxHii, HiixI, HiixHii,vec_Sigma_Z,
-  #             SIMPLIFY = F)
-  # )
-  # Denom <- Reduce('+',
-  #                 mapply(function(IxI, IxHii, HiixI) {(IxI - IxHii - HiixI + Sum_Ki_Sum_HHi)},
-  #                        IxI, IxHii, HiixI, SIMPLIFY = F))
-  # # Denom <- Reduce('+', IxI) - Reduce('+', IxHii) - Reduce('+', HiixI) + Sum_Ki_Sum_HHi
-  # 
-  # 
-  # ## D
-  # vec_D_tilde = solve(Denom) %*% (vec_sb - c)
-  # browser()
-  # ks::invvec(vec_D_tilde, sqrt(length(vec_D_tilde)))
 }
 
 calculate_stage2_varbeta <- function(K_mi, weights, Z_i, D_tilde, Sigma_tilde) {
   var_beta_i     <- mapply(function(Z) {D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))},
                            Z_i, SIMPLIFY = F)
   var_beta_part1 <- calculate_inv_sum_KWK(K_mi, weights)
-  var_beta_part2 <- Reduce('+', mapply(function(K, W, VB) {t(K) %*% W %*% VB %*% t(W) %*% K},
+  var_beta_part2 <- Reduce('+', mapply(function(K, W, VB) {crossprod(K, W) %*% VB %*% crossprod(W, K)},
                                        K_mi, weights, var_beta_i, SIMPLIFY = F))
   
   var_beta_part1 %*% var_beta_part2 %*% var_beta_part1
@@ -768,7 +699,7 @@ CbCEstimator <- function(mats, fit_args){
     E <- diag(eigenvalues)
     L <- eig$vectors
     
-    L %*% E %*% t(L)
+    L %*% tcrossprod(E, L)
   }
   if(min(eigen(D_tilde,only.values = T)$values) < 0 ){
     warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
