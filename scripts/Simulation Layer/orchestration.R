@@ -400,7 +400,7 @@ run_requested_analyses <- function(
     overwrite = FALSE
 ) {
   available_analyses <- c("classical_ml", "multiple_imputation", "reweighting")
-  unknown_analyses <- setdiff(analyses, available_analyses)
+  unknown_analyses   <- setdiff(analyses, available_analyses)
   if (length(unknown_analyses) > 0L) {
     stop("Unknown analyses requested: ", paste(unknown_analyses, collapse = ", "))
   }
@@ -423,10 +423,10 @@ run_requested_analyses <- function(
         user_config
       )
       analysis_results <- analyze_generated_data_mi_closed_form(
-        data = data,
-        scenarios = scenarios,
+        data        = data,
+        scenarios   = scenarios,
         impute_args = mi_config$impute_args,
-        fit_args = mi_config$fit_args
+        fit_args    = mi_config$fit_args
       )
     } else if (identical(analysis_name, "reweighting")) {
       rw_config <- utils::modifyList(
@@ -434,34 +434,34 @@ run_requested_analyses <- function(
         user_config
       )
       analysis_results <- analyze_generated_data_closed_form_weights(
-        data = data,
+        data      = data,
         scenarios = scenarios,
-        fit_args = rw_config$fit_args
+        fit_args  = rw_config$fit_args
       )
     }
 
     saved_results <- build_and_save_results(
       analysis_results = analysis_results,
-      scenarios = scenarios,
-      output_dir = output_dir,
-      overwrite = overwrite,
-      n_simulations = n_simulations
+      scenarios        = scenarios,
+      output_dir       = output_dir,
+      overwrite        = overwrite,
+      n_simulations    = n_simulations
     )
     results_artifact <- load_results_artifact_exact(
-      scenarios = scenarios,
-      methods = unique(analysis_results$method),
-      engines = unique(analysis_results$engine),
+      scenarios     = scenarios,
+      methods       = unique(analysis_results$method),
+      engines       = unique(analysis_results$engine),
       n_simulations = n_simulations,
-      output_dir = output_dir
+      output_dir    = output_dir
     )
     aggregated <- aggregate_results(results_artifact)
 
     output[[analysis_name]] <- list(
       analysis_results = analysis_results,
       results_artifact = results_artifact,
-      aggregated = aggregated,
-      hash = saved_results$metadata$hash,
-      paths = saved_results$paths
+      aggregated       = aggregated,
+      hash             = saved_results$metadata$hash,
+      paths            = saved_results$paths
     )
   }
 

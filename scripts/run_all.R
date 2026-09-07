@@ -19,12 +19,12 @@ scenarios <- build_scenario_grid(
   dropout_mechanism = "half-missing",
   seed_base = 260925
 )
-n_simulations <- 10000L
+n_simulations <- 10L
 validate_scenario_grid(scenarios)
 
 # Simulate/load data ----------------------------------------------------------------------------------------------
 data_hash <- compute_data_generation_hash_from_spec(
-  scenarios = scenarios,
+  scenarios     = scenarios,
   n_simulations = n_simulations
 )
 data_paths <- build_data_generation_artifact_paths(data_hash, dir = "data/processed")
@@ -37,8 +37,8 @@ if (!file.exists(data_paths$immutable_path)) {
     })
   )
   build_and_save_generated_data_artifact(
-    data = generated_stacked,
-    scenarios = scenarios,
+    data          = generated_stacked,
+    scenarios     = scenarios,
     n_simulations = n_simulations
   )
 }
@@ -46,20 +46,20 @@ generated <- load_generated_data_artifact_exact(scenarios = scenarios, n_simulat
 
 # Run all requested analyses with one orchestrator call -----------------------------------------------------------
 analysis_outputs <- run_requested_analyses(
-  data = generated$data,
-  scenarios = generated$scenarios,
-  analyses = c("classical_ml", "multiple_imputation", "reweighting"),
-  n_simulations = n_simulations,
+  data             = generated$data,
+  scenarios        = generated$scenarios,
+  analyses         = c("classical_ml", "multiple_imputation", "reweighting"),
+  n_simulations    = n_simulations,
   analysis_configs = list(
     multiple_imputation = list(
       impute_args = set_impute_args(method_y = "2l.pmm"),
-      fit_args = set_fit_args()
+      fit_args    = set_fit_args()
     ),
     reweighting = list(
       fit_args = set_fit_args(reweighting = TRUE)
     )
   ),
   output_dir = "results/data",
-  overwrite = TRUE
+  overwrite  = TRUE
 )
   
