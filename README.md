@@ -1,79 +1,107 @@
-# Template Project — RStudio
+# 2026_RealiseD
 
-A lightweight template for organizing reproducible RStudio projects.
+An R-based research project with choice-based conjoint (CBC) analysis and statistical modeling components.
 
-This repository is a starting template I use for new RStudio projects. It includes a recommended folder structure, a starter R project, basic scripts to get going, a lintr file for consistent and clear formatting.
+## Overview
 
-Table of contents
+This repository contains reproducible research code and analysis for investigating CBC (Choice-Based Conjoint) estimation methods. It integrates LaTeX documentation with R-based data analysis workflows, following a structured project organization.
 
-* [Why this template](#why-this-template)
-* [Project structure](#project-structure)
-* [Using this repository as a template](#using-this-repository-as-a-template)
-* [Using the .lintr file](#-Using-the-.lintr-file)
-* [Contributing](#contributing)
-
-## Why this template
-
-This template enforces a clear layout and reproducible workflow for data analysis and R package-adjacent projects. It is minimal so you can adapt it quickly to specific analyses or packages.
-
-## Project structure
-
-This template follows the following opinionated structure:
+## Project Structure
 
 ```
-│   .gitignore                       — files to be ignored
-│   .lintr                           — linter file for consistent formatting
-│   README.md                        — this file
-│   Template\_Project\_RStudio.Rproj   — R project file, name changed automatically on first push
-│   Tijd.xlsx                        — Record time spent on project
-├───.github                          — Github actions
-├───data                             — All contents, except for optional test data are ignored by gitignore
-│   ├───processed
-│   ├───raw
-│   └───test
-├───reports
-│   ├───drafts
-│   └───final
-├───research\_question
-│   ├───meeting\_notes
-│   └───research\_papers              — Research papers pertaining to research question, provided by researchers
-├───results
-│   ├───graphs
-│   └───tables                        — Current preference on excel files for inclusion in Word
-├───scripts
-│       analysis.R
-│       data\_management.R
-│       exploration.R
-│       helpers.R
-│       run\_all.R
-└───supplementary\_material
-    ├───R\_package\_manuals
-    └───statistical\_papers           — Any papers on statistical material
+│   .gitignore                      — Files to ignore during version control
+│   .lintr                          — R linter configuration for code style
+│   README.md                       — This file
+│   2026_RealiseD.Rproj            — RStudio project file
+│   CBCEstimator.tex               — LaTeX source documentation
+│   CBCEstimator.pdf               — Compiled PDF documentation
+│   CBCEstimator.log               — LaTeX compilation log
+│   Tijd.xlsx                       — Time tracking spreadsheet
+│
+├───data                            — Data storage (contents ignored by gitignore except tests)
+│   ├───raw                        — Original, unmodified data files
+│   ├───processed                  — Cleaned and processed data
+│   └───test                       — Test datasets
+│
+├───scripts                        — R analysis scripts
+│   ├───data_management.R          — Data loading, cleaning, and preprocessing
+│   ├───exploration.R              — Exploratory data analysis
+│   ├───analysis.R                 — Main statistical analysis
+│   ├───helpers.R                  — Utility functions
+│   └───run_all.R                  — Master script to run full pipeline
+│
+├───results                        — Output from analyses
+│   ├───graphs                     — Figures and plots
+│   └───tables                     — Summary tables and results
+│
+├───reports                        — Reports and manuscripts
+│   ├───drafts                     — Work-in-progress versions
+│   └───final                      — Final report/manuscript versions
+│
+├───research_question              — Research documentation
+│   ├───meeting_notes              — Notes from research meetings
+│   └───research_papers            — Reference papers and literature
+│
+└───supplementary_material         — Additional resources
+    ├───R_package_manuals          — Documentation for R packages used
+    └───statistical_papers        — Papers on statistical methods
 ```
 
-## Using this repository as a template
+## Getting Started
 
-To create a new project from this template:
+### Prerequisites
 
-1. Use GitHub's "Use this template" button to create a new repo (or fork/clone).
-2. Update the README file.
-3. Push once to automatically update the name of the R project. .github/workflows/init.yml is now automatically removed
+- R (latest version recommended)
+- RStudio (optional, but recommended)
+- Required R packages (see scripts for specific dependencies)
 
-## Using the .lintr file
+### Setup
 
-I use [lintr](https://lintr.r-lib.org/) for static code analysis. Make sure to add it as an addon in RStudio
+1. Clone this repository
+2. Open `2026_RealiseD.Rproj` in RStudio
+3. Install any required packages listed in the scripts
+4. Run `scripts/run_all.R` to execute the complete analysis pipeline
 
-The linter file currently has the default settings except for:
+### Code Style
 
-* line length of maximum 120
-* assignment operators <-, -> and =
-* snake\_case, except for some prespecified statistical acronyms (e.g., SD, SME,...)
+This project uses [lintr](https://lintr.r-lib.org/) for static code analysis. Configuration includes:
+
+- Maximum line length: 120 characters
+- Assignment operators: `<-`, `->`, and `=`
+- Naming convention: `snake_case` (with exceptions for statistical acronyms like SD, SME, etc.)
+
+## Documentation
+
+The main documentation is provided in `CBCEstimator.tex` and compiled to `CBCEstimator.pdf`. This contains detailed information about the CBC estimation methodology and analysis approach.
+
+## Workflow
+
+The standard analysis workflow is:
+
+1. **Data Management** (`data_management.R`) — Load and prepare data
+2. **Exploration** (`exploration.R`) — Explore data structure and distributions
+3. **Analysis** (`analysis.R`) — Run main statistical analyses
+4. **Results** — Outputs saved to `results/` directory
+
+Run all steps at once with `scripts/run_all.R`, or execute individual scripts as needed.
+
+## Time Tracking
+
+Project time is tracked in `Tijd.xlsx` for project management and estimation purposes.
 
 ## Contributing
 
 Contributions are welcome. Suggested workflow:
 
-1. Fork the repo.
-2. Create a branch (feature/your-feature).
-3. Make changes and add tests where applicable.
-4. Open a pull request describing the change.
+1. Fork the repository
+2. Create a feature branch (`feature/your-feature`)
+3. Make changes and test thoroughly
+4. Open a pull request with a clear description of changes
+
+## License
+
+See LICENSE file for details (if applicable).
+
+## Contact
+
+For questions about this project, please open an issue on GitHub.
