@@ -603,6 +603,54 @@ sort_analysis_results_deterministically <- function(results_df) {
 }
 
 
+find_valid_analysis_scenario_method_artifact <- function(analysis_run_hash,
+                                                         scenario_entry,
+                                                         method,
+                                                         output_dir = "results/data",
+                                                         overwrite = FALSE) {
+  output_path <- build_analysis_scenario_method_path(
+    analysis_run_hash = analysis_run_hash,
+    scenario_id = scenario_entry$scenario_id,
+    method = method,
+    dir = output_dir
+  )
+
+  if (overwrite || !file.exists(output_path)) {
+    return(NULL)
+  }
+
+  existing_artifact <- tryCatch(
+    readRDS(output_path),
+    error = function(e) {
+      message(
+        "Existing analysis artifact could not be read and will be regenerated: ",
+        output_path,
+        " (",
+        conditionMessage(e),
+        ")"
+      )
+      NULL
+    }
+  )
+  existing_meta <- if (is.null(existing_artifact)) NULL else existing_artifact$metadata
+  is_valid_existing <- !is.null(existing_meta) &&
+    identical(as.character(existing_meta$analysis_run_hash), as.character(analysis_run_hash)) &&
+    identical(as.integer(existing_meta$source_scenario_id), as.integer(scenario_entry$scenario_id)) &&
+    identical(as.character(existing_meta$method), as.character(method)) &&
+    identical(as.character(existing_meta$source_scenario_checksum), as.character(scenario_entry$checksum))
+
+  if (is_valid_existing) {
+    return(output_path)
+  }
+
+  if (!is.null(existing_artifact)) {
+    message("Existing analysis artifact failed validation and will be regenerated: ", output_path)
+  }
+
+  NULL
+}
+
+
 save_analysis_scenario_method_artifact <- function(analysis_results,
                                                    analysis_run_hash,
                                                    generation_manifest,
@@ -610,7 +658,17 @@ save_analysis_scenario_method_artifact <- function(analysis_results,
                                                    method,
                                                    output_dir = "results/data",
                                                    overwrite = FALSE) {
-  
+  existing_path <- find_valid_analysis_scenario_method_artifact(
+    analysis_run_hash = analysis_run_hash,
+    scenario_entry = scenario_entry,
+    method = method,
+    output_dir = output_dir,
+    overwrite = overwrite
+  )
+  if (!is.null(existing_path)) {
+    return(list(path = existing_path, status = "skipped_existing"))
+  }
+
   output_path <- build_analysis_scenario_method_path(
     analysis_run_hash = analysis_run_hash,
     scenario_id = scenario_entry$scenario_id,
@@ -620,20 +678,6 @@ save_analysis_scenario_method_artifact <- function(analysis_results,
   output_dirname <- dirname(output_path)
   if (!dir.exists(output_dirname)) {
     dir.create(output_dirname, recursive = TRUE)
-  }
-
-  if (file.exists(output_path) && !overwrite) {
-    existing_artifact <- tryCatch(readRDS(output_path), error = function(e) NULL)
-    existing_meta <- if (is.null(existing_artifact)) NULL else existing_artifact$metadata
-    is_valid_existing <- !is.null(existing_meta) &&
-      identical(as.character(existing_meta$analysis_run_hash), as.character(analysis_run_hash)) &&
-      identical(as.integer(existing_meta$source_scenario_id), as.integer(scenario_entry$scenario_id)) &&
-      identical(as.character(existing_meta$method), as.character(method)) &&
-      identical(as.character(existing_meta$source_scenario_checksum), as.character(scenario_entry$checksum))
-    if (is_valid_existing) {
-      return(list(path = output_path, status = "skipped_existing"))
-    }
-    message("Existing analysis artifact failed validation and will be regenerated: ", output_path)
   }
   sorted_results <- sort_analysis_results_deterministically(analysis_results)
 
@@ -876,27 +920,42 @@ run_requested_analyses <- function(
       message(sprintf("[scenario %d][method %s] started", scenario_id, analysis_name))
 
       method_outcome <- tryCatch({
-        method_results <- run_single_analysis_method(
-          analysis_name = analysis_name,
-          scenario_data = scenario_data,
-          scenarios = scenario_metadata,
-          user_config = analysis_configs[[analysis_name]],
-          analysis_registry = analysis_registry
-        )
-        saved <- save_analysis_scenario_method_artifact(
-          analysis_results = method_results,
+        existing_path <- find_valid_analysis_scenario_method_artifact(
           analysis_run_hash = analysis_run_hash,
-          generation_manifest = generation_manifest,
           scenario_entry = scenario_entry,
           method = analysis_name,
           output_dir = output_dir,
           overwrite = overwrite
         )
-        list(
-          status = saved$status,
-          path = saved$path,
-          error = NA_character_
-        )
+        if (!is.null(existing_path)) {
+          list(
+            status = "skipped_existing",
+            path = existing_path,
+            error = NA_character_
+          )
+        } else {
+          method_results <- run_single_analysis_method(
+            analysis_name = analysis_name,
+            scenario_data = scenario_data,
+            scenarios = scenario_metadata,
+            user_config = analysis_configs[[analysis_name]],
+            analysis_registry = analysis_registry
+          )
+          saved <- save_analysis_scenario_method_artifact(
+            analysis_results = method_results,
+            analysis_run_hash = analysis_run_hash,
+            generation_manifest = generation_manifest,
+            scenario_entry = scenario_entry,
+            method = analysis_name,
+            output_dir = output_dir,
+            overwrite = overwrite
+          )
+          list(
+            status = saved$status,
+            path = saved$path,
+            error = NA_character_
+          )
+        }
       }, error = function(e) {
         list(
           status = "failure",
