@@ -633,7 +633,10 @@ find_valid_analysis_scenario_method_artifact <- function(analysis_run_hash,
     }
   )
   existing_meta <- if (is.null(existing_artifact)) NULL else existing_artifact$metadata
+  existing_results <- if (is.null(existing_artifact)) NULL else existing_artifact$results
+  has_convergence_status <- !is.null(existing_results) && "convergence_status" %in% names(existing_results)
   is_valid_existing <- !is.null(existing_meta) &&
+    has_convergence_status &&
     identical(as.character(existing_meta$analysis_run_hash), as.character(analysis_run_hash)) &&
     identical(as.integer(existing_meta$source_scenario_id), as.integer(scenario_entry$scenario_id)) &&
     identical(as.character(existing_meta$method), as.character(method)) &&
@@ -679,7 +682,8 @@ save_analysis_scenario_method_artifact <- function(analysis_results,
   if (!dir.exists(output_dirname)) {
     dir.create(output_dirname, recursive = TRUE)
   }
-  sorted_results <- sort_analysis_results_deterministically(analysis_results)
+  results_with_convergence <- add_convergence_status(analysis_results)
+  sorted_results <- sort_analysis_results_deterministically(results_with_convergence)
 
   artifact <- list(
     results = sorted_results,
