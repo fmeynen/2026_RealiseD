@@ -998,11 +998,11 @@ extract_classical_ml_results <- function(
   result_row
 }
 
-extract_mi_closed_form_results <- function(
+extract_closed_form_results <- function(
     fit_result,
     original_data,
     analysis_data,
-    method = "multiple_imputation",
+    method = c("multiple_imputation", "reweighting"),
     engine = "mice_cbc",
     fit_type = c("imputation", "reweighting")
 ) {
