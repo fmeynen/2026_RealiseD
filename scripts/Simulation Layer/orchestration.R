@@ -504,7 +504,7 @@ build_analysis_scenario_method_path <- function(analysis_run_hash, scenario_id, 
   file.path(
     build_analysis_run_root(analysis_run_hash, dir = dir),
     sprintf(
-      "analysis_scenario_%06d_method_%s_%s.rds",
+      "scen_%02d_%s_%s.rds",
       as.integer(scenario_id),
       sanitize_filename_token(method),
       method_hash
@@ -587,7 +587,6 @@ run_single_analysis_method <- function(analysis_name, scenario_data, scenarios,
   } else {
   final_config <- utils::modifyList(analysis_entry$default_config, user_config)
   }
-  
   analysis_entry$runner(scenario_data, scenarios, final_config)
 }
 
@@ -793,7 +792,6 @@ save_aggregation_summary <- function(combined_artifact,
   if (is.null(combined_artifact$results) || nrow(combined_artifact$results) == 0L) {
     return(NULL)
   }
-
   output_path <- build_aggregation_output_path(
     analysis_run_hash = analysis_run_hash,
     dir = output_dir,
@@ -1051,7 +1049,6 @@ run_requested_analyses <- function(
     dir = output_dir
   )
   source_signature <- build_analysis_source_signature(artifact_records)
-  browser()
   aggregation_artifact <- save_aggregation_summary(
     combined_artifact = combined_artifact,
     analysis_run_hash = analysis_run_hash,
