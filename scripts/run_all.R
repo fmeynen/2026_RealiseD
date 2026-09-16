@@ -28,7 +28,7 @@ data_hash <- compute_data_generation_hash_from_spec(
   n_simulations = n_simulations
 )
 generated_output_dir <- "data/processed/generated"
-generation_overwrite <- TRUE
+generation_overwrite <- FALSE
 
 generation_manifest <- initialize_generation_manifest(
   run_hash = data_hash,
@@ -43,6 +43,38 @@ for (i in seq_len(nrow(scenarios))) {
   scenario_id <- scenario_row$scenario_id[[1L]]
   scenario_start_time <- Sys.time()
   message(sprintf("[generation][scenario %d] started", scenario_id))
+  scenario_path <- build_generated_scenario_path(
+    run_hash = data_hash,
+    scenario_id = scenario_id,
+    dir = generated_output_dir
+  )
+
+  if (file.exists(scenario_path) && !generation_overwrite) {
+    existing_data <- readRDS(scenario_path)
+    validate_generated_scenario_data(
+      data = existing_data,
+      scenario_id = scenario_id,
+      n_simulations = n_simulations
+    )
+    generation_manifest <- update_generation_manifest_entry(
+      manifest = generation_manifest,
+      scenario_id = scenario_id,
+      status = "skipped_existing",
+      checksum = compute_file_md5(scenario_path),
+      n_rows = nrow(existing_data),
+      sim_count = length(unique(existing_data$sim_id)),
+      error = NA_character_,
+      started_at = scenario_start_time,
+      finished_at = Sys.time()
+    )
+    message(sprintf(
+      "[generation][scenario %d] skipped_existing (%.2fs)",
+      scenario_id,
+      as.numeric(difftime(Sys.time(), scenario_start_time, units = "secs"))
+    ))
+    generation_manifest_path <- save_generation_manifest(generation_manifest, dir = generated_output_dir)
+    next
+  }
 
   generation_manifest <- tryCatch({
     scenario_data <- simulate_scenario(scenario_row, B = n_simulations)
@@ -100,6 +132,9 @@ generation_manifest_path <- save_generation_manifest(generation_manifest, dir = 
 message("Generation manifest: ", generation_manifest_path)
 message("Generation run hash: ", generation_manifest$run_hash)
 message("Generation status: ", generation_manifest$status)
+if (!identical(generation_manifest$status, "completed")) {
+  stop("Generation run did not complete successfully. Status: ", generation_manifest$status)
+}
 
 # Run all requested analyses with one orchestrator call -----------------------------------------------------------
 analysis_outputs <- run_requested_analyses(
@@ -121,4 +156,3 @@ analysis_outputs <- run_requested_analyses(
 )
 
 # Scratchpad ------------------------------------------------------------------------------------------------------
-

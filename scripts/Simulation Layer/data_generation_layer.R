@@ -720,8 +720,16 @@ update_generation_manifest_entry <- function(manifest,
   manifest$entries$n_rows[idx] <- as.integer(n_rows)
   manifest$entries$sim_count[idx] <- as.integer(sim_count)
   manifest$entries$error[idx] <- error
-  manifest$entries$started_at[idx] <- as.POSIXct(started_at)
-  manifest$entries$finished_at[idx] <- as.POSIXct(finished_at)
+  if (inherits(started_at, "POSIXt")) {
+    manifest$entries$started_at[idx] <- started_at
+  } else {
+    manifest$entries$started_at[idx] <- as.POSIXct(started_at, tz = "UTC")
+  }
+  if (inherits(finished_at, "POSIXt")) {
+    manifest$entries$finished_at[idx] <- finished_at
+  } else {
+    manifest$entries$finished_at[idx] <- as.POSIXct(finished_at, tz = "UTC")
+  }
   manifest
 }
 
@@ -732,7 +740,7 @@ finalize_generation_manifest <- function(manifest) {
   n_failure <- sum(manifest$entries$status == "failure", na.rm = TRUE)
   n_pending <- sum(manifest$entries$status == "pending", na.rm = TRUE)
 
-  manifest$status <- if (n_failure > 0L) "completed_with_failures" else if (n_pending > 0L) "incomplete" else "completed"
+  manifest$status <- if (n_pending > 0L) "incomplete" else if (n_failure > 0L) "completed_with_failures" else "completed"
   manifest$finalized_at <- Sys.time()
   manifest$summary <- list(
     n_success = n_success,
@@ -758,16 +766,22 @@ save_generated_scenario <- function(data,
     dir.create(scenario_dir, recursive = TRUE)
   }
 
-  sorted_data <- data[order(data$sim_id, data$subject_id, data$time_value), , drop = FALSE]
+  sorted_data <- data[order(data$scenario_id, data$sim_id, data$subject_id, data$treatment, data$time_value), , drop = FALSE]
   rownames(sorted_data) <- NULL
 
   if (file.exists(scenario_path) && !overwrite) {
+    existing_data <- readRDS(scenario_path)
+    validate_generated_scenario_data(
+      data = existing_data,
+      scenario_id = scenario_id,
+      n_simulations = n_simulations
+    )
     return(list(
       scenario_id = as.integer(scenario_id),
       path = scenario_path,
       checksum = compute_file_md5(scenario_path),
-      n_rows = nrow(sorted_data),
-      sim_count = length(unique(sorted_data$sim_id)),
+      n_rows = nrow(existing_data),
+      sim_count = length(unique(existing_data$sim_id)),
       status = "skipped_existing"
     ))
   }
