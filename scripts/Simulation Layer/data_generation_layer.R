@@ -433,8 +433,8 @@ simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL, ...) {
     dropout_mechanism <- if (scenario_row$dropout_rate > 0) "fixed_rate" else "none"
   }
   dropout_info <- generate_dropout_process(panel, scenario_row$dropout_rate, scenario_row$dropout_mechanism)
-  apply_missingness(panel, dropout_info)
-  
+  output <- apply_missingness(panel, dropout_info)
+  output[,c("sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed")]
 }
 
 
