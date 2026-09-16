@@ -286,7 +286,6 @@ analyze_closed_form_reweighting <- function(data,
 
 analyze_LSPIM <- function(data) {
   metadata <- collect_analysis_metadata(data)
-  browser()
   tryCatch({
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "LSPIM")
@@ -438,88 +437,658 @@ analyze_generated_data_LSPIM <- function(
     data = data,
     scenarios = scenarios,
     analyzer_fn = analyze_LSPIM,
-    parallel = .Platform$OS.type != "windows",
+    parallel = .Platform$OS.type != "windows"
   )
 }
 
+sanitize_filename_token <- function(value) {
+  gsub("[^A-Za-z0-9_-]", "-", value)
+}
+
+
+canonicalize_nested_list <- function(value) {
+  if (!is.list(value)) {
+    return(value)
+  }
+
+  nms <- names(value)
+  if (is.null(nms)) {
+    return(lapply(value, canonicalize_nested_list))
+  }
+
+  ordered_names <- sort(nms)
+  ordered <- value[ordered_names]
+  lapply(ordered, canonicalize_nested_list)
+}
+
+
+build_analysis_run_hash <- function(generation_manifest,
+                                    analyses,
+                                    analysis_configs = list(),
+                                    aggregation_include_engine = FALSE) {
+  config_names <- names(analysis_configs)
+  if (length(analysis_configs) > 0L && !is.null(config_names) && any(config_names == "")) {
+    stop("analysis_configs contains unnamed entries; all entries must be named by analysis method.")
+  }
+  canonical_configs <- if (is.null(config_names)) {
+    analysis_configs
+  } else if (length(config_names) == 0L) {
+    list()
+  } else {
+    analysis_configs[sort(config_names)]
+  }
+  canonical_configs <- canonicalize_nested_list(canonical_configs)
+
+  identity <- list(
+    generation_run_hash = generation_manifest$run_hash,
+    generation_manifest_schema_version = generation_manifest$schema_version,
+    data_generation_schema_version = generation_manifest$data_generation_schema_version,
+    analyses = sort(unique(analyses)),
+    analysis_configs = canonical_configs,
+    aggregation_include_engine = isTRUE(aggregation_include_engine),
+    results_schema_version = results_schema_version,
+    convergence_status_version = convergence_status_version,
+    aggregation_schema_version = aggregation_schema_version
+  )
+  compute_results_hash(identity)
+}
+
+
+build_analysis_run_root <- function(analysis_run_hash, dir = "results/data") {
+  file.path(dir, analysis_run_hash)
+}
+
+
+build_analysis_scenario_method_path <- function(analysis_run_hash, scenario_id, method, dir = "results/data") {
+  method_hash <- compute_results_hash(list(method = method))
+  file.path(
+    build_analysis_run_root(analysis_run_hash, dir = dir),
+    sprintf(
+      "analysis_scenario_%06d_method_%s_%s.rds",
+      as.integer(scenario_id),
+      sanitize_filename_token(method),
+      method_hash
+    )
+  )
+}
+
+
+build_analysis_manifest_path <- function(analysis_run_hash, dir = "results/data") {
+  file.path(build_analysis_run_root(analysis_run_hash, dir = dir), "analysis_manifest.rds")
+}
+
+
+build_analysis_combined_convenience_path <- function(analysis_run_hash, dir = "results/data") {
+  file.path(build_analysis_run_root(analysis_run_hash, dir = dir), "analysis_combined_convenience.rds")
+}
+
+
+build_aggregation_output_path <- function(analysis_run_hash, dir = "results/data", include_engine = FALSE) {
+  suffix <- if (isTRUE(include_engine)) "include_engine" else "default"
+  file.path(build_analysis_run_root(analysis_run_hash, dir = dir), paste0("aggregation_summary_", suffix, ".rds"))
+}
+
+
+build_analysis_registry <- function() {
+  list(
+    classical_ml = list(
+      default_config = list(),
+      runner = function(scenario_data, scenarios, config) {
+        analyze_generated_data_classical_ml(scenario_data, scenarios)
+      }
+    ),
+    multiple_imputation = list(
+      default_config = list(
+        impute_args = set_impute_args(method_y = "2l.pmm"),
+        fit_args = set_fit_args()
+      ),
+      runner = function(scenario_data, scenarios, config) {
+        analyze_generated_data_mi_closed_form(
+          data = scenario_data,
+          scenarios = scenarios,
+          impute_args = config$impute_args,
+          fit_args = config$fit_args
+        )
+      }
+    ),
+    reweighting = list(
+      default_config = list(
+        fit_args = set_fit_args(reweighting = TRUE)
+      ),
+      runner = function(scenario_data, scenarios, config) {
+        analyze_generated_data_closed_form_weights(
+          data = scenario_data,
+          scenarios = scenarios,
+          fit_args = config$fit_args
+        )
+      }
+    ),
+    LSPIM = list(
+      default_config = list(),
+      runner = function(scenario_data, scenarios, config) {
+        analyze_generated_data_LSPIM(data = scenario_data)
+      }
+    )
+  )
+}
+
+
+run_single_analysis_method <- function(analysis_name, scenario_data, scenarios,
+                                       user_config = list(), analysis_registry = NULL) {
+  if (is.null(analysis_registry)) {
+    analysis_registry <- build_analysis_registry()
+  }
+  analysis_entry <- analysis_registry[[analysis_name]]
+  if (is.null(analysis_entry)) {
+    stop("Unsupported analysis requested: ", analysis_name)
+  }
+  if(is.null(user_config)){
+    final_config <- analysis_entry$default_config
+  } else {
+  final_config <- utils::modifyList(analysis_entry$default_config, user_config)
+  }
+  
+  analysis_entry$runner(scenario_data, scenarios, final_config)
+}
+
+
+sort_analysis_results_deterministically <- function(results_df) {
+  sort_cols <- intersect(c("scenario_id", "sim_id", "method", "engine"), names(results_df))
+  if (length(sort_cols) == 0L) {
+    return(results_df)
+  }
+  sorted <- results_df[do.call(order, unname(results_df[sort_cols])), , drop = FALSE]
+  rownames(sorted) <- NULL
+  sorted
+}
+
+
+find_valid_analysis_scenario_method_artifact <- function(analysis_run_hash,
+                                                         scenario_entry,
+                                                         method,
+                                                         output_dir = "results/data",
+                                                         overwrite = FALSE) {
+  output_path <- build_analysis_scenario_method_path(
+    analysis_run_hash = analysis_run_hash,
+    scenario_id = scenario_entry$scenario_id,
+    method = method,
+    dir = output_dir
+  )
+
+  if (overwrite || !file.exists(output_path)) {
+    return(NULL)
+  }
+
+  existing_artifact <- tryCatch(
+    readRDS(output_path),
+    error = function(e) {
+      message(
+        "Existing analysis artifact could not be read and will be regenerated: ",
+        output_path,
+        " (",
+        conditionMessage(e),
+        ")"
+      )
+      NULL
+    }
+  )
+  existing_meta <- if (is.null(existing_artifact)) NULL else existing_artifact$metadata
+  existing_results <- if (is.null(existing_artifact)) NULL else existing_artifact$results
+  has_convergence_status <- !is.null(existing_results) && "convergence_status" %in% names(existing_results)
+  is_valid_existing <- !is.null(existing_meta) &&
+    has_convergence_status &&
+    identical(as.character(existing_meta$analysis_run_hash), as.character(analysis_run_hash)) &&
+    identical(as.integer(existing_meta$source_scenario_id), as.integer(scenario_entry$scenario_id)) &&
+    identical(as.character(existing_meta$method), as.character(method)) &&
+    identical(as.character(existing_meta$source_scenario_checksum), as.character(scenario_entry$checksum))
+
+  if (is_valid_existing) {
+    return(output_path)
+  }
+
+  if (!is.null(existing_artifact)) {
+    message("Existing analysis artifact failed validation and will be regenerated: ", output_path)
+  }
+
+  NULL
+}
+
+
+save_analysis_scenario_method_artifact <- function(analysis_results,
+                                                   analysis_run_hash,
+                                                   generation_manifest,
+                                                   scenario_entry,
+                                                   method,
+                                                   output_dir = "results/data",
+                                                   overwrite = FALSE) {
+  existing_path <- find_valid_analysis_scenario_method_artifact(
+    analysis_run_hash = analysis_run_hash,
+    scenario_entry = scenario_entry,
+    method = method,
+    output_dir = output_dir,
+    overwrite = overwrite
+  )
+  if (!is.null(existing_path)) {
+    return(list(path = existing_path, status = "skipped_existing"))
+  }
+
+  output_path <- build_analysis_scenario_method_path(
+    analysis_run_hash = analysis_run_hash,
+    scenario_id = scenario_entry$scenario_id,
+    method = method,
+    dir = output_dir
+  )
+  output_dirname <- dirname(output_path)
+  if (!dir.exists(output_dirname)) {
+    dir.create(output_dirname, recursive = TRUE)
+  }
+  results_with_convergence <- add_convergence_status(analysis_results)
+  sorted_results <- sort_analysis_results_deterministically(results_with_convergence)
+
+  artifact <- list(
+    results = sorted_results,
+    metadata = list(
+      analysis_run_hash = analysis_run_hash,
+      generation_run_hash = generation_manifest$run_hash,
+      source_scenario_id = as.integer(scenario_entry$scenario_id),
+      source_scenario_path = as.character(scenario_entry$path),
+      source_scenario_checksum = as.character(scenario_entry$checksum),
+      method = method,
+      created_at = Sys.time()
+    )
+  )
+  saveRDS(artifact, output_path)
+  list(path = output_path, status = "success")
+}
+
+
+save_combined_convenience_artifact <- function(artifact_records,
+                                               analysis_run_hash,
+                                               generation_manifest,
+                                               output_dir = "results/data",
+                                               overwrite = FALSE) {
+  successful <- artifact_records[artifact_records$status %in% c("success", "skipped_existing"), , drop = FALSE]
+  failed_records <- artifact_records[artifact_records$status == "failure", , drop = FALSE]
+  successful_has_path <- !is.na(successful$path)
+  successful_exists <- successful_has_path & file.exists(successful$path)
+  missing_successful <- successful[!successful_exists, , drop = FALSE]
+  if (nrow(missing_successful) > 0L) {
+    missing_successful$status <- "failure"
+    missing_successful$error <- "Expected analysis artifact is missing at combine time."
+  }
+  available_successful <- successful[successful_exists, , drop = FALSE]
+  failed_exclusions <- rbind(failed_records, missing_successful)
+
+  combined_path <- build_analysis_combined_convenience_path(analysis_run_hash = analysis_run_hash, dir = output_dir)
+  combined_dir <- dirname(combined_path)
+  if (!dir.exists(combined_dir)) {
+    dir.create(combined_dir, recursive = TRUE)
+  }
+
+  if (nrow(available_successful) == 0L) {
+    combined_artifact <- list(
+      results = empty_results(),
+      scenarios = generation_manifest$scenario_identity,
+      metadata = list(
+        analysis_run_hash = analysis_run_hash,
+        generation_run_hash = generation_manifest$run_hash,
+        derived_convenience_artifact = TRUE,
+        n_source_artifacts = 0L,
+        source_artifacts = character(0L),
+        failed_exclusions = failed_exclusions
+      )
+    )
+    saveRDS(combined_artifact, combined_path)
+    return(combined_artifact)
+  }
+
+  if (anyDuplicated(available_successful$path)) {
+    stop("Non-unique analysis artifact paths detected for successful records.")
+  }
+  successful_paths <- as.character(available_successful$path)
+  loaded <- lapply(successful_paths, readRDS)
+  loaded_results <- lapply(loaded, `[[`, "results")
+  non_empty_results <- loaded_results[vapply(loaded_results, nrow, integer(1L)) > 0L]
+  if (length(non_empty_results) == 0L) {
+    combined_results <- loaded_results[[1L]][0, , drop = FALSE]
+  } else {
+    combined_results <- do.call(rbind, non_empty_results)
+  }
+  combined_results <- sort_analysis_results_deterministically(combined_results)
+
+  combined_artifact <- list(
+    results = combined_results,
+    scenarios = generation_manifest$scenario_identity,
+    metadata = list(
+      analysis_run_hash = analysis_run_hash,
+      generation_run_hash = generation_manifest$run_hash,
+      derived_convenience_artifact = TRUE,
+      n_source_artifacts = length(successful_paths),
+      source_artifacts = successful_paths,
+      failed_exclusions = failed_exclusions
+    )
+  )
+  saveRDS(combined_artifact, combined_path)
+  combined_artifact
+}
+
+
+build_analysis_source_signature <- function(artifact_records) {
+  successful <- artifact_records[artifact_records$status %in% c("success", "skipped_existing"), , drop = FALSE]
+  if (nrow(successful) == 0L) {
+    return("no_successful_sources")
+  }
+  paths <- sort(unique(successful$path))
+  checksums <- vapply(paths, compute_file_md5, character(1L))
+  compute_results_hash(list(paths = paths, checksums = checksums))
+}
+
+
+save_aggregation_summary <- function(combined_artifact,
+                                     analysis_run_hash,
+                                     output_dir = "results/data",
+                                     overwrite = FALSE,
+                                     include_engine = FALSE,
+                                     source_signature = NULL) {
+  if (is.null(combined_artifact$results) || nrow(combined_artifact$results) == 0L) {
+    return(NULL)
+  }
+
+  output_path <- build_aggregation_output_path(
+    analysis_run_hash = analysis_run_hash,
+    dir = output_dir,
+    include_engine = include_engine
+  )
+  combined_path <- build_analysis_combined_convenience_path(analysis_run_hash = analysis_run_hash, dir = output_dir)
+  combined_checksum <- compute_file_md5(combined_path)
+  if (file.exists(output_path) && !overwrite) {
+    existing <- tryCatch(readRDS(output_path), error = function(e) NULL)
+    meta <- if (is.null(existing)) NULL else existing$metadata
+    if (!is.null(meta) &&
+        identical(as.character(meta$analysis_run_hash), as.character(analysis_run_hash)) &&
+        identical(as.character(meta$source_signature), as.character(source_signature)) &&
+        identical(as.character(meta$source_combined_artifact), as.character(combined_path)) &&
+        identical(as.character(meta$source_combined_checksum), as.character(combined_checksum)) &&
+        identical(as.character(meta$aggregation_schema_version), as.character(aggregation_schema_version)) &&
+        identical(isTRUE(meta$include_engine), isTRUE(include_engine))) {
+      return(existing)
+    }
+  }
+
+  aggregation <- aggregate_results(combined_artifact, include_engine = include_engine)
+  aggregation$meta$analysis_run_hash <- analysis_run_hash
+  aggregation$metadata <- aggregation$meta
+
+  aggregation_artifact <- list(
+    aggregation = aggregation,
+    metadata = list(
+      analysis_run_hash = analysis_run_hash,
+      source_combined_artifact = combined_path,
+      source_combined_checksum = combined_checksum,
+      source_signature = source_signature,
+      aggregation_schema_version = aggregation_schema_version,
+      include_engine = isTRUE(include_engine),
+      created_at = Sys.time()
+    )
+  )
+  saveRDS(aggregation_artifact, output_path)
+  aggregation_artifact
+}
+
+
 run_requested_analyses <- function(
-    data,
     scenarios,
+    generation_manifest,
     analyses = c("classical_ml", "multiple_imputation", "reweighting"),
     n_simulations = NULL,
     analysis_configs = list(),
+    aggregation_include_engine = FALSE,
     output_dir = "results/data",
     overwrite = FALSE
 ) {
-  available_analyses <- c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")
-  unknown_analyses   <- setdiff(analyses, available_analyses)
+  
+  analysis_registry <- build_analysis_registry()
+  available_analyses <- names(analysis_registry)
+  unknown_analyses <- setdiff(analyses, available_analyses)
   if (length(unknown_analyses) > 0L) {
     stop("Unknown analyses requested: ", paste(unknown_analyses, collapse = ", "))
   }
 
   if (is.null(n_simulations)) {
-    n_simulations <- length(unique(data$sim_id))
+    n_simulations <- generation_manifest$n_simulations
   }
 
-  output <- list()
-  for (analysis_name in analyses) {
-    user_config <- analysis_configs[[analysis_name]]
-    if (is.null(user_config)) {
-      user_config <- list()
-    }
-    if (identical(analysis_name, "classical_ml")) {
-      analysis_results <- analyze_generated_data_classical_ml(data, scenarios)
-    } else if (identical(analysis_name, "multiple_imputation")) {
-      mi_config <- utils::modifyList(
-        list(impute_args = set_impute_args(method_y = "2l.pmm"), fit_args = set_fit_args()),
-        user_config
-      )
-      analysis_results <- analyze_generated_data_mi_closed_form(
-        data        = data,
-        scenarios   = scenarios,
-        impute_args = mi_config$impute_args,
-        fit_args    = mi_config$fit_args
-      )
-    } else if (identical(analysis_name, "reweighting")) {
-      rw_config <- utils::modifyList(
-        list(fit_args = set_fit_args(reweighting = TRUE)),
-        user_config
-      )
-      analysis_results <- analyze_generated_data_closed_form_weights(
-        data      = data,
-        scenarios = scenarios,
-        fit_args  = rw_config$fit_args
-      )
-    } else if (identical(analysis_name, "LSPIM")){
-      analysis_results <- analyze_generated_data_LSPIM(
-        data = data
-      )
+  analysis_run_hash <- build_analysis_run_hash(
+    generation_manifest = generation_manifest,
+    analyses = analyses,
+    analysis_configs = analysis_configs,
+    aggregation_include_engine = aggregation_include_engine
+  )
+  run_root <- build_analysis_run_root(analysis_run_hash = analysis_run_hash, dir = output_dir)
+  if (!dir.exists(run_root)) {
+    dir.create(run_root, recursive = TRUE)
+  }
+
+  scenario_entries <- iterate_generated_scenarios(generation_manifest)
+  generation_failures <- generation_manifest$entries[!generation_manifest$entries$status %in% c("success", "skipped_existing"), , drop = FALSE]
+  record_rows <- vector("list", length = nrow(scenario_entries) * length(analyses))
+  record_idx <- 1L
+
+  for (i in seq_len(nrow(scenario_entries))) {
+    scenario_entry <- scenario_entries[i, , drop = FALSE]
+    scenario_id <- scenario_entry$scenario_id[[1L]]
+    scenario_started <- proc.time()[["elapsed"]]
+    message(sprintf("[scenario %d] loading generated data", scenario_id))
+    scenario_metadata <- scenarios[scenarios$scenario_id == scenario_id, , drop = FALSE]
+    if (nrow(scenario_metadata) != 1L) {
+      for (analysis_name in analyses) {
+        record_rows[[record_idx]] <- data.frame(
+          scenario_id = as.integer(scenario_id),
+          method = analysis_name,
+          path = NA_character_,
+          status = "failure",
+          error = "Scenario metadata row not found for scenario_id in scenarios.",
+          elapsed_seconds = 0,
+          stringsAsFactors = FALSE
+        )
+        record_idx <- record_idx + 1L
+      }
+      message(sprintf("[scenario %d] failed: scenario metadata row not found", scenario_id))
+      next
     }
 
-    saved_results <- build_and_save_results(
-      analysis_results = analysis_results,
-      scenarios        = scenarios,
-      output_dir       = output_dir,
-      overwrite        = overwrite,
-      n_simulations    = n_simulations
+    scenario_data <- tryCatch(
+      load_generated_scenario_by_id(generation_manifest, scenario_id),
+      error = function(e) e
     )
-    results_artifact <- load_results_artifact_exact(
-      scenarios     = scenarios,
-      methods       = unique(analysis_results$method),
-      engines       = unique(analysis_results$engine),
-      n_simulations = n_simulations,
-      output_dir    = output_dir
-    )
-    aggregated <- aggregate_results(results_artifact)
 
-    output[[analysis_name]] <- list(
-      analysis_results = analysis_results,
-      results_artifact = results_artifact,
-      aggregated       = aggregated,
-      hash             = saved_results$metadata$hash,
-      paths            = saved_results$paths
+    if (inherits(scenario_data, "error")) {
+      for (analysis_name in analyses) {
+        record_rows[[record_idx]] <- data.frame(
+          scenario_id = as.integer(scenario_id),
+          method = analysis_name,
+          path = NA_character_,
+          status = "failure",
+          error = conditionMessage(scenario_data),
+          elapsed_seconds = 0,
+          stringsAsFactors = FALSE
+        )
+        record_idx <- record_idx + 1L
+      }
+      message(sprintf("[scenario %d] failed to load: %s", scenario_id, conditionMessage(scenario_data)))
+      next
+    }
+
+    for (analysis_name in analyses) {
+      method_started <- proc.time()[["elapsed"]]
+      message(sprintf("[scenario %d][method %s] started", scenario_id, analysis_name))
+
+      method_outcome <- tryCatch({
+        existing_path <- find_valid_analysis_scenario_method_artifact(
+          analysis_run_hash = analysis_run_hash,
+          scenario_entry = scenario_entry,
+          method = analysis_name,
+          output_dir = output_dir,
+          overwrite = overwrite
+        )
+        if (!is.null(existing_path)) {
+          list(
+            status = "skipped_existing",
+            path = existing_path,
+            error = NA_character_
+          )
+        } else {
+          method_results <- run_single_analysis_method(
+            analysis_name = analysis_name,
+            scenario_data = scenario_data,
+            scenarios = scenario_metadata,
+            user_config = analysis_configs[[analysis_name]],
+            analysis_registry = analysis_registry
+          )
+          saved <- save_analysis_scenario_method_artifact(
+            analysis_results = method_results,
+            analysis_run_hash = analysis_run_hash,
+            generation_manifest = generation_manifest,
+            scenario_entry = scenario_entry,
+            method = analysis_name,
+            output_dir = output_dir,
+            overwrite = overwrite
+          )
+          list(
+            status = saved$status,
+            path = saved$path,
+            error = NA_character_
+          )
+        }
+      }, error = function(e) {
+        list(
+          status = "failure",
+          path = NA_character_,
+          error = conditionMessage(e)
+        )
+      })
+
+      elapsed <- proc.time()[["elapsed"]] - method_started
+      message(sprintf(
+        "[scenario %d][method %s] %s (%.2fs)",
+        scenario_id,
+        analysis_name,
+        method_outcome$status,
+        elapsed
+      ))
+
+      record_rows[[record_idx]] <- data.frame(
+        scenario_id = as.integer(scenario_id),
+        method = analysis_name,
+        path = method_outcome$path,
+        status = method_outcome$status,
+        error = method_outcome$error,
+        elapsed_seconds = elapsed,
+        stringsAsFactors = FALSE
+      )
+      record_idx <- record_idx + 1L
+    }
+
+    scenario_elapsed <- proc.time()[["elapsed"]] - scenario_started
+    message(sprintf("[scenario %d] completed (%.2fs)", scenario_id, scenario_elapsed))
+  }
+  
+  if (length(record_rows) == 0L) {
+    artifact_records <- data.frame(
+      scenario_id = integer(0L),
+      method = character(0L),
+      path = character(0L),
+      status = character(0L),
+      error = character(0L),
+      elapsed_seconds = numeric(0L),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    populated_rows <- record_rows[!vapply(record_rows, is.null, logical(1L))]
+    artifact_records <- if (length(populated_rows) == 0L) {
+      data.frame(
+        scenario_id = integer(0L),
+        method = character(0L),
+        path = character(0L),
+        status = character(0L),
+        error = character(0L),
+        elapsed_seconds = numeric(0L),
+        stringsAsFactors = FALSE
+      )
+    } else {
+      do.call(rbind, populated_rows)
+    }
+  }
+  artifact_records <- artifact_records[order(artifact_records$scenario_id, artifact_records$method), , drop = FALSE]
+  rownames(artifact_records) <- NULL
+
+  analysis_manifest <- list(
+    analysis_run_hash = analysis_run_hash,
+    generation_run_hash = generation_manifest$run_hash,
+    analyses = sort(unique(analyses)),
+    created_at = Sys.time(),
+    records = artifact_records,
+    generation_failures = generation_failures,
+    summary = list(
+      n_generation_failures = nrow(generation_failures),
+      n_success = sum(artifact_records$status == "success", na.rm = TRUE),
+      n_skipped_existing = sum(artifact_records$status == "skipped_existing", na.rm = TRUE),
+      n_failure = sum(artifact_records$status == "failure", na.rm = TRUE)
+    )
+  )
+  analysis_manifest_path <- build_analysis_manifest_path(analysis_run_hash = analysis_run_hash, dir = output_dir)
+  saveRDS(analysis_manifest, analysis_manifest_path)
+
+  combined_artifact <- save_combined_convenience_artifact(
+    artifact_records = artifact_records,
+    analysis_run_hash = analysis_run_hash,
+    generation_manifest = generation_manifest,
+    output_dir = output_dir,
+    overwrite = overwrite
+  )
+  combined_artifact_path <- build_analysis_combined_convenience_path(
+    analysis_run_hash = analysis_run_hash,
+    dir = output_dir
+  )
+  source_signature <- build_analysis_source_signature(artifact_records)
+  browser()
+  aggregation_artifact <- save_aggregation_summary(
+    combined_artifact = combined_artifact,
+    analysis_run_hash = analysis_run_hash,
+    output_dir = output_dir,
+    overwrite = overwrite,
+    include_engine = aggregation_include_engine,
+    source_signature = source_signature
+  )
+  aggregation_path <- if (is.null(aggregation_artifact)) {
+    NULL
+  } else {
+    build_aggregation_output_path(
+      analysis_run_hash = analysis_run_hash,
+      dir = output_dir,
+      include_engine = aggregation_include_engine
     )
   }
 
-  output
+  message("=== Analysis run summary ===")
+  message("Analysis run hash: ", analysis_run_hash)
+  message("Analysis root: ", run_root)
+  message("Manifest: ", analysis_manifest_path)
+  message("Combined convenience artifact: ", combined_artifact_path)
+  message("Aggregation output: ", if (is.null(aggregation_path)) "none (no combined results)" else aggregation_path)
+  message("Successful artifacts: ", analysis_manifest$summary$n_success)
+  message("Skipped existing artifacts: ", analysis_manifest$summary$n_skipped_existing)
+  message("Failed artifacts: ", analysis_manifest$summary$n_failure)
+  message("Generation failures carried in manifest: ", analysis_manifest$summary$n_generation_failures)
+
+  list(
+    analysis_run_hash = analysis_run_hash,
+    run_root = run_root,
+    analysis_manifest = analysis_manifest,
+    analysis_manifest_path = analysis_manifest_path,
+    combined_artifact = combined_artifact,
+    combined_artifact_path = combined_artifact_path,
+    aggregation_artifact = aggregation_artifact,
+    aggregation_path = aggregation_path
+  )
 }

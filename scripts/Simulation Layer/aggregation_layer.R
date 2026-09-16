@@ -2,7 +2,7 @@
 # Aggregation layer for the simulation experiment described in
 # research_question/meeting_notes/programming_planning.qmd.
 #
-# Consumes the results-layer artifact and returns per-scenario x per-method
+# Consumes the scenario-wise combined convenience analysis artifact and returns per-scenario x per-method
 # summary statistics:
 #   - Mean convergence and status proportions
 #   - Absolute bias and relative bias for beta0..beta3
@@ -472,4 +472,27 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
   )
 
   list(summary = summary_df, meta = meta)
+}
+
+
+build_combined_convenience_artifact_path <- function(analysis_run_hash, dir = "results/data") {
+  file.path(dir, analysis_run_hash, "analysis_combined_convenience.rds")
+}
+
+
+load_combined_convenience_artifact <- function(analysis_run_hash, dir = "results/data") {
+  path <- build_combined_convenience_artifact_path(analysis_run_hash = analysis_run_hash, dir = dir)
+  if (!file.exists(path)) {
+    stop("Combined convenience artifact not found at: ", path)
+  }
+  readRDS(path)
+}
+
+
+aggregate_results_from_analysis_run <- function(analysis_run_hash, dir = "results/data", include_engine = FALSE) {
+  combined_artifact <- load_combined_convenience_artifact(
+    analysis_run_hash = analysis_run_hash,
+    dir = dir
+  )
+  aggregate_results(combined_artifact, include_engine = include_engine)
 }

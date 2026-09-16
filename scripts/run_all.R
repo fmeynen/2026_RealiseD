@@ -1,5 +1,5 @@
 # High level orchestration
-
+rm(list = ls())
 # Source functions -------------------------------------------------------------------------------------------------
 lapply(list.files("scripts/Simulation Layer/", pattern = "\\.R$", full.names = TRUE), source)
 library(miceadds)
@@ -27,28 +27,120 @@ data_hash <- compute_data_generation_hash_from_spec(
   scenarios     = scenarios,
   n_simulations = n_simulations
 )
-data_paths <- build_data_generation_artifact_paths(data_hash, dir = "data/processed")
+generated_output_dir <- "data/processed/generated"
+generation_overwrite <- FALSE
 
-if (!file.exists(data_paths$immutable_path)) {
-  generated_stacked <- do.call(
-    rbind,
-    lapply(seq_len(nrow(scenarios)), function(i) {
-      simulate_scenario(scenarios[i, , drop = FALSE], B = n_simulations)
-    })
+generation_manifest <- initialize_generation_manifest(
+  run_hash = data_hash,
+  scenarios = scenarios,
+  n_simulations = n_simulations,
+  dir = generated_output_dir
+)
+generation_manifest_path <- save_generation_manifest(generation_manifest, dir = generated_output_dir)
+
+for (i in seq_len(nrow(scenarios))) {
+  scenario_row <- scenarios[i, , drop = FALSE]
+  scenario_id <- scenario_row$scenario_id[[1L]]
+  scenario_start_time <- Sys.time()
+  message(sprintf("[generation][scenario %d] started", scenario_id))
+  scenario_path <- build_generated_scenario_path(
+    run_hash = data_hash,
+    scenario_id = scenario_id,
+    dir = generated_output_dir
   )
-  build_and_save_generated_data_artifact(
-    data          = generated_stacked,
-    scenarios     = scenarios,
-    n_simulations = n_simulations
-  )
+
+  if (file.exists(scenario_path) && !generation_overwrite) {
+    existing_data <- readRDS(scenario_path)
+    validate_generated_scenario_data(
+      data = existing_data,
+      scenario_id = scenario_id,
+      n_simulations = n_simulations
+    )
+    generation_manifest <- update_generation_manifest_entry(
+      manifest = generation_manifest,
+      scenario_id = scenario_id,
+      status = "skipped_existing",
+      checksum = compute_file_md5(scenario_path),
+      n_rows = nrow(existing_data),
+      sim_count = length(unique(existing_data$sim_id)),
+      error = NA_character_,
+      started_at = scenario_start_time,
+      finished_at = Sys.time()
+    )
+    message(sprintf(
+      "[generation][scenario %d] skipped_existing (%.2fs)",
+      scenario_id,
+      as.numeric(difftime(Sys.time(), scenario_start_time, units = "secs"))
+    ))
+    generation_manifest_path <- save_generation_manifest(generation_manifest, dir = generated_output_dir)
+    next
+  }
+
+  generation_manifest <- tryCatch({
+    scenario_data <- simulate_scenario(scenario_row, B = n_simulations)
+    save_info <- save_generated_scenario(
+      data = scenario_data,
+      scenario_id = scenario_id,
+      run_hash = data_hash,
+      n_simulations = n_simulations,
+      dir = generated_output_dir,
+      overwrite = generation_overwrite
+    )
+    manifest_updated <- update_generation_manifest_entry(
+      manifest = generation_manifest,
+      scenario_id = scenario_id,
+      status = if (identical(save_info$status, "skipped_existing")) "skipped_existing" else "success",
+      checksum = save_info$checksum,
+      n_rows = save_info$n_rows,
+      sim_count = save_info$sim_count,
+      error = NA_character_,
+      started_at = scenario_start_time,
+      finished_at = Sys.time()
+    )
+    message(sprintf(
+      "[generation][scenario %d] %s (%.2fs)",
+      scenario_id,
+      save_info$status,
+      as.numeric(difftime(Sys.time(), scenario_start_time, units = "secs"))
+    ))
+    manifest_updated
+  }, error = function(e) {
+    message(sprintf(
+      "[generation][scenario %d] failure: %s (%.2fs)",
+      scenario_id,
+      conditionMessage(e),
+      as.numeric(difftime(Sys.time(), scenario_start_time, units = "secs"))
+    ))
+    update_generation_manifest_entry(
+      manifest = generation_manifest,
+      scenario_id = scenario_id,
+      status = "failure",
+      checksum = NA_character_,
+      n_rows = NA_integer_,
+      sim_count = NA_integer_,
+      error = conditionMessage(e),
+      started_at = scenario_start_time,
+      finished_at = Sys.time()
+    )
+  })
+
+  generation_manifest_path <- save_generation_manifest(generation_manifest, dir = generated_output_dir)
 }
-generated <- load_generated_data_artifact_exact(scenarios = scenarios, n_simulations = n_simulations)
+
+generation_manifest <- finalize_generation_manifest(generation_manifest)
+generation_manifest_path <- save_generation_manifest(generation_manifest, dir = generated_output_dir)
+message("Generation manifest: ", generation_manifest_path)
+message("Generation run hash: ", generation_manifest$run_hash)
+message("Generation status: ", generation_manifest$status)
+if (!identical(generation_manifest$status, "completed")) {
+  stop("Generation run did not complete successfully. Status: ", generation_manifest$status)
+}
 
 # Run all requested analyses with one orchestrator call -----------------------------------------------------------
 analysis_outputs <- run_requested_analyses(
-  data             = generated$data,
-  scenarios        = generated$scenarios,
-  analyses         = c("LSPIM", "classical_ml", "multiple_imputation", "reweighting"),
+  scenarios        = scenarios,
+  generation_manifest = generation_manifest,
+  analyses         = c("classical_ml", "multiple_imputation", "reweighting"),
   n_simulations    = n_simulations,
   analysis_configs = list(
     multiple_imputation = list(
@@ -60,11 +152,7 @@ analysis_outputs <- run_requested_analyses(
     )
   ),
   output_dir = "results/data",
-  overwrite  = TRUE
+  overwrite  = FALSE
 )
 
 # Scratchpad ------------------------------------------------------------------------------------------------------
-
-
-
-
