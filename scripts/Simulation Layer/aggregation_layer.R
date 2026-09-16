@@ -393,7 +393,7 @@ merge_aggregation_summaries <- function(convergence_df, bias_df, mse_df, time_df
   out <- merge(out,            mse_df,   by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out,            time_df,   by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out,            coverage_df, by = group_cols, all = TRUE, sort = FALSE)
-  out <- out[do.call(order, out[group_cols]), , drop = FALSE]
+  out <- out[do.call(order, unname(out[group_cols])), , drop = FALSE]
   rownames(out) <- NULL
   out
 }
