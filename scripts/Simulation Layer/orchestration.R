@@ -573,7 +573,8 @@ build_analysis_registry <- function() {
 }
 
 
-run_single_analysis_method <- function(analysis_name, scenario_data, scenarios, user_config = list(), analysis_registry = NULL) {
+run_single_analysis_method <- function(analysis_name, scenario_data, scenarios,
+                                       user_config = list(), analysis_registry = NULL) {
   if (is.null(analysis_registry)) {
     analysis_registry <- build_analysis_registry()
   }
@@ -581,7 +582,12 @@ run_single_analysis_method <- function(analysis_name, scenario_data, scenarios, 
   if (is.null(analysis_entry)) {
     stop("Unsupported analysis requested: ", analysis_name)
   }
+  if(is.null(user_config)){
+    final_config <- analysis_entry$default_config
+  } else {
   final_config <- utils::modifyList(analysis_entry$default_config, user_config)
+  }
+  
   analysis_entry$runner(scenario_data, scenarios, final_config)
 }
 
@@ -591,7 +597,7 @@ sort_analysis_results_deterministically <- function(results_df) {
   if (length(sort_cols) == 0L) {
     return(results_df)
   }
-  sorted <- results_df[do.call(order, results_df[sort_cols]), , drop = FALSE]
+  sorted <- results_df[do.call(order, unname(results_df[sort_cols])), , drop = FALSE]
   rownames(sorted) <- NULL
   sorted
 }
@@ -604,6 +610,7 @@ save_analysis_scenario_method_artifact <- function(analysis_results,
                                                    method,
                                                    output_dir = "results/data",
                                                    overwrite = FALSE) {
+  
   output_path <- build_analysis_scenario_method_path(
     analysis_run_hash = analysis_run_hash,
     scenario_id = scenario_entry$scenario_id,
@@ -628,7 +635,6 @@ save_analysis_scenario_method_artifact <- function(analysis_results,
     }
     message("Existing analysis artifact failed validation and will be regenerated: ", output_path)
   }
-
   sorted_results <- sort_analysis_results_deterministically(analysis_results)
 
   artifact <- list(
@@ -792,6 +798,7 @@ run_requested_analyses <- function(
     output_dir = "results/data",
     overwrite = FALSE
 ) {
+  
   analysis_registry <- build_analysis_registry()
   available_analyses <- names(analysis_registry)
   unknown_analyses <- setdiff(analyses, available_analyses)
@@ -922,7 +929,7 @@ run_requested_analyses <- function(
     scenario_elapsed <- proc.time()[["elapsed"]] - scenario_started
     message(sprintf("[scenario %d] completed (%.2fs)", scenario_id, scenario_elapsed))
   }
-
+  
   if (length(record_rows) == 0L) {
     artifact_records <- data.frame(
       scenario_id = integer(0L),
@@ -981,7 +988,7 @@ run_requested_analyses <- function(
     dir = output_dir
   )
   source_signature <- build_analysis_source_signature(artifact_records)
-
+  browser()
   aggregation_artifact <- save_aggregation_summary(
     combined_artifact = combined_artifact,
     analysis_run_hash = analysis_run_hash,
