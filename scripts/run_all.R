@@ -1,5 +1,5 @@
 # High level orchestration
-
+rm(list = ls())
 # Source functions -------------------------------------------------------------------------------------------------
 lapply(list.files("scripts/Simulation Layer/", pattern = "\\.R$", full.names = TRUE), source)
 library(miceadds)
@@ -140,7 +140,7 @@ if (!identical(generation_manifest$status, "completed")) {
 analysis_outputs <- run_requested_analyses(
   scenarios        = scenarios,
   generation_manifest = generation_manifest,
-  analyses         = c("LSPIM", "classical_ml", "multiple_imputation", "reweighting"),
+  analyses         = c("classical_ml", "multiple_imputation", "reweighting"),
   n_simulations    = n_simulations,
   analysis_configs = list(
     multiple_imputation = list(
@@ -152,7 +152,7 @@ analysis_outputs <- run_requested_analyses(
     )
   ),
   output_dir = "results/data",
-  overwrite  = TRUE
+  overwrite  = FALSE
 )
 
 # Scratchpad ------------------------------------------------------------------------------------------------------
