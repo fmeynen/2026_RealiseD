@@ -140,8 +140,8 @@ build_result_row <- function(
     engine = engine,
     status = status,
     converged = converged,
-    singular = singular,
-    n_rows = metadata$n_rows,
+    singular  = singular,
+    n_rows     = metadata$n_rows,
     n_observed = metadata$n_observed,
     n_subjects = metadata$n_subjects,
     estimate_beta0 = NA_real_,
@@ -152,13 +152,13 @@ build_result_row <- function(
     se_beta1 = NA_real_,
     se_beta2 = NA_real_,
     se_beta3 = NA_real_,
-    var_b0 = NA_real_,
-    cov_b0b1 = NA_real_,
-    var_b1 = NA_real_,
+    var_b0     = NA_real_,
+    cov_b0b1   = NA_real_,
+    var_b1     = NA_real_,
     sigma2_hat = NA_real_,
     elapsed_seconds = as.numeric(elapsed_seconds),
     warning_message = warning_message,
-    error_message = error_message,
+    error_message   = error_message,
     stringsAsFactors = FALSE
   )
 }
@@ -913,7 +913,13 @@ is_singular <- function(cov_matrix, tol) {
 #' @return One of `"success"`, `"singular_fit"`, or `"failure"`.
 
 classify_fit_status <- function(fit_result, singular_tol = 1e-06,
-                                type = c("classical_ml", "imputation", "reweighting")) {
+                                type = c("classical_ml", "imputation", "reweighting", "LSPIM")) {
+  
+  #TODO fix implementaiton
+  if(type == "LSPIM"){
+    return("success")
+  }
+  
   if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) {
     return("failure")
   }
@@ -929,7 +935,6 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
       return("singular_fit")
     }
   }
-
   "success"
 }
 
@@ -956,7 +961,7 @@ extract_classical_ml_results <- function(
     engine = "lme4"
 ) {
   metadata        <- collect_analysis_metadata(original_data)
-  status          <- classify_fit_status(fit_result, type = "classical_ml")
+  status          <- classify_fit_status(fit_result, type = method)
   warning_message <- if (length(fit_result$warnings) > 0L) {
     paste(fit_result$warnings, collapse = " | ")
   } else {
@@ -1024,6 +1029,43 @@ extract_closed_form_results <- function(
     converged       = status != "failure",
     singular        = status == "singular_fit",
     elapsed_seconds = fit_result$elapsed_seconds,
+    warning_message = warning_message,
+    error_message   = if (is.null(fit_result$error_message)) NA_character_ else fit_result$error_message
+  )
+  
+  if (status == "failure") {
+    return(result_row)
+  }
+  common_names <- intersect(names(result_row), names(fit_result$fit))
+  result_row[common_names] <- fit_result$fit[common_names]
+  result_row
+}
+
+extract_LSPIM_results <- function(
+    fit_result,
+    original_data,
+    analysis_data,
+    method = "LSPIM",
+    engine = "LSPIM"
+) {
+  fit_type <- match.arg(fit_type)
+  metadata <- collect_analysis_metadata(original_data)
+  status   <- classify_fit_status(fit_result, type = method)
+  #TODO
+  # warning_message <- if (length(fit_result$warnings) > 0L) {
+  #   paste(fit_result$warnings, collapse = " | ")
+  # } else {
+  #   NA_character_
+  # }
+  
+  result_row <- build_result_row(
+    metadata        = metadata,
+    method          = method,
+    engine          = engine,
+    status          = status,
+    converged       = status != "failure",
+    singular        = status == "singular_fit",
+    elapsed_seconds = NA, #TODO
     warning_message = warning_message,
     error_message   = if (is.null(fit_result$error_message)) NA_character_ else fit_result$error_message
   )
