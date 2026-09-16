@@ -23,9 +23,9 @@
 #       generate_dropout_process()
 #       apply_missingness()
 #   summarize_generated_data()
-#   build_and_save_generated_data_artifact()
-#   find_generated_data_artifact_exact()
-#   load_generated_data_artifact_exact()
+#   compute_data_generation_hash_from_spec()
+#   initialize_generation_manifest() / save_generation_manifest() / finalize_generation_manifest()
+#   save_generated_scenario() / load_generated_scenario_by_id() / iterate_generated_scenarios()
 
 
 # Constants --------------------------------------------------------------------------------------------------------
@@ -547,6 +547,10 @@ summarize_generated_data <- function(data) {
 
 # Artifact persistence ---------------------------------------------------------------------------------------------
 
+generation_manifest_schema_version <- "v2"
+generated_data_required_columns <- c("sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed")
+generated_data_forbidden_columns <- c("time_index", "time_label", "y_complete", "eta_ij", "epsilon_ij", "dropout_time")
+
 ensure_results_artifact_helpers <- function() {
   required_helpers <- c(
     "canonicalize_results_scenarios_for_hash",
@@ -568,31 +572,14 @@ ensure_results_artifact_helpers <- function() {
 }
 
 
-infer_data_generation_n_simulations <- function(data) {
-  required_cols <- c("scenario_id", "sim_id")
-  missing_cols <- setdiff(required_cols, names(data))
-  if (length(missing_cols) > 0L) {
-    stop("data is missing required columns for artifact identity: ", paste(missing_cols, collapse = ", "))
-  }
-
-  sim_counts <- tapply(data$sim_id, data$scenario_id, function(x) length(unique(x)))
-  unique_counts <- unique(as.integer(sim_counts))
-
-  if (length(unique_counts) != 1L) {
-    stop("data must contain the same number of simulation replicates for every scenario_id.")
-  }
-
-  unique_counts[1L]
-}
-
-
 build_data_generation_canonical_meta <- function(scenarios, n_simulations) {
   ensure_results_artifact_helpers()
 
   list(
     scenario_grid = canonicalize_results_scenarios_for_hash(scenarios),
-    n_simulations = n_simulations,
-    data_generation_schema_version = data_generation_schema_version
+    n_simulations = as.integer(n_simulations),
+    data_generation_schema_version = data_generation_schema_version,
+    generation_manifest_schema_version = generation_manifest_schema_version
   )
 }
 
@@ -606,152 +593,227 @@ compute_data_generation_hash_from_spec <- function(scenarios, n_simulations) {
 }
 
 
-build_data_generation_metadata <- function(data, scenarios, hash, n_simulations) {
-  list(
-    hash                           = hash,
-    data_generation_schema_version = data_generation_schema_version,
-    created_at                     = Sys.time(),
-    n_rows                         = nrow(data),
-    n_scenarios                    = nrow(scenarios),
-    n_simulations                  = n_simulations,
-    scenario_ids                   = as.integer(sort(unique(scenarios$scenario_id)))
+build_generated_run_root <- function(run_hash, dir = "data/processed/generated") {
+  file.path(dir, run_hash)
+}
+
+
+build_generated_scenario_path <- function(run_hash, scenario_id, dir = "data/processed/generated") {
+  file.path(
+    build_generated_run_root(run_hash, dir = dir),
+    sprintf("generated_scenario_%06d.rds", as.integer(scenario_id))
   )
 }
 
 
-build_data_generation_artifact_paths <- function(hash, dir = "data/processed") {
-  list(
-    immutable_path = file.path(dir, paste0("generated_data_", hash, ".rds")),
-    latest_path = file.path(dir, "generated_data_latest.rds")
-  )
+build_generation_manifest_path <- function(run_hash, dir = "data/processed/generated") {
+  file.path(build_generated_run_root(run_hash, dir = dir), "generation_manifest.rds")
 }
 
 
-save_generated_data_artifact <- function(artifact, hash, dir = "data/processed", overwrite = FALSE) {
-  if (!dir.exists(dir)) {
-    dir.create(dir, recursive = TRUE)
-  }
-
-  paths <- build_data_generation_artifact_paths(hash, dir = dir)
-  immutable_path <- paths$immutable_path
-  latest_path <- paths$latest_path
-
-  if (file.exists(immutable_path) && !overwrite) {
-    message("Immutable artifact already exists (overwrite = FALSE): ", immutable_path)
-    message("Updating stable latest pointer only.")
-  } else {
-    saveRDS(artifact, file = immutable_path)
-    message("Saved immutable artifact: ", immutable_path)
-  }
-
-  saveRDS(artifact, file = latest_path)
-  message("Updated stable pointer:    ", latest_path)
-
-  paths
+compute_file_md5 <- function(path) {
+  unname(tools::md5sum(path))
 }
 
 
-#' Build and save a generated-data artifact using exact hash-based persistence.
-#'
-#' This thin wrapper reuses the existing results-layer hashing primitive and the
-#' same dual-file immutable/latest save strategy. Retrieval of these artifacts is
-#' exact-only and must use the same scenario grid and `n_simulations`.
-#'
-#' @param data          Stacked generated data.
-#' @param scenarios     Scenario metadata data frame (one row per scenario_id).
-#' @param n_simulations Optional integer-ish scalar. If NULL, infer from `data`.
-#' @param output_dir    Directory for saved data-generation artifacts.
-#' @param overwrite     Logical. Overwrite existing immutable artifact when TRUE.
-#'
-#' @return Invisibly: named list with data, scenarios, metadata, and paths.
-
-build_and_save_generated_data_artifact <- function(
-    data,
-    scenarios,
-    n_simulations = NULL,
-    output_dir = "data/processed",
-    overwrite = FALSE
-) {
-  if (is.null(n_simulations)) {
-    n_simulations <- infer_data_generation_n_simulations(data)
-  }
-  n_simulations <- n_simulations
-  if ("seed_base" %in% names(scenarios)) {
-    scenarios$seed_base <- as.integer(scenarios$seed_base)
+validate_generated_scenario_data <- function(data, scenario_id, n_simulations) {
+  missing_cols <- setdiff(generated_data_required_columns, names(data))
+  if (length(missing_cols) > 0L) {
+    stop("Generated scenario data is missing required columns: ", paste(missing_cols, collapse = ", "))
   }
 
-  canonical_meta <- build_data_generation_canonical_meta(
-    scenarios = scenarios,
-    n_simulations = n_simulations
-  )
-  hash <- compute_results_hash(canonical_meta)
-  metadata <- build_data_generation_metadata(
-    data = data,
-    scenarios = scenarios,
-    hash = hash,
-    n_simulations = n_simulations
-  )
+  forbidden_cols <- intersect(generated_data_forbidden_columns, names(data))
+  if (length(forbidden_cols) > 0L) {
+    stop("Generated scenario data still contains forbidden transient columns: ", paste(forbidden_cols, collapse = ", "))
+  }
 
-  artifact <- list(data = data, scenarios = scenarios, metadata = metadata)
-  paths <- save_generated_data_artifact(artifact, hash, dir = output_dir, overwrite = overwrite)
+  scenario_values <- unique(data$scenario_id)
+  if (length(scenario_values) != 1L || is.na(scenario_values[[1L]]) || as.integer(scenario_values[[1L]]) != as.integer(scenario_id)) {
+    stop("Generated scenario data must contain exactly one scenario_id matching the save target.")
+  }
 
-  invisible(list(data = data, scenarios = scenarios, metadata = metadata, paths = paths))
-}
-
-
-#' Find an exact saved generated-data artifact by its identity inputs.
-#'
-#' Reuses the same canonicalization and hashing path as save-time logic. Missing
-#' artifacts raise a deterministic exact-not-found error with the expected hash
-#' and immutable path.
-#'
-#' @param scenarios     Scenario metadata data frame (one row per scenario_id).
-#' @param n_simulations Integer-ish scalar. Number of simulation replicates.
-#' @param output_dir    Directory containing saved data-generation artifacts.
-#'
-#' @return Named list with hash, immutable_path, and latest_path.
-
-find_generated_data_artifact_exact <- function(
-    scenarios,
-    n_simulations,
-    output_dir = "data/processed"
-) {
-  hash <- compute_data_generation_hash_from_spec(
-    scenarios = scenarios,
-    n_simulations = n_simulations
-  )
-  paths <- build_data_generation_artifact_paths(hash, dir = output_dir)
-
-  if (!file.exists(paths$immutable_path)) {
+  sim_ids <- sort(unique(as.integer(data$sim_id)))
+  expected_sim_ids <- seq_len(as.integer(n_simulations))
+  if (!identical(sim_ids, expected_sim_ids)) {
     stop(
-      "Exact generated-data artifact not found. Hash: ", hash,
-      ". Expected path: ", paths$immutable_path
+      "Generated scenario data has invalid sim_id coverage. Expected: ",
+      paste(expected_sim_ids, collapse = ", "), ". Got: ", paste(sim_ids, collapse = ", ")
     )
   }
 
-  c(list(hash = hash), paths)
+  invisible(TRUE)
 }
 
 
-#' Load an exact saved generated-data artifact by its identity inputs.
-#'
-#' Thin exact-only wrapper around `find_generated_data_artifact_exact()` and
-#' `readRDS()`.
-#'
-#' @inheritParams find_generated_data_artifact_exact
-#'
-#' @return The saved generated-data artifact list.
+initialize_generation_manifest <- function(run_hash, scenarios, n_simulations, dir = "data/processed/generated") {
+  scenarios_ordered <- scenarios[order(scenarios$scenario_id), , drop = FALSE]
+  rownames(scenarios_ordered) <- NULL
 
-load_generated_data_artifact_exact <- function(
-    scenarios,
-    n_simulations,
-    output_dir = "data/processed"
-) {
-  artifact_info <- find_generated_data_artifact_exact(
-    scenarios = scenarios,
-    n_simulations = n_simulations,
-    output_dir = output_dir
+  entries <- data.frame(
+    scenario_id = as.integer(scenarios_ordered$scenario_id),
+    path = vapply(
+      scenarios_ordered$scenario_id,
+      function(x) build_generated_scenario_path(run_hash = run_hash, scenario_id = x, dir = dir),
+      character(1L)
+    ),
+    checksum = NA_character_,
+    n_rows = NA_integer_,
+    sim_count = NA_integer_,
+    status = rep("pending", nrow(scenarios_ordered)),
+    error = NA_character_,
+    started_at = as.POSIXct(rep(NA, nrow(scenarios_ordered)), origin = "1970-01-01"),
+    finished_at = as.POSIXct(rep(NA, nrow(scenarios_ordered)), origin = "1970-01-01"),
+    stringsAsFactors = FALSE
   )
 
-  readRDS(artifact_info$immutable_path)
+  list(
+    run_hash = run_hash,
+    schema_version = generation_manifest_schema_version,
+    data_generation_schema_version = data_generation_schema_version,
+    n_simulations = as.integer(n_simulations),
+    n_scenarios = nrow(scenarios_ordered),
+    scenario_identity = scenarios_ordered,
+    created_at = Sys.time(),
+    finalized_at = as.POSIXct(NA),
+    status = "running",
+    entries = entries
+  )
+}
+
+
+save_generation_manifest <- function(manifest, dir = "data/processed/generated") {
+  run_root <- build_generated_run_root(manifest$run_hash, dir = dir)
+  if (!dir.exists(run_root)) {
+    dir.create(run_root, recursive = TRUE)
+  }
+  manifest_path <- build_generation_manifest_path(manifest$run_hash, dir = dir)
+  saveRDS(manifest, manifest_path)
+  manifest_path
+}
+
+
+load_generation_manifest <- function(run_hash, dir = "data/processed/generated") {
+  manifest_path <- build_generation_manifest_path(run_hash = run_hash, dir = dir)
+  if (!file.exists(manifest_path)) {
+    stop("Generation manifest not found at: ", manifest_path)
+  }
+  readRDS(manifest_path)
+}
+
+
+update_generation_manifest_entry <- function(manifest,
+                                             scenario_id,
+                                             status,
+                                             checksum = NA_character_,
+                                             n_rows = NA_integer_,
+                                             sim_count = NA_integer_,
+                                             error = NA_character_,
+                                             started_at = NA,
+                                             finished_at = Sys.time()) {
+  idx <- match(as.integer(scenario_id), manifest$entries$scenario_id)
+  if (is.na(idx)) {
+    stop("Scenario ", scenario_id, " not found in generation manifest.")
+  }
+
+  manifest$entries$status[idx] <- status
+  manifest$entries$checksum[idx] <- checksum
+  manifest$entries$n_rows[idx] <- as.integer(n_rows)
+  manifest$entries$sim_count[idx] <- as.integer(sim_count)
+  manifest$entries$error[idx] <- error
+  manifest$entries$started_at[idx] <- as.POSIXct(started_at)
+  manifest$entries$finished_at[idx] <- as.POSIXct(finished_at)
+  manifest
+}
+
+
+finalize_generation_manifest <- function(manifest) {
+  n_success <- sum(manifest$entries$status == "success", na.rm = TRUE)
+  n_skipped_existing <- sum(manifest$entries$status == "skipped_existing", na.rm = TRUE)
+  n_failure <- sum(manifest$entries$status == "failure", na.rm = TRUE)
+  n_pending <- sum(manifest$entries$status == "pending", na.rm = TRUE)
+
+  manifest$status <- if (n_failure > 0L) "completed_with_failures" else if (n_pending > 0L) "incomplete" else "completed"
+  manifest$finalized_at <- Sys.time()
+  manifest$summary <- list(
+    n_success = n_success,
+    n_skipped_existing = n_skipped_existing,
+    n_failure = n_failure,
+    n_pending = n_pending
+  )
+  manifest
+}
+
+
+save_generated_scenario <- function(data,
+                                    scenario_id,
+                                    run_hash,
+                                    n_simulations,
+                                    dir = "data/processed/generated",
+                                    overwrite = FALSE) {
+  validate_generated_scenario_data(data = data, scenario_id = scenario_id, n_simulations = n_simulations)
+
+  scenario_path <- build_generated_scenario_path(run_hash = run_hash, scenario_id = scenario_id, dir = dir)
+  scenario_dir <- dirname(scenario_path)
+  if (!dir.exists(scenario_dir)) {
+    dir.create(scenario_dir, recursive = TRUE)
+  }
+
+  sorted_data <- data[order(data$sim_id, data$subject_id, data$time_value), , drop = FALSE]
+  rownames(sorted_data) <- NULL
+
+  if (file.exists(scenario_path) && !overwrite) {
+    return(list(
+      scenario_id = as.integer(scenario_id),
+      path = scenario_path,
+      checksum = compute_file_md5(scenario_path),
+      n_rows = nrow(sorted_data),
+      sim_count = length(unique(sorted_data$sim_id)),
+      status = "skipped_existing"
+    ))
+  }
+
+  saveRDS(sorted_data, scenario_path)
+
+  list(
+    scenario_id = as.integer(scenario_id),
+    path = scenario_path,
+    checksum = compute_file_md5(scenario_path),
+    n_rows = nrow(sorted_data),
+    sim_count = length(unique(sorted_data$sim_id)),
+    status = "success"
+  )
+}
+
+
+load_generated_scenario_by_id <- function(manifest, scenario_id) {
+  idx <- match(as.integer(scenario_id), manifest$entries$scenario_id)
+  if (is.na(idx)) {
+    stop("Scenario ", scenario_id, " not found in generation manifest.")
+  }
+
+  entry <- manifest$entries[idx, , drop = FALSE]
+  if (!entry$status %in% c("success", "skipped_existing")) {
+    stop("Scenario ", scenario_id, " is not available for loading (status: ", entry$status, ").")
+  }
+  if (!file.exists(entry$path)) {
+    stop("Scenario file missing at: ", entry$path)
+  }
+
+  data <- readRDS(entry$path)
+  validate_generated_scenario_data(
+    data = data,
+    scenario_id = scenario_id,
+    n_simulations = manifest$n_simulations
+  )
+  data
+}
+
+
+iterate_generated_scenarios <- function(manifest, include_failed = FALSE) {
+  entries <- manifest$entries[order(manifest$entries$scenario_id), , drop = FALSE]
+  if (!include_failed) {
+    entries <- entries[entries$status %in% c("success", "skipped_existing"), , drop = FALSE]
+  }
+  rownames(entries) <- NULL
+  entries
 }
