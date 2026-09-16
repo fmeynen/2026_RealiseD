@@ -39,8 +39,6 @@ collect_analysis_metadata <- function(data) {
 
 ## Prepare analysis data -------------------------------------------------------------------------------------------
 
-#' Prepare one canonical generated dataset for classical ML fitting.
-#'
 #' Keeps observed rows only, coerces analysis variables to modelling-friendly
 #' types, and sorts rows deterministically.
 #'
@@ -48,9 +46,9 @@ collect_analysis_metadata <- function(data) {
 #'
 #' @return Data frame ready for `lme4::lmer()`.
 
-prepare_analysis_data <- function(data, type = c("imputation", "weighting", "classical_ml")) {
+prepare_analysis_data <- function(data, type = c("imputation", "weighting", "classical_ml", "LSPIM")) {
   if (missing(type)) {
-    stop("type must be specified: choose one of \"imputation\", \"weighting\" or \"classical_ml\"")
+    stop("type must be specified: choose one of \"classical_ml\", \"imputation\", \"weighting\" or \"LSPIM\"")
   }
   type <- match.arg(type)
   analysis_data <- data[
