@@ -48,7 +48,7 @@ generated <- load_generated_data_artifact_exact(scenarios = scenarios, n_simulat
 analysis_outputs <- run_requested_analyses(
   data             = generated$data,
   scenarios        = generated$scenarios,
-  analyses         = c("classical_ml", "multiple_imputation", "reweighting"),
+  analyses         = c("LSPIM", "classical_ml", "multiple_imputation", "reweighting"),
   n_simulations    = n_simulations,
   analysis_configs = list(
     multiple_imputation = list(
@@ -62,4 +62,9 @@ analysis_outputs <- run_requested_analyses(
   output_dir = "results/data",
   overwrite  = TRUE
 )
-  
+
+# Scratchpad ------------------------------------------------------------------------------------------------------
+
+
+
+

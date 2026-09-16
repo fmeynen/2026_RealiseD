@@ -232,7 +232,7 @@ analyze_mi_closed_form <- function(data,
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "imputation")
     fit_result    <- fit_mi_closed_form(analysis_data, impute_args, fit_args)
-    extract_mi_closed_form_results(
+    extract_closed_form_results(
       fit_result = fit_result,
       original_data = data,
       analysis_data = analysis_data,
@@ -262,7 +262,7 @@ analyze_closed_form_reweighting <- function(data,
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "weighting")
     fit_result    <-  fit_closed_form_reweighting(analysis_data, fit_args)
-    extract_mi_closed_form_results(
+    extract_closed_form_results(
       fit_result = fit_result,
       original_data = data,
       analysis_data = analysis_data,
@@ -274,6 +274,33 @@ analyze_closed_form_reweighting <- function(data,
     build_result_row(
       metadata = metadata,
       method = "closed_form_reweighting",
+      status = "failure",
+      converged = FALSE,
+      singular = FALSE,
+      elapsed_seconds = NA_real_,
+      warning_message = NA_character_,
+      error_message = conditionMessage(error)
+    )
+  })
+}
+
+analyze_LSPIM <- function(data) {
+  metadata <- collect_analysis_metadata(data)
+  browser()
+  tryCatch({
+    validate_analysis_data(data)
+    analysis_data <- prepare_analysis_data(data, type = "LSPIM")
+    fit_result    <-  fit_LSPIM(analysis_data)
+    extract_LSPIM_results( #TODO create proper extraction
+      fit_result = fit_result,
+      method = "LSPIM",
+      engine = "cbc",
+      fit_type = "reweighting"
+    )
+  }, error = function(error) {
+    build_result_row(
+      metadata = metadata,
+      method = "LSPIM",
       status = "failure",
       converged = FALSE,
       singular = FALSE,
@@ -403,6 +430,17 @@ analyze_generated_data_closed_form_weights <- function(
   )
 }
 
+analyze_generated_data_LSPIM <- function(
+    data,
+    scenarios = NULL
+) {
+  run_analysis_over_groups(
+    data = data,
+    scenarios = scenarios,
+    analyzer_fn = analyze_LSPIM,
+    parallel = .Platform$OS.type != "windows",
+  )
+}
 
 run_requested_analyses <- function(
     data,
@@ -413,7 +451,7 @@ run_requested_analyses <- function(
     output_dir = "results/data",
     overwrite = FALSE
 ) {
-  available_analyses <- c("classical_ml", "multiple_imputation", "reweighting")
+  available_analyses <- c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")
   unknown_analyses   <- setdiff(analyses, available_analyses)
   if (length(unknown_analyses) > 0L) {
     stop("Unknown analyses requested: ", paste(unknown_analyses, collapse = ", "))
@@ -451,6 +489,10 @@ run_requested_analyses <- function(
         data      = data,
         scenarios = scenarios,
         fit_args  = rw_config$fit_args
+      )
+    } else if (identical(analysis_name, "LSPIM")){
+      analysis_results <- analyze_generated_data_LSPIM(
+        data = data
       )
     }
 
