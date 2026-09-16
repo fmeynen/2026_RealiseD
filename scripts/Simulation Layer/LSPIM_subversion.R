@@ -1,5 +1,6 @@
 require(geessbin)
 require(multcomp)
+require(dplyr)
 
 pseudo_score <- function(y_left, y_right, higher_is_better = TRUE) {
   # left = control, right = treatment for between-group pairs.
@@ -34,16 +35,15 @@ nearest_psd <- function(V, eps = 1e-8) {
 }
 
 fit_LSPIM = function(dat){
-  browser()
   # TODO move to data preparation
-  dat <- dat %>% arrange(subject_id, time_index) %>% mutate(row_id = row_number())
-  times <- sort(unique(dat$time_index))
+  dat <- dat %>% arrange(subject_id, time_value) %>% mutate(row_id = row_number())
+  times <- sort(unique(dat$time_value))
   all_pairs <- list()
   
   # Between-treatment pairs within each visit: Var1 = control, Var2 = treatment.
   for (tt in times) {
-    id.fac <- which(dat$treatment == 0 & dat$time_index == tt)
-    id.nonfac <- which(dat$treatment == 1 & dat$time_index == tt)
+    id.fac <- which(dat$treatment == 0 & dat$time_value == tt)
+    id.nonfac <- which(dat$treatment == 1 & dat$time_value == tt)
     if (length(id.fac) > 0 && length(id.nonfac) > 0) {
       tmp <- expand.grid(Var1 = id.fac, Var2 = id.nonfac)
       tmp$pair_type <- "between"
@@ -54,7 +54,7 @@ fit_LSPIM = function(dat){
   # Within-subject pairs over time: Var1 = earlier visit, Var2 = later visit.
     for (ii in sort(unique(dat$subject_id))) {
       idx <- which(dat$subject_id == ii)
-      idx <- idx[order(dat$time_index[idx])]
+      idx <- idx[order(dat$time_value[idx])]
       if (length(idx) >= 2) {
         tmp <- t(utils::combn(idx, 2))
         tmp <- data.frame(Var1 = tmp[, 1], Var2 = tmp[, 2])
@@ -73,11 +73,11 @@ fit_LSPIM = function(dat){
   #   two within-subject time-trend parameters, one for treated and one for controls;
   #   one treatment effect parameter per visit.
   X <- data.frame(
-    trend_treat = (R$time_index - L$time_index) * R$treatment * L$treatment,
-    trend_ctrl  = (R$time_index - L$time_index) * (1 - R$treatment) * (1 - L$treatment)
+    trend_treat = (R$time_value - L$time_value) * R$treatment * L$treatment,
+    trend_ctrl  = (R$time_value - L$time_value) * (1 - R$treatment) * (1 - L$treatment)
   )
   for (tt in times) {
-    X[[paste0("trt_visit", tt)]] <- (R$treatment - L$treatment) * (R$time_index == tt) * (L$time_index == tt)
+    X[[paste0("trt_visit", tt)]] <- (R$treatment - L$treatment) * (R$time_value == tt) * (L$time_value == tt)
   }
   
   treatment_terms = grep("^trt_visit", names(X), value = TRUE)
