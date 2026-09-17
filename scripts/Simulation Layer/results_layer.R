@@ -29,7 +29,7 @@
 convergence_status_version <- "v1"
 
 # Increment this string whenever the final results schema changes.
-results_schema_version <- "v1"
+results_schema_version <- "v2"
 
 
 # Convergence status mapping ---------------------------------------------------------------------------------------
@@ -206,9 +206,11 @@ join_scenario_metadata <- function(analysis_results, scenarios) {
 #'   2. Raw diagnostics:         status, converged, singular, convergence_status,
 #'                               warning_message, error_message
 #'   3. Data-size / runtime:     n_rows, n_observed, n_subjects, elapsed_seconds
-#'   4. Fixed effects:           estimate_beta0..3, se_beta0..3
-#'   5. Random / error variance: var_b0, cov_b0b1, var_b1, sigma2_hat
-#'   6. Scenario metadata:       seed_base + remaining scenario columns (excluding scenario_id)
+#'   4. Interaction test:        interaction_tested, interaction_rejected,
+#'                               interaction_alpha, interaction_test_procedure
+#'   5. Fixed effects:           estimate_beta0..3, se_beta0..3
+#'   6. Random / error variance: var_b0, cov_b0b1, var_b1, sigma2_hat
+#'   7. Scenario metadata:       seed_base + remaining scenario columns (excluding scenario_id)
 #'
 #' Columns not in any group are appended at the end.
 #'
@@ -220,7 +222,11 @@ join_scenario_metadata <- function(analysis_results, scenarios) {
 order_results_columns <- function(data, scenario_cols) {
   group1 <- c("scenario_id", "sim_id", "method", "engine")
   group2 <- c("status", "converged", "singular", "convergence_status", "warning_message", "error_message")
-  group3 <- c("n_rows", "n_observed", "n_subjects", "elapsed_seconds")
+  group3 <- c(
+    "n_rows", "n_observed", "n_subjects", "elapsed_seconds",
+    "interaction_tested", "interaction_rejected", "interaction_alpha",
+    "interaction_test_procedure"
+  )
   group4 <- c("estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
               "se_beta0", "se_beta1", "se_beta2", "se_beta3")
   group5 <- c("var_b0", "cov_b0b1", "var_b1", "sigma2_hat")

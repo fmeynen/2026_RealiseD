@@ -103,6 +103,10 @@ empty_results <- function() {
     n_rows = integer(),
     n_observed = integer(),
     n_subjects = integer(),
+    interaction_tested = logical(),
+    interaction_rejected = logical(),
+    interaction_alpha = numeric(),
+    interaction_test_procedure = character(),
     estimate_beta0 = numeric(),
     estimate_beta1 = numeric(),
     estimate_beta2 = numeric(),
@@ -144,6 +148,10 @@ build_result_row <- function(
     n_rows     = metadata$n_rows,
     n_observed = metadata$n_observed,
     n_subjects = metadata$n_subjects,
+    interaction_tested = NA,
+    interaction_rejected = NA,
+    interaction_alpha = NA_real_,
+    interaction_test_procedure = NA_character_,
     estimate_beta0 = NA_real_,
     estimate_beta1 = NA_real_,
     estimate_beta2 = NA_real_,
@@ -1048,15 +1056,13 @@ extract_LSPIM_results <- function(
     method = "LSPIM",
     engine = "LSPIM"
 ) {
-  fit_type <- match.arg(fit_type)
   metadata <- collect_analysis_metadata(original_data)
-  status   <- classify_fit_status(fit_result, type = method)
-  #TODO
-  # warning_message <- if (length(fit_result$warnings) > 0L) {
-  #   paste(fit_result$warnings, collapse = " | ")
-  # } else {
-  #   NA_character_
-  # }
+  status <- if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) "failure" else "success"
+  warning_message <- if (length(fit_result$warnings) > 0L) {
+    paste(fit_result$warnings, collapse = " | ")
+  } else {
+    NA_character_
+  }
   
   result_row <- build_result_row(
     metadata        = metadata,
@@ -1064,8 +1070,8 @@ extract_LSPIM_results <- function(
     engine          = engine,
     status          = status,
     converged       = status != "failure",
-    singular        = status == "singular_fit",
-    elapsed_seconds = NA, #TODO
+    singular        = FALSE,
+    elapsed_seconds = fit_result$elapsed_seconds,
     warning_message = warning_message,
     error_message   = if (is.null(fit_result$error_message)) NA_character_ else fit_result$error_message
   )
@@ -1073,7 +1079,10 @@ extract_LSPIM_results <- function(
   if (status == "failure") {
     return(result_row)
   }
-  common_names <- intersect(names(result_row), names(fit_result$fit))
-  result_row[common_names] <- fit_result$fit[common_names]
+  result_row$n_observed <- as.integer(nrow(analysis_data))
+  result_row$interaction_tested <- TRUE
+  result_row$interaction_rejected <- isTRUE(fit_result$fit$interaction_rejected)
+  result_row$interaction_alpha <- as.numeric(fit_result$fit$interaction_alpha)
+  result_row$interaction_test_procedure <- as.character(fit_result$fit$interaction_test_procedure)
   result_row
 }
