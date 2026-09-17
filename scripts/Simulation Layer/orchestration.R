@@ -284,22 +284,24 @@ analyze_closed_form_reweighting <- function(data,
   })
 }
 
-analyze_LSPIM <- function(data) {
+analyze_LSPIM <- function(data, alpha = 0.05) {
   metadata <- collect_analysis_metadata(data)
   tryCatch({
     validate_analysis_data(data)
     analysis_data <- prepare_analysis_data(data, type = "LSPIM")
-    fit_result    <-  fit_LSPIM(analysis_data)
-    extract_LSPIM_results( #TODO create proper extraction
+    fit_result <- fit_LSPIM(analysis_data, alpha = alpha)
+    extract_LSPIM_results(
       fit_result = fit_result,
+      original_data = data,
+      analysis_data = analysis_data,
       method = "LSPIM",
-      engine = "cbc",
-      fit_type = "reweighting"
+      engine = "LSPIM"
     )
   }, error = function(error) {
     build_result_row(
       metadata = metadata,
       method = "LSPIM",
+      engine = "LSPIM",
       status = "failure",
       converged = FALSE,
       singular = FALSE,
@@ -431,13 +433,15 @@ analyze_generated_data_closed_form_weights <- function(
 
 analyze_generated_data_LSPIM <- function(
     data,
-    scenarios = NULL
+    scenarios = NULL,
+    alpha = 0.05
 ) {
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
     analyzer_fn = analyze_LSPIM,
-    parallel = .Platform$OS.type != "windows"
+    parallel = .Platform$OS.type != "windows",
+    alpha = alpha
   )
 }
 
@@ -564,9 +568,9 @@ build_analysis_registry <- function() {
       }
     ),
     LSPIM = list(
-      default_config = list(),
+      default_config = list(alpha = 0.05),
       runner = function(scenario_data, scenarios, config) {
-        analyze_generated_data_LSPIM(data = scenario_data)
+        analyze_generated_data_LSPIM(data = scenario_data, scenarios = scenarios, alpha = config$alpha)
       }
     )
   )

@@ -140,7 +140,7 @@ if (!identical(generation_manifest$status, "completed")) {
 analysis_outputs <- run_requested_analyses(
   scenarios        = scenarios,
   generation_manifest = generation_manifest,
-  analyses         = c("classical_ml", "multiple_imputation", "reweighting"),
+  analyses         = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM"),
   n_simulations    = n_simulations,
   analysis_configs = list(
     multiple_imputation = list(
@@ -149,6 +149,9 @@ analysis_outputs <- run_requested_analyses(
     ),
     reweighting = list(
       fit_args = set_fit_args(reweighting = TRUE)
+    ),
+    LSPIM = list(
+      alpha = 0.05
     )
   ),
   output_dir = "results/data",
