@@ -6,20 +6,20 @@ library(miceadds)
 
 # Build scenarios --------------------------------------------------------------------------------------------------
 scenarios <- build_scenario_grid(
-  n_values = c(100, 50, 20, 10),
+  n_values = c(10, 20, 50, 100),
   n_measures = 12,
   beta0_values = 2.4562,
   beta1_values = 0,
   beta2_values = 0.2792,
-  beta3_values = 0.0350,
+  beta3_values = c(0.0350, 0),
   d11_values = 7.3174,
   d22_values = 0.2239,
   d12_values = -0.4985,
   sigma2_values = 3.1508,
-  dropout_mechanism = "half-missing",
+  dropout_mechanism = c("half-missing", "three_obs_minimum"),
   seed_base = 260925
 )
-n_simulations <- 10L
+n_simulations <- 5000L
 validate_scenario_grid(scenarios)
 
 # Simulate/load data ----------------------------------------------------------------------------------------------
@@ -159,3 +159,5 @@ analysis_outputs <- run_requested_analyses(
 )
 
 # Scratchpad ------------------------------------------------------------------------------------------------------
+
+analysis_outputs
