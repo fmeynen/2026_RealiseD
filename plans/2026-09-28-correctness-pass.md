@@ -27,7 +27,7 @@ Tests live in `tests/testthat/` and run with
   per combination.
   *Depends on:* 0. *Files:* `tests/testthat/`.
 
-- [ ] **2. Non-overlapping RNG streams.** In `data_generation_layer.R`:
+- [x] **2. Non-overlapping RNG streams.** In `data_generation_layer.R`:
   - Set `RNGkind("L'Ecuyer-CMRG")`.
   - `set.seed(seed_base)` derives the master stream.
   - Scenario *s* gets `nextRNGStream` applied *s* times.

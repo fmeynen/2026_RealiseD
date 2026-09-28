@@ -11,6 +11,7 @@
 #
 # Function hierarchy:
 #   build_scenario_grid() / validate_scenario_grid()
+#   scenario_rng_stream() / replicate_rng_states() / with_rng_state()
 #   simulate_scenario()
 #     simulate_one_dataset()
 #       make_time_grid()
@@ -30,7 +31,7 @@
 
 # Constants --------------------------------------------------------------------------------------------------------
 
-data_generation_schema_version <- "v1"
+data_generation_schema_version <- "v2"
 
 
 
@@ -55,11 +56,13 @@ data_generation_schema_version <- "v1"
 #' @param sigma2_values       Numeric vector. Residual variance values.
 #' @param dropout_mechanism   String vector.  Dropout mechanism
 #' @param dropout_rate_values Numeric vector. Per-visit dropout probabilities.
-#' @param seed_base           Integer. Global base seed. Each scenario row is assigned a
-#'   deterministic seed as seed_base + scenario_id * 1000L, ensuring non-overlapping
-#'   per-replicate seed ranges across scenarios (with B <= 1000).
+#' @param seed_base           Integer. Global base seed, stored unchanged on every row. It seeds a
+#'   master L'Ecuyer-CMRG stream from which each scenario derives its own non-overlapping
+#'   streams (one for data generation, one for analysis); replicate b uses substream b of
+#'   the relevant stream. See scenario_rng_stream() and replicate_rng_states().
 #'
-#' @return Data frame with one row per scenario and unique scenario_id and seed_base columns.
+#' @return Data frame with one row per scenario, a unique scenario_id column and a seed_base
+#'   column holding the global seed.
 
 build_scenario_grid <- function(
     n_values,
@@ -92,7 +95,7 @@ build_scenario_grid <- function(
     stringsAsFactors = FALSE
   )
   grid$scenario_id <- seq_len(nrow(grid))
-  grid$seed_base <- as.integer(seed_base + grid$scenario_id * 1000L)
+  grid$seed_base <- rep(as.integer(seed_base), nrow(grid))
   grid[, c("scenario_id", "seed_base", setdiff(names(grid), c("scenario_id", "seed_base")))]
 }
 
@@ -401,6 +404,157 @@ apply_missingness <- function(panel, dropout_info) {
 }
 
 
+# RNG streams -----------------------------------------------------------------------------------------------------
+#
+# Stream scheme (L'Ecuyer-CMRG):
+#   RNGkind("L'Ecuyer-CMRG"); set.seed(seed_base) gives the master state.
+#   Stream k = parallel::nextRNGStream() applied k times to the master state.
+#   Scenario s owns stream 2 * (s - 1) + 1 for data generation and 2 * (s - 1) + 2 for analysis.
+#   Replicate b (sim_id) uses substream b = parallel::nextRNGSubStream() applied b times to the
+#   purpose stream, so replicate draws never depend on B.
+
+## Save / restore RNG state ----------------------------------------------------------------------------------------
+
+#' Capture the caller's RNG kind and .Random.seed (NULL when it does not exist).
+#'
+#' @return List with elements kind (as returned by RNGkind()) and seed.
+
+save_rng_state <- function() {
+  # Check existence before calling RNGkind(), which may initialise .Random.seed.
+  seed <- if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+    get(".Random.seed", envir = globalenv(), inherits = FALSE)
+  } else {
+    NULL
+  }
+  list(kind = RNGkind(), seed = seed)
+}
+
+
+#' Restore an RNG kind and .Random.seed captured by save_rng_state().
+#'
+#' @param saved List as returned by save_rng_state().
+#'
+#' @return NULL (invisibly). Called for its side effect on the global RNG.
+
+restore_rng_state <- function(saved) {
+  # sample.kind = "Rounding" warns on every call; the restore itself is intentional.
+  suppressWarnings(
+    RNGkind(kind = saved$kind[[1L]], normal.kind = saved$kind[[2L]], sample.kind = saved$kind[[3L]])
+  )
+  if (is.null(saved$seed)) {
+    if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+      rm(".Random.seed", envir = globalenv())
+    }
+  } else {
+    assign(".Random.seed", saved$seed, envir = globalenv())
+  }
+  invisible(NULL)
+}
+
+
+## With RNG state --------------------------------------------------------------------------------------------------
+
+#' Evaluate an expression with a given L'Ecuyer-CMRG RNG state.
+#'
+#' Sets RNGkind("L'Ecuyer-CMRG") and .Random.seed (in globalenv) to state, evaluates expr,
+#' then restores the caller's previous RNG kind and .Random.seed (removing .Random.seed
+#' again if it did not exist before), also when expr errors.
+#'
+#' @param state Integer vector of length 7. An L'Ecuyer-CMRG .Random.seed, e.g. from
+#'   scenario_rng_stream() or replicate_rng_states().
+#' @param expr  Expression to evaluate.
+#'
+#' @return The value of expr.
+
+with_rng_state <- function(state, expr) {
+  if (!is.integer(state) || length(state) != 7L || anyNA(state)) {
+    stop("'state' must be an L'Ecuyer-CMRG .Random.seed: an integer vector of length 7.")
+  }
+  saved <- save_rng_state()
+  on.exit(restore_rng_state(saved), add = TRUE)
+  RNGkind(kind = "L'Ecuyer-CMRG", normal.kind = "Inversion", sample.kind = "Rejection")
+  assign(".Random.seed", state, envir = globalenv())
+  expr
+}
+
+
+## Scenario RNG stream ---------------------------------------------------------------------------------------------
+
+#' Return the L'Ecuyer-CMRG stream owned by a scenario for a given purpose.
+#'
+#' Stream index is 2 * (scenario_id - 1) + 1 for "generation" and 2 * (scenario_id - 1) + 2
+#' for "analysis", so no two scenarios or purposes share a stream. The global RNG kind and
+#' state are left unchanged.
+#'
+#' @param seed_base   Integer scalar. Global base seed seeding the master stream.
+#' @param scenario_id Positive integer scalar. Scenario identifier.
+#' @param purpose     Character. "generation" (default) or "analysis".
+#'
+#' @return Integer vector of length 7: the .Random.seed at the start of that stream.
+
+scenario_rng_stream <- function(seed_base, scenario_id, purpose = c("generation", "analysis")) {
+  purpose <- match.arg(purpose)
+  if (!is.numeric(seed_base) || length(seed_base) != 1L || is.na(seed_base)) {
+    stop("'seed_base' must be a non-missing numeric scalar.")
+  }
+  if (!is.numeric(scenario_id) || length(scenario_id) != 1L || is.na(scenario_id) || scenario_id < 1) {
+    stop("'scenario_id' must be a positive integer scalar.")
+  }
+
+  saved <- save_rng_state()
+  on.exit(restore_rng_state(saved), add = TRUE)
+  RNGkind(kind = "L'Ecuyer-CMRG", normal.kind = "Inversion", sample.kind = "Rejection")
+  set.seed(as.integer(seed_base))
+  state <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
+
+  stream_index <- 2L * (as.integer(scenario_id) - 1L) + if (purpose == "generation") 1L else 2L
+  for (k in seq_len(stream_index)) {
+    state <- parallel::nextRNGStream(state)
+  }
+  state
+}
+
+
+## Replicate RNG states --------------------------------------------------------------------------------------------
+
+#' Return the per-replicate L'Ecuyer-CMRG states for a scenario and purpose.
+#'
+#' Replicate b uses substream b of the scenario's purpose stream. All substreams up to
+#' max(sim_ids) are derived in one cumulative pass, so the cost is O(max(sim_ids)) and the
+#' state for a given sim_id does not depend on which other sim_ids are requested. The global
+#' RNG kind and state are left unchanged.
+#'
+#' @param seed_base   Integer scalar. Global base seed.
+#' @param scenario_id Positive integer scalar. Scenario identifier.
+#' @param sim_ids     Positive integer vector. Replicate identifiers.
+#' @param purpose     Character. "generation" (default) or "analysis".
+#'
+#' @return List of integer vectors of length 7 (one .Random.seed per element of sim_ids),
+#'   named by sim_id.
+
+replicate_rng_states <- function(seed_base, scenario_id, sim_ids, purpose = c("generation", "analysis")) {
+  purpose <- match.arg(purpose)
+  if (!is.numeric(sim_ids) || anyNA(sim_ids) || any(sim_ids < 1)) {
+    stop("'sim_ids' must be a vector of positive integers.")
+  }
+  sim_ids <- as.integer(sim_ids)
+  stream <- scenario_rng_stream(seed_base, scenario_id, purpose)
+  if (length(sim_ids) == 0L) {
+    return(setNames(list(), character(0L)))
+  }
+
+  substreams <- vector("list", max(sim_ids))
+  state <- stream
+  for (b in seq_along(substreams)) {
+    state <- parallel::nextRNGSubStream(state)
+    substreams[[b]] <- state
+  }
+  out <- substreams[sim_ids]
+  names(out) <- as.character(sim_ids)
+  out
+}
+
+
 # Orchestration ---------------------------------------------------------------------------------------------------
 
 ## Simulate one dataset --------------------------------------------------------------------------------------------
@@ -413,13 +567,18 @@ apply_missingness <- function(panel, dropout_info) {
 #'
 #' @param scenario_row A single-row data frame from the scenario grid.
 #' @param sim_id       Integer. Simulation replicate identifier.
-#' @param seed         Integer or NULL. Random seed for reproducibility.
+#' @param rng_state    Integer vector of length 7 or NULL. L'Ecuyer-CMRG .Random.seed for this
+#'   replicate (e.g. from replicate_rng_states()). When supplied, the replicate is generated
+#'   inside with_rng_state(), leaving the caller's RNG untouched. When NULL (default), the
+#'   current global RNG is used as is.
 #'
 #' @return Long-format data frame for one replicate (see apply_missingness()).
 
-simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL, ...) {
-  if (!is.null(seed)) set.seed(seed)
-  
+simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
+  if (!is.null(rng_state)) {
+    return(with_rng_state(rng_state, simulate_one_dataset(scenario_row, sim_id, rng_state = NULL, ...)))
+  }
+
   n <- scenario_row$n
   d_mat <- matrix(
     c(scenario_row$d11, scenario_row$d12,
@@ -459,15 +618,17 @@ simulate_one_dataset <- function(scenario_row, sim_id, seed = NULL, ...) {
 
 #' Generate all B simulated datasets for a single scenario.
 #'
-#' Repeats simulate_one_dataset() B times, manages replicate IDs and seeds,
+#' Repeats simulate_one_dataset() B times, manages replicate IDs and RNG states,
 #' and returns all replicates in a single stacked long-format data frame.
 #'
 #' @param scenario_row A single-row data frame from the scenario grid.
 #' @param B            Integer. Number of simulation replicates.
-#' @param seed_base    Integer or NULL. Overrides scenario_row$seed_base when supplied.
-#'   Replicate k uses seed_base + k. If NULL (default), seed_base is read from
-#'   scenario_row$seed_base when present. Set to NULL and omit from scenario_row
-#'   for unseeded (non-reproducible) runs.
+#' @param seed_base    Integer or NULL. Global base seed; overrides scenario_row$seed_base when
+#'   supplied. If NULL (default), seed_base is read from scenario_row$seed_base when present.
+#'   Replicate b is generated from substream b of the scenario's "generation" L'Ecuyer-CMRG
+#'   stream (see replicate_rng_states()), so its draws do not depend on B and never overlap
+#'   with other scenarios. The caller's RNG state is left unchanged. Set to NULL and omit from
+#'   scenario_row for unseeded (non-reproducible) runs that use the current global RNG.
 #'
 #' @return A stacked long-format data frame with B replicates identified by sim_id.
 
@@ -479,10 +640,14 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
   } else {
     NULL
   }
-  seeds <- if (!is.null(effective_seed)) as.list(effective_seed + seq_len(B)) else rep(list(NULL), B)
+  rng_states <- if (!is.null(effective_seed)) {
+    replicate_rng_states(effective_seed, scenario_row$scenario_id, seq_len(B), "generation")
+  } else {
+    rep(list(NULL), B)
+  }
 
   replicates <- lapply(seq_len(B), function(b) {
-    simulate_one_dataset(scenario_row, sim_id = b, seed = seeds[[b]])
+    simulate_one_dataset(scenario_row, sim_id = b, rng_state = rng_states[[b]])
   })
   do.call(rbind, replicates)
 }
