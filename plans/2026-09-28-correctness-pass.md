@@ -71,7 +71,7 @@ Tests live in `tests/testthat/` and run with
   engine `"cbc"`, status `"failure"`.
   *Depends on:* 1. *Files:* `orchestration.R`, `tests/testthat/test-failure-labels.R`.
 
-- [ ] **6. Use `epsilon_B` in reweighting loop.** `CbCEstimator()` while condition and the
+- [x] **6. Use `epsilon_B` in reweighting loop.** `CbCEstimator()` while condition and the
   post-loop warning use `epsilon_B`, not `epsilon_D`; replace scalar `&` with `&&`.
   *Tests:* with a large `epsilon_B` the loop stops after one iteration (expose the iteration
   count in the returned list, e.g. `iterations`).

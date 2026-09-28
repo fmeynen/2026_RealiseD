@@ -715,8 +715,8 @@ CbCEstimator <- function(mats, fit_args){
   #Reweighting
   
   if(reweighting){
-    while((convergence > epsilon_D) & (iterations <= max_iterations)){
-      
+    while(convergence > epsilon_B && iterations <= max_iterations){
+
       beta_tilde_ori <- beta_tilde
       lambda         <- 0.7 #dampening factor
       # lambda         <- 1
@@ -738,19 +738,20 @@ CbCEstimator <- function(mats, fit_args){
       convergence <- max(abs(beta_tilde_ori - beta_tilde))
       iterations  <- iterations + 1
     }
-    if(convergence > epsilon_D) {
+    if(convergence > epsilon_B) {
       warning(paste("Convergence of beta parameters not reached.
-                    Maximal absolute difference:", convergence, " > ", epsilon_D))
+                    Maximal absolute difference:", convergence, " > ", epsilon_B))
       }
   }
-  
+
   # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma (3) Estimates D,
   # and (4) variance of estimates for fixed effects
   list(beta_tilde          = beta_tilde,
        Sigma_tilde         = Sigma_tilde,
        D_tilde             = D_tilde,
-       variance_beta_tilde = variance_beta_tilde)
-  
+       variance_beta_tilde = variance_beta_tilde,
+       iterations          = if (reweighting) iterations - 1 else 0)
+
 }
 
 
