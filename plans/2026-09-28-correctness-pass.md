@@ -96,7 +96,7 @@ Tests live in `tests/testthat/` and run with
   there is no missingness.
   *Depends on:* 2 (same file). *Files:* `data_generation_layer.R`, `tests/testthat/test-dropout.R`.
 
-- [ ] **9. Signed bias.**
+- [x] **9. Signed bias.**
   - In `compute_bias_summary()` replace `mean_abs_bias_beta{k}` / `mean_rel_bias_beta{k}` with
     `bias_beta{k} = mean(est) - true` and `rel_bias_beta{k} = (mean(est) - true) / true`
     (NA when true == 0). Keep the `n_*` counts.
