@@ -65,7 +65,7 @@ Tests live in `tests/testthat/` and run with
   *Tests:* with FALSE the output is unchanged vs current behaviour; with TRUE the SEs are √m larger.
   *Depends on:* 3 (same files). *Files:* `analysis_layer.R`, `tests/testthat/test-stacked-variance.R`.
 
-- [ ] **5. Reweighting failure label.** In `analyze_closed_form_reweighting()`'s error handler use
+- [x] **5. Reweighting failure label.** In `analyze_closed_form_reweighting()`'s error handler use
   `method = "reweighting"`, `engine = "cbc"`.
   *Tests:* a forced failure (e.g. data with a single subject) yields method `"reweighting"`,
   engine `"cbc"`, status `"failure"`.

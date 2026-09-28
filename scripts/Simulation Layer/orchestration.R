@@ -313,7 +313,8 @@ analyze_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
     error = function(error) {
       build_result_row(
         metadata = metadata,
-        method = "closed_form_reweighting",
+        method = "reweighting",
+        engine = "cbc",
         status = "failure",
         converged = FALSE,
         singular = FALSE,
