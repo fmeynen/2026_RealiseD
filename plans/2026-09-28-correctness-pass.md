@@ -77,7 +77,7 @@ Tests live in `tests/testthat/` and run with
   count in the returned list, e.g. `iterations`).
   *Depends on:* 4 (same file). *Files:* `analysis_layer.R`, `tests/testthat/test-reweighting.R`.
 
-- [ ] **7. LSPIM max-N config.**
+- [x] **7. LSPIM max-N config.**
   - Replace the `n_rows == 12000` check in `run_requested_analyses()` with an
     `lspim_max_n` entry in the LSPIM config (registry default 50; set it explicitly in `run_all.R`).
   - Scenarios with `n > lspim_max_n` get record status `"skipped_by_config"` with no artifact.

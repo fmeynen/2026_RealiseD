@@ -672,7 +672,10 @@ build_analysis_registry <- function() {
       }
     ),
     LSPIM = list(
-      default_config = list(alpha = 0.05),
+      default_config = list(alpha = 0.05, lspim_max_n = 50),
+      applies_to = function(scenario_row, config) {
+        scenario_row$n <= config$lspim_max_n
+      },
       runner = function(scenario_data, scenarios, config) {
         analyze_generated_data_LSPIM(
           data = scenario_data,
@@ -682,6 +685,18 @@ build_analysis_registry <- function() {
       }
     )
   )
+}
+
+
+resolve_analysis_config <- function(analysis_entry, user_config = NULL) {
+  if (is.null(user_config)) {
+    analysis_entry$default_config
+  } else {
+    utils::modifyList(
+      analysis_entry$default_config,
+      user_config
+    )
+  }
 }
 
 
@@ -699,14 +714,7 @@ run_single_analysis_method <- function(
   if (is.null(analysis_entry)) {
     stop("Unsupported analysis requested: ", analysis_name)
   }
-  if (is.null(user_config)) {
-    final_config <- analysis_entry$default_config
-  } else {
-    final_config <- utils::modifyList(
-      analysis_entry$default_config,
-      user_config
-    )
-  }
+  final_config <- resolve_analysis_config(analysis_entry, user_config)
   analysis_entry$runner(scenario_data, scenarios, final_config)
 }
 
@@ -872,6 +880,11 @@ save_combined_convenience_artifact <- function(
     ,
     drop = FALSE
   ]
+  skipped_by_config_records <- artifact_records[
+    artifact_records$status == "skipped_by_config",
+    ,
+    drop = FALSE
+  ]
   successful_has_path <- !is.na(successful$path)
   successful_exists <- successful_has_path & file.exists(successful$path)
   missing_successful <- successful[!successful_exists, , drop = FALSE]
@@ -901,7 +914,8 @@ save_combined_convenience_artifact <- function(
         derived_convenience_artifact = TRUE,
         n_source_artifacts = 0L,
         source_artifacts = character(0L),
-        failed_exclusions = failed_exclusions
+        failed_exclusions = failed_exclusions,
+        skipped_by_config = skipped_by_config_records
       )
     )
     saveRDS(combined_artifact, combined_path)
@@ -933,7 +947,8 @@ save_combined_convenience_artifact <- function(
       derived_convenience_artifact = TRUE,
       n_source_artifacts = length(successful_paths),
       source_artifacts = successful_paths,
-      failed_exclusions = failed_exclusions
+      failed_exclusions = failed_exclusions,
+      skipped_by_config = skipped_by_config_records
     )
   )
   saveRDS(combined_artifact, combined_path)
@@ -1150,44 +1165,59 @@ run_requested_analyses <- function(
 
       method_outcome <- tryCatch(
         {
-          existing_path <- find_valid_analysis_scenario_method_artifact(
-            analysis_run_hash = analysis_run_hash,
-            scenario_entry = scenario_entry,
-            method = analysis_name,
-            output_dir = output_dir,
-            overwrite = overwrite
+          analysis_entry <- analysis_registry[[analysis_name]]
+          final_config <- resolve_analysis_config(
+            analysis_entry,
+            analysis_configs[[analysis_name]]
           )
-          if (!is.null(existing_path)) {
+          applies <- if (is.null(analysis_entry$applies_to)) {
+            TRUE
+          } else {
+            isTRUE(analysis_entry$applies_to(scenario_metadata, final_config))
+          }
+          if (!applies) {
             list(
-              status = "skipped_existing",
-              path = existing_path,
+              status = "skipped_by_config",
+              path = NA_character_,
               error = NA_character_
             )
           } else {
-            if (analysis_name == "LSPIM" & scenario_entry$n_rows == 12000) {
-              stop("This analysis cannot be done")
-            }
-            method_results <- run_single_analysis_method(
-              analysis_name = analysis_name,
-              scenario_data = scenario_data,
-              scenarios = scenario_metadata,
-              user_config = analysis_configs[[analysis_name]],
-              analysis_registry = analysis_registry
-            )
-            saved <- save_analysis_scenario_method_artifact(
-              analysis_results = method_results,
+            existing_path <- find_valid_analysis_scenario_method_artifact(
               analysis_run_hash = analysis_run_hash,
-              generation_manifest = generation_manifest,
               scenario_entry = scenario_entry,
               method = analysis_name,
               output_dir = output_dir,
               overwrite = overwrite
             )
-            list(
-              status = saved$status,
-              path = saved$path,
-              error = NA_character_
-            )
+            if (!is.null(existing_path)) {
+              list(
+                status = "skipped_existing",
+                path = existing_path,
+                error = NA_character_
+              )
+            } else {
+              method_results <- run_single_analysis_method(
+                analysis_name = analysis_name,
+                scenario_data = scenario_data,
+                scenarios = scenario_metadata,
+                user_config = analysis_configs[[analysis_name]],
+                analysis_registry = analysis_registry
+              )
+              saved <- save_analysis_scenario_method_artifact(
+                analysis_results = method_results,
+                analysis_run_hash = analysis_run_hash,
+                generation_manifest = generation_manifest,
+                scenario_entry = scenario_entry,
+                method = analysis_name,
+                output_dir = output_dir,
+                overwrite = overwrite
+              )
+              list(
+                status = saved$status,
+                path = saved$path,
+                error = NA_character_
+              )
+            }
           }
         },
         error = function(e) {
@@ -1275,6 +1305,10 @@ run_requested_analyses <- function(
         artifact_records$status == "skipped_existing",
         na.rm = TRUE
       ),
+      n_skipped_by_config = sum(
+        artifact_records$status == "skipped_by_config",
+        na.rm = TRUE
+      ),
       n_failure = sum(artifact_records$status == "failure", na.rm = TRUE)
     )
   )
@@ -1331,6 +1365,10 @@ run_requested_analyses <- function(
   message(
     "Skipped existing artifacts: ",
     analysis_manifest$summary$n_skipped_existing
+  )
+  message(
+    "Skipped by config: ",
+    analysis_manifest$summary$n_skipped_by_config
   )
   message("Failed artifacts: ", analysis_manifest$summary$n_failure)
   message(

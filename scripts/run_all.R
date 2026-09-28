@@ -176,7 +176,8 @@ analysis_outputs <- run_requested_analyses(
       fit_args = set_fit_args(reweighting = TRUE)
     ),
     LSPIM = list(
-      alpha = 0.05
+      alpha = 0.05,
+      lspim_max_n = 50
     )
   ),
   output_dir = "results/data",
