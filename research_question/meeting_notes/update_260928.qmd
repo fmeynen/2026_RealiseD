@@ -1,0 +1,348 @@
+---
+title: "Update Joint Modeling 26/09"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(here)
+library(ggplot2)
+library(dplyr)
+# Global chunk options
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+res <- readRDS(here::here("results", "data", "aggregation_summary_default.rds"))
+res <- res$aggregation$summary
+res <- res[1:60,]
+res$n <- as.factor(res$n)
+res_three_obs <- res |> filter(beta3 != 0 & res$dropout_mechanism == "three_obs_minimum")
+res_half_missing <- res |> filter(beta3 != 0 & res$dropout_mechanism == "half-missing")
+res_three_obs_alpha <- res |> filter(beta3 == 0 & res$dropout_mechanism == "three_obs_minimum")
+res_half_missing_alpha <- res |> filter(beta3 == 0 & res$dropout_mechanism == "half-missing")
+
+
+```
+
+# Overview Methods:
+
+The three (+1) suggested methods are implemented
+
+1.  Classical ML
+
+2.  MI + closed form
+
+    1.  imputations were done within clusters, 3 imputations per clusters, with a maximum of 10 repetitions.
+
+3.  Closed form + iterative reweighting
+
+    1.  30 iterations max
+
+4.  LSPIM
+
+    1.  **With 100 or more clusters it crashes the system.**, so these are not included
+    2.  Compared where applicable
+
+\newpage
+
+# Simulation setup
+
+Formula: $$ y_{ij} = \beta_0 + \beta_1Treatment_i + \beta_2Time_j + \beta_3Treatment_i*Time_j + b_{0i} + b_{1i}*Time_j $$
+
+Parameters were taken from the toenail data:
+
++---------------------------+--------------+------------------------------------------------------+
+| Effect                    | Parameter    | Size                                                 |
++===========================+==============+======================================================+
+| Intercept                 | $\beta_0$    | 2.4562                                               |
++---------------------------+--------------+------------------------------------------------------+
+| Treatment Effect          | $\beta_1$    | 0 *(0.593 in toenail data (this was a dose effect))* |
++---------------------------+--------------+------------------------------------------------------+
+| Time Effect               | $\beta_2$    | 0.2792                                               |
++---------------------------+--------------+------------------------------------------------------+
+| Treatment x Time          | $\beta_3$    | 0.0350 (*0 for type I error control*)                |
++---------------------------+--------------+------------------------------------------------------+
+| Random intercept variance | $d_{11}$     | 7.3174                                               |
++---------------------------+--------------+------------------------------------------------------+
+| Random slope variance     | $d_{22}$     | 0.2239                                               |
++---------------------------+--------------+------------------------------------------------------+
+| Random effects covariance | $d_{12}$     | -0.4985                                              |
++---------------------------+--------------+------------------------------------------------------+
+| Residual variance         | $\sigma^2$   | 3.1508                                               |
++---------------------------+--------------+------------------------------------------------------+
+
++----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+| Variable                         | Value                                                                                                                                           |         |
++==================================+=================================================================================================================================================+=========+
+| number of clusters               | 100, 50, 20, 10 *(10.000 clusters was asked too, but currently excluded due to large computing time)* \|                                        |         |
++----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+| number of repeated measures      | 12                                                                                                                                              |         |
++----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+| missingness pattern              | "half-missing" (half of the clusters have no missingness, other half have uniform probability to have 1-11 observations, dropout is monotone).\ |         |
+|                                  | \                                                                                                                                               |         |
+|                                  | "three observations minimum" (same as half-missing but with three observations minimum for better comparison reweighting)                       |         |
++----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+| number of simulations / scenario | 5.000                                                                                                                                           |         |
++----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+
+\newpage
+
+# Next steps
+
+1.  Asymptotic behavior at 10.000 clusters
+
+2.  Improve LSPIM for larger sample sizes?
+
+3.  Doublecheck power?
+
+\newpage
+
+# Results - "Half-Missing"
+
+## Mean Squared Error
+
+```{r}
+res_half_missing[order(-as.numeric(res_half_missing$n), res_half_missing$method), c(2, 49, grep("^mse", names(res)))]
+```
+
+```{r}
+ggplot(res_half_missing, aes(x = n, y = mse_beta3, colour = method)) +
+  geom_point() +
+  labs(
+    x = "Number of clusters",
+    y = "MSE (beta3)",
+    title = "MSE for beta3 by Method and Sample Size"
+  ) +
+  theme_minimal()
+```
+
+\newpage
+
+## Type I error control
+
+```{r}
+res_half_missing_alpha$alpha <- coalesce(1- res_half_missing_alpha$coverage95_beta3, res_half_missing_alpha$type1_error_interaction)
+res_half_missing_alpha[order(-as.numeric(res_half_missing_alpha$n), res_half_missing_alpha$method), c(2, 49, grep("alpha", names(res_half_missing_alpha)))]
+```
+
+```{r}
+ggplot(res_half_missing_alpha, aes(x = n, y = alpha, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Type I error rate",
+    title = "Type I error rate for beta3 / interaction by Method and Sample Size"
+  ) + 
+  geom_hline(yintercept = 0.05, linetype = "dotted") +
+  theme_minimal()
+```
+
+\newpage
+
+## Power
+
+```{r}
+res_half_missing$power <- coalesce(res_half_missing$wald_rejection_rate_beta3, res_half_missing$power_interaction)
+res_half_missing[order(-as.numeric(res_half_missing$n), res_half_missing$method), c(2, 49, 61)]
+```
+
+```{r}
+ggplot(res_half_missing, aes(x = n, y = power, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Power",
+    title = "Power for beta3 / interaction by Method and Sample Size"
+  ) + 
+  # geom_hline(yintercept = 0.05, linetype = "dotted") +
+  theme_minimal()
+```
+
+\newpage
+
+## Coverage rate of $\beta_3$
+
+```{r}
+res_half_missing[order(-as.numeric(res_half_missing$n), res_half_missing$method), c(2, 49, grep("coverage95", names(res)))]
+```
+
+```{r}
+ggplot(res_half_missing, aes(x = n, y = coverage95_beta3, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Coverage rate of beta 3",
+    title = "Coverage Rate of beta 3 in a 95%CI by Method and Sample Size"
+  ) +
+  geom_hline(yintercept = 0.95, linetype = "dotted") +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal()
+```
+
+\newpage
+
+## Convergence Rate
+
+```{r}
+res_half_missing[order(-as.numeric(res_half_missing$n), res_half_missing$method), c(2, 49, grep("^prop_conv", names(res_half_missing)))]
+```
+
+```{r}
+ggplot(res_half_missing, aes(x = n, y = (prop_converged_ok + prop_converged_warning), colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Proportion of converged simulations",
+    title = "Convergence Rate by Method and Sample Size"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal()
+```
+
+\newpage
+
+## Computation Time
+
+```{r}
+res_half_missing[order(-as.numeric(res_half_missing$n), res_half_missing$method), c(2, 49, grep("seconds", names(res)))]
+```
+
+```{r}
+ggplot(res_half_missing, aes(x = n, y = time_median_seconds, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Median computation time (seconds)",
+    title = "Median computation time by Method and Sample Size"
+  ) +
+  theme_minimal()
+```
+
+\newpage
+
+# Results - "Three observations minimum"
+
+## Mean Squared Error
+
+```{r}
+res_three_obs[order(-as.numeric(res_three_obs$n), res_three_obs$method), c(2, 49, grep("^mse", names(res)))]
+```
+
+```{r}
+ggplot(res_three_obs, aes(x = n, y = mse_beta3, colour = method)) +
+  geom_point() +
+  labs(
+    x = "Number of clusters",
+    y = "MSE (beta3)",
+    title = "MSE for beta3 by Method and Sample Size"
+  ) +
+  theme_minimal()
+```
+
+\newpage
+
+## Type I error control
+
+```{r}
+res_three_obs_alpha$alpha <- coalesce(1- res_three_obs_alpha$coverage95_beta3, res_three_obs_alpha$type1_error_interaction)
+res_three_obs_alpha[order(-as.numeric(res_three_obs_alpha$n), res_three_obs_alpha$method), c(2, 49, grep("alpha", names(res_three_obs_alpha)))]
+```
+
+```{r}
+ggplot(res_three_obs_alpha, aes(x = n, y = alpha, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Type I error rate",
+    title = "Type I error rate for beta3 / interaction by Method and Sample Size"
+  ) + 
+  geom_hline(yintercept = 0.05, linetype = "dotted") +
+  theme_minimal()
+```
+
+\newpage
+
+## Power
+
+```{r}
+res_three_obs$power <- coalesce(res_three_obs$wald_rejection_rate_beta3, res_three_obs$power_interaction)
+res_three_obs[order(-as.numeric(res_three_obs$n), res_three_obs$method), c(2, 49, 61)]
+```
+
+```{r}
+ggplot(res_three_obs, aes(x = n, y = power, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Power",
+    title = "Power for beta3 / interaction by Method and Sample Size"
+  ) + 
+  # geom_hline(yintercept = 0.05, linetype = "dotted") +
+  theme_minimal()
+```
+
+\newpage
+
+## Coverage rate of $\beta_3$
+
+```{r}
+res_three_obs[order(-as.numeric(res_three_obs$n), res_three_obs$method), c(2, 49, grep("coverage95", names(res)))]
+```
+
+```{r}
+ggplot(res_three_obs, aes(x = n, y = coverage95_beta3, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Coverage rate of beta 3",
+    title = "Coverage Rate of beta 3 in a 95%CI by Method and Sample Size"
+  ) +
+  geom_hline(yintercept = 0.95, linetype = "dotted") +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal()
+```
+
+\newpage
+
+## Convergence Rate
+
+```{r}
+res_three_obs[order(-as.numeric(res_three_obs$n), res_three_obs$method), c(2, 49, grep("^prop_conv", names(res_three_obs)))]
+```
+
+```{r}
+ggplot(res_three_obs, aes(x = n, y = (prop_converged_ok + prop_converged_warning), colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Proportion of converged simulations",
+    title = "Convergence Rate by Method and Sample Size"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal()
+```
+
+\newpage
+
+## Computation Time
+
+```{r}
+res_three_obs[order(-as.numeric(res_three_obs$n), res_three_obs$method), c(2, 49, grep("seconds", names(res)))]
+```
+
+```{r}
+ggplot(res_three_obs, aes(x = n, y = time_median_seconds, colour = method)) +
+  geom_point(size = 2, position = position_dodge(width = 0.25)) +
+  labs(
+    x = "Number of clusters",
+    y = "Median computation time (seconds)",
+    title = "Median computation time by Method and Sample Size"
+  ) +
+  theme_minimal()
+```
