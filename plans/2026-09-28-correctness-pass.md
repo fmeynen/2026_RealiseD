@@ -89,7 +89,7 @@ Tests live in `tests/testthat/` and run with
   *Depends on:* 5 (same file). *Files:* `orchestration.R`, `run_all.R`,
   `tests/testthat/test-lspim-config.R`.
 
-- [ ] **8. Dropout fallback.** In `simulate_one_dataset()` pass the computed `dropout_mechanism`
+- [x] **8. Dropout fallback.** In `simulate_one_dataset()` pass the computed `dropout_mechanism`
   to `generate_dropout_process()`. Also make `build_scenario_grid()` with
   `dropout_mechanism = NULL` still produce rows (store NA and treat NA like NULL).
   *Tests:* NULL/NA mechanism with `dropout_rate > 0` produces dropout (`fixed_rate`); with rate 0

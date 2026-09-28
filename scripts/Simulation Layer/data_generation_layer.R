@@ -54,7 +54,9 @@ data_generation_schema_version <- "v2"
 #' @param d22_values          Numeric vector. Values for var(b1_i).
 #' @param d12_values          Numeric vector. Values for cov(b0_i, b1_i).
 #' @param sigma2_values       Numeric vector. Residual variance values.
-#' @param dropout_mechanism   String vector.  Dropout mechanism
+#' @param dropout_mechanism   String vector. Dropout mechanism: 'none', 'uniform',
+#'   'half-missing', 'three_obs_minimum', 'fixed_rate', or NA/NULL (default) to derive
+#'   the mechanism from dropout_rate at generation time (see simulate_one_dataset()).
 #' @param dropout_rate_values Numeric vector. Per-visit dropout probabilities.
 #' @param seed_base           Integer. Global base seed, stored unchanged on every row. It seeds a
 #'   master L'Ecuyer-CMRG stream from which each scenario derives its own non-overlapping
@@ -79,6 +81,9 @@ build_scenario_grid <- function(
     dropout_rate_values = 0,
     seed_base
 ) {
+  if (is.null(dropout_mechanism)) {
+    dropout_mechanism <- NA_character_
+  }
   grid <- expand.grid(
     n = n_values,
     n_measures = n_measures,
@@ -132,6 +137,17 @@ validate_scenario_grid <- function(scenario_grid) {
   if (any(scenario_grid$sigma2 <= 0)) stop("sigma2 must be > 0 for all scenarios.")
   if (any(scenario_grid$dropout_rate < 0 | scenario_grid$dropout_rate > 1)) {
     stop("dropout_rate must be in [0, 1] for all scenarios.")
+  }
+  if ("dropout_mechanism" %in% names(scenario_grid)) {
+    allowed_mechanisms <- c("none", "uniform", "half-missing", "three_obs_minimum", "fixed_rate")
+    observed_mechanisms <- scenario_grid$dropout_mechanism[!is.na(scenario_grid$dropout_mechanism)]
+    invalid_mechanisms <- setdiff(unique(observed_mechanisms), allowed_mechanisms)
+    if (length(invalid_mechanisms) > 0) {
+      stop(
+        "dropout_mechanism must be one of: ", paste(allowed_mechanisms, collapse = ", "),
+        ", or NA. Found invalid value(s): ", paste(invalid_mechanisms, collapse = ", ")
+      )
+    }
   }
   # Check that D = [[d11, d12], [d12, d22]] is positive semi-definite in each scenario.
   for (i in seq_len(nrow(scenario_grid))) {
@@ -605,10 +621,10 @@ simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
   panel <- generate_outcomes(panel, epsilon)
   
   dropout_mechanism <- scenario_row$dropout_mechanism
-  if(is.null(dropout_mechanism)){
+  if (is.null(dropout_mechanism) || is.na(dropout_mechanism)) {
     dropout_mechanism <- if (scenario_row$dropout_rate > 0) "fixed_rate" else "none"
   }
-  dropout_info <- generate_dropout_process(panel, scenario_row$dropout_rate, scenario_row$dropout_mechanism)
+  dropout_info <- generate_dropout_process(panel, scenario_row$dropout_rate, dropout_mechanism)
   output <- apply_missingness(panel, dropout_info)
   output[,c("sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed")]
 }
