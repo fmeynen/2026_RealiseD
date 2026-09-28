@@ -55,7 +55,7 @@ Tests live in `tests/testthat/` and run with
   identical results.
   *Depends on:* 2. *Files:* `analysis_layer.R`, `orchestration.R`, `tests/testthat/test-mi-seed.R`.
 
-- [ ] **4. Stacked-variance switch.**
+- [x] **4. Stacked-variance switch.**
   - Add `stacked_variance_inflation = FALSE` to `set_fit_args()`.
   - In the MI path only, when TRUE multiply `variance_beta_tilde` by `m` (the number of
     imputations) before the SEs are extracted.
