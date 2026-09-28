@@ -107,7 +107,7 @@ Tests live in `tests/testthat/` and run with
   *Depends on:* 1. *Files:* `aggregation_layer.R`, `scripts/Validation/validate_aggregation_layer.R`,
   `tests/testthat/test-bias.R`.
 
-- [ ] **10. Smoke run.** Run the `run_all.R` grid with B = 20 and all four methods, writing to a
+- [x] **10. Smoke run.** Run the `run_all.R` grid with B = 20 and all four methods, writing to a
   temp/scratch `output_dir` and generation dir (not committed). Check that:
   - the generation manifest is `completed`;
   - analysis statuses are success or `skipped_by_config` for LSPIM at N = 100;
