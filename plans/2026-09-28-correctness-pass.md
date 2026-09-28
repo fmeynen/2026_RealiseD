@@ -16,12 +16,12 @@ Tests live in `tests/testthat/` and run with
 
 ## Items
 
-- [ ] **0. Archive and backlog.** `git mv` the tracked contents of `results/data/` to
+- [x] **0. Archive and backlog.** `git mv` the tracked contents of `results/data/` to
   `results/archive/2026-09-28/` (keep `.gitkeep` in `results/data/`). Commit together with
   `BACKLOG.md` and this plan file.
   *Files:* `results/`, `BACKLOG.md`, `docs/plans/`.
 
-- [ ] **1. Test scaffold.** Create `tests/testthat/helper-source.R` that sources every file in
+- [x] **1. Test scaffold.** Create `tests/testthat/helper-source.R` that sources every file in
   `scripts/Simulation Layer/` (paths resolved from the repo root via `testthat::test_path()`)
   and attaches `miceadds`. Add a trivial smoke test that `build_scenario_grid()` returns one row
   per combination.
