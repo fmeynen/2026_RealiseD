@@ -328,7 +328,6 @@ set_impute_args <- function(
     method_y         = c("2l.pmm", "2l.norm"),
     m                = 3,
     maxit            = 10,
-    seed             = 123,
     include_original = FALSE,
     strict_checks    = TRUE,
     return_mids      = FALSE
@@ -346,7 +345,6 @@ set_impute_args <- function(
     method_y = method_y,
     m = m,
     maxit = maxit,
-    seed = seed,
     include_original = include_original,
     strict_checks = strict_checks,
     return_mids = return_mids
@@ -545,13 +543,14 @@ impute_data <- function(data, impute_args = set_impute_args()){
   pred_row                          <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
   pred[target_col, names(pred_row)] <- pred_row
   
+  # No seed is passed: mice draws from the current global RNG, which the orchestration layer
+  # sets to the replicate's "analysis" L'Ecuyer-CMRG substream (see run_analysis_over_groups()).
   imp <- mice::mice(
     sub_df,
     method          = meth,
     predictorMatrix = pred,
     m               = impute_args$m,
     maxit           = impute_args$maxit,
-    seed            = impute_args$seed,
     print           = FALSE
   )
   

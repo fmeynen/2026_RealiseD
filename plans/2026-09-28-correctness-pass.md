@@ -43,7 +43,7 @@ Tests live in `tests/testthat/` and run with
   *Depends on:* 1. *Files:* `data_generation_layer.R`, `run_all.R` (only if the call changes),
   `tests/testthat/test-seeding.R`.
 
-- [ ] **3. Per-replicate analysis stream for MI.**
+- [x] **3. Per-replicate analysis stream for MI.**
   - Remove the fixed `seed = 123` from `set_impute_args()` / `impute_data()`, and stop passing
     `seed` to `mice()`.
   - Before each replicate is analysed, set the RNG to an analysis substream derived from that

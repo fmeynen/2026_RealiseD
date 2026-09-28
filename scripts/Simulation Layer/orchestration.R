@@ -360,6 +360,47 @@ analyze_LSPIM <- function(data, alpha = 0.05) {
 
 # Analyze Generated dataset ---------------------------------------------------------------------------------------
 
+#' Map each scenario_id x sim_id group to its replicate "analysis" RNG state.
+#'
+#' For every scenario_id present in split_data whose row in scenarios has a non-missing
+#' seed_base, replicate_rng_states() is called once (purpose "analysis") for that scenario's
+#' sim_ids. Groups without an available seed get NULL.
+#'
+#' @param split_data List of per-group data frames (one scenario_id x sim_id each).
+#' @param scenarios  Scenario metadata data frame with scenario_id and seed_base, or NULL.
+#'
+#' @return List aligned with split_data: an L'Ecuyer-CMRG .Random.seed or NULL per group.
+
+build_group_analysis_rng_states <- function(split_data, scenarios) {
+  group_states <- vector("list", length(split_data))
+  if (
+    is.null(scenarios) ||
+      !all(c("scenario_id", "seed_base") %in% names(scenarios)) ||
+      length(split_data) == 0L
+  ) {
+    return(group_states)
+  }
+
+  group_scenario_ids <- vapply(split_data, function(group) as.numeric(group$scenario_id[[1L]]), numeric(1L))
+  group_sim_ids <- vapply(split_data, function(group) as.numeric(group$sim_id[[1L]]), numeric(1L))
+
+  for (scenario_id in unique(group_scenario_ids)) {
+    seed_base <- scenarios$seed_base[scenarios$scenario_id == scenario_id]
+    if (length(seed_base) == 0L || is.na(seed_base[[1L]])) {
+      next
+    }
+    in_scenario <- which(group_scenario_ids == scenario_id)
+    states <- replicate_rng_states(
+      seed_base = seed_base[[1L]],
+      scenario_id = scenario_id,
+      sim_ids = unique(group_sim_ids[in_scenario]),
+      purpose = "analysis"
+    )
+    group_states[in_scenario] <- states[as.character(as.integer(group_sim_ids[in_scenario]))]
+  }
+  group_states
+}
+
 run_analysis_over_groups <- function(
   data,
   scenarios = NULL,
@@ -385,25 +426,41 @@ run_analysis_over_groups <- function(
     data,
     interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE)
   )
+  group_states <- build_group_analysis_rng_states(split_data, scenarios)
+
+  # Each group runs under its replicate's "analysis" substream when one is available, so any
+  # stochastic step (e.g. MI) is independent across replicates, reproducible within a
+  # replicate, and leaves the caller's RNG untouched. Without a seed, the current RNG is used.
+  run_group <- function(i, ...) {
+    state <- group_states[[i]]
+    if (is.null(state)) {
+      analyzer_fn(split_data[[i]], ...)
+    } else {
+      with_rng_state(state, analyzer_fn(split_data[[i]], ...))
+    }
+  }
+  group_idx <- seq_along(split_data)
+
   if (isTRUE(parallel)) {
     if (.Platform$OS.type == "windows") {
       warning(
         "parallel=TRUE requested, but mclapply is not supported on Windows; falling back to lapply."
       )
-      results <- lapply(split_data, analyzer_fn, ...)
+      results <- lapply(group_idx, run_group, ...)
     } else {
       mc_cores <- min(as.integer(n_cores), length(split_data))
       mc_cores <- max(1L, mc_cores)
       results <- parallel::mclapply(
-        split_data,
-        analyzer_fn,
+        group_idx,
+        run_group,
         ...,
         mc.cores = mc_cores
       )
     }
   } else {
-    results <- lapply(split_data, analyzer_fn, ...)
+    results <- lapply(group_idx, run_group, ...)
   }
+  names(results) <- names(split_data)
   combined_results <- do.call(rbind, results)
   combined_results <- combined_results[
     order(combined_results$scenario_id, combined_results$sim_id),
@@ -453,7 +510,8 @@ analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
 #' one standardized result row per scenario_id x sim_id.
 #'
 #' @param data        Long-format data frame with all scenarios and simulations.
-#' @param scenarios   Optional scenario metadata data frame (currently unused).
+#' @param scenarios   Optional scenario metadata data frame. When it carries seed_base, each
+#'   replicate is analyzed under its "analysis" RNG substream (see run_analysis_over_groups()).
 #' @param impute_args Named list of additional arguments forwarded to
 #'   \code{impute_mi_by_sim_scenario()}.
 #' @param fit_args    Named list of additional arguments forwarded to
@@ -483,7 +541,8 @@ analyze_generated_data_mi_closed_form <- function(
 #' one standardized result row per scenario_id x sim_id.
 #'
 #' @param data        Long-format data frame with all scenarios and simulations.
-#' @param scenarios   Optional scenario metadata data frame (currently unused).
+#' @param scenarios   Optional scenario metadata data frame. When it carries seed_base, each
+#'   replicate is analyzed under its "analysis" RNG substream (see run_analysis_over_groups()).
 #' @param fit_args    Named list of additional arguments forwarded to
 #'   \code{fit_closed_form()}.
 #'
@@ -572,7 +631,8 @@ build_analysis_run_hash <- function(
     aggregation_include_engine = isTRUE(aggregation_include_engine),
     results_schema_version = results_schema_version,
     convergence_status_version = convergence_status_version,
-    aggregation_schema_version = aggregation_schema_version
+    aggregation_schema_version = aggregation_schema_version,
+    analysis_rng_scheme = "lecuyer_analysis_substream_v1"
   )
   compute_results_hash(identity)
 }
