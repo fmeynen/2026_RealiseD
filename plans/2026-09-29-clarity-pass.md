@@ -18,7 +18,7 @@ Ground rules:
 
 ## Items
 
-- [ ] **0. Golden-output test.** On the unmodified code, run a tiny grid through the whole pipeline
+- [x] **0. Golden-output test.** On the unmodified code, run a tiny grid through the whole pipeline
   into a temp dir and save the results as `tests/testthat/fixtures/golden_pipeline.rds`.
   - Grid: 2 scenarios, `n_values = c(10, 20)`, `n_measures = 6`, one dropout mechanism.
   - B = 2, all 4 methods, `lspim_max_n = 50`.

@@ -1,0 +1,173 @@
+# helper-golden.R
+# Support for the golden-output regression test (test-golden-pipeline.R).
+#
+# run_golden_pipeline(root_dir) drives the full pipeline (data generation +
+# run_requested_analyses()) for a tiny, fixed scenario grid, writing only
+# under root_dir, and returns a normalised snapshot of the combined results
+# and aggregation summary. It is used both to regenerate the golden fixture
+# (fixtures/make_golden_pipeline.R) and, unmodified, by the regression test
+# itself, so the only thing that can differ between a fixture run and a test
+# run is the pipeline code in scripts/Simulation Layer/.
+#
+# It intentionally calls only pipeline functions sourced by helper-source.R
+# (build_scenario_grid(), the generation-manifest functions,
+# run_requested_analyses()) and never hard-codes a script path, so it stays
+# valid across file renames/splits in scripts/Simulation Layer/.
+
+normalise_golden <- function(x) {
+  if (is.null(x) || !is.data.frame(x) || nrow(x) == 0L) {
+    return(x)
+  }
+
+  volatile_exact <- c(
+    "elapsed_seconds",
+    "time_mean_seconds",
+    "time_median_seconds",
+    "n_time"
+  )
+  volatile_pattern <- grepl(
+    "path|created|timestamp",
+    names(x),
+    ignore.case = TRUE
+  )
+  drop_cols <- names(x)[names(x) %in% volatile_exact | volatile_pattern]
+  x <- x[, setdiff(names(x), drop_cols), drop = FALSE]
+
+  sort_cols <- intersect(
+    c("scenario_id", "sim_id", "method", "engine"),
+    names(x)
+  )
+  if (length(sort_cols) > 0L) {
+    # unname(): a sort column literally named "method" would otherwise be
+    # matched by do.call() against order()'s own `method` formal argument.
+    ord <- do.call(order, unname(as.list(x[, sort_cols, drop = FALSE])))
+    x <- x[ord, , drop = FALSE]
+  }
+  rownames(x) <- NULL
+
+  x[, sort(names(x)), drop = FALSE]
+}
+
+
+run_golden_pipeline <- function(root_dir) {
+  scenarios <- build_scenario_grid(
+    n_values = c(10, 20),
+    n_measures = 6,
+    beta0_values = 2.4562,
+    beta1_values = 0,
+    beta2_values = 0.2792,
+    beta3_values = 0.0350,
+    d11_values = 7.3174,
+    d22_values = 0.2239,
+    d12_values = -0.4985,
+    sigma2_values = 3.1508,
+    dropout_mechanism = "half-missing",
+    seed_base = 260925
+  )
+
+  n_simulations <- 2L
+  generated_output_dir <- file.path(root_dir, "generated")
+
+  data_hash <- compute_data_generation_hash_from_spec(
+    scenarios = scenarios,
+    n_simulations = n_simulations
+  )
+
+  generation_manifest <- initialize_generation_manifest(
+    run_hash = data_hash,
+    scenarios = scenarios,
+    n_simulations = n_simulations,
+    dir = generated_output_dir
+  )
+
+  for (i in seq_len(nrow(scenarios))) {
+    scenario_row <- scenarios[i, , drop = FALSE]
+    scenario_id <- scenario_row$scenario_id[[1L]]
+    scenario_start_time <- Sys.time()
+
+    generation_manifest <- tryCatch(
+      {
+        scenario_data <- simulate_scenario(scenario_row, B = n_simulations)
+        save_info <- save_generated_scenario(
+          data = scenario_data,
+          scenario_id = scenario_id,
+          run_hash = data_hash,
+          n_simulations = n_simulations,
+          dir = generated_output_dir,
+          overwrite = FALSE
+        )
+        update_generation_manifest_entry(
+          manifest = generation_manifest,
+          scenario_id = scenario_id,
+          status = if (identical(save_info$status, "skipped_existing")) {
+            "skipped_existing"
+          } else {
+            "success"
+          },
+          checksum = save_info$checksum,
+          n_rows = save_info$n_rows,
+          sim_count = save_info$sim_count,
+          error = NA_character_,
+          started_at = scenario_start_time,
+          finished_at = Sys.time()
+        )
+      },
+      error = function(e) {
+        update_generation_manifest_entry(
+          manifest = generation_manifest,
+          scenario_id = scenario_id,
+          status = "failure",
+          checksum = NA_character_,
+          n_rows = NA_integer_,
+          sim_count = NA_integer_,
+          error = conditionMessage(e),
+          started_at = scenario_start_time,
+          finished_at = Sys.time()
+        )
+      }
+    )
+  }
+
+  generation_manifest <- finalize_generation_manifest(generation_manifest)
+  if (!identical(generation_manifest$status, "completed")) {
+    stop(
+      "Golden pipeline generation did not complete successfully. Status: ",
+      generation_manifest$status
+    )
+  }
+
+  analysis_outputs <- suppressWarnings(suppressMessages(
+    run_requested_analyses(
+      scenarios = scenarios,
+      generation_manifest = generation_manifest,
+      analyses = c(
+        "classical_ml",
+        "multiple_imputation",
+        "reweighting",
+        "LSPIM"
+      ),
+      n_simulations = n_simulations,
+      analysis_configs = list(
+        multiple_imputation = list(
+          impute_args = set_impute_args(method_y = "2l.pmm"),
+          fit_args = set_fit_args()
+        ),
+        reweighting = list(
+          fit_args = set_fit_args(reweighting = TRUE)
+        ),
+        LSPIM = list(
+          alpha = 0.05,
+          lspim_max_n = 50
+        )
+      ),
+      output_dir = file.path(root_dir, "results")
+    )
+  ))
+
+  list(
+    results = normalise_golden(analysis_outputs$combined_artifact$results),
+    aggregation = normalise_golden(
+      analysis_outputs$aggregation_artifact$aggregation$summary
+    )
+  )
+}
