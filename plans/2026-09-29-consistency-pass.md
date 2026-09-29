@@ -85,7 +85,7 @@ Ground rules:
     source order).
   - Values unchanged, so hashes are unchanged and the golden test passes.
 
-- [ ] **6. Generic `run_method()`.**
+- [x] **6. Generic `run_method()`.**
   - Add `run_method(data, method, engine, prepare_type, fit, extract)`: collect metadata,
     validate, prepare, fit, extract, and on error build the failure row with the given
     method/engine.

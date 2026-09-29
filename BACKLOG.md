@@ -116,9 +116,15 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
   `scripts/simulation/config.R` (`default_paths`, `*_schema_version`); `ensure_results_artifact_helpers()`
   was removed as it only guarded against a source-order issue that no longer applies.
 
-- [ ] **[consistency] One failure-row builder.**
-  The four `analyze_*()` wrappers duplicate failure-row construction; a generic
-  `run_method(data, prepare, fit, extract, method, engine)` removes the duplication.
+- [x] **[consistency] One failure-row builder.**
+  The four `analyze_*()` wrappers now call a generic `run_method(data, method, engine,
+  prepare_type, fit, extract)` (`scripts/simulation/analysis_methods.R`) that validates,
+  prepares, fits, and extracts inside a single `tryCatch()` (consistency pass, branch
+  `refactor/consistency`).
+
+- [ ] **[consistency] Consider removing the thin `analyze_*()` wrappers.**
+  They add little beyond `run_method()`; callers (registry runners, tests) could call
+  `run_method()`/the registry directly.
 
 - [ ] **[consistency] Declare dependencies.**
   lme4, mice, miceadds, ks, expm, reformulas, geessbin, multcomp, dplyr (only `bind_rows`),

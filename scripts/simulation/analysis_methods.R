@@ -5,6 +5,7 @@
 # resolves a method name to its runner and config.
 #
 # Function hierarchy:
+#   run_method()
 #   analyze_classical_ml() / analyze_mi_closed_form() /
 #     analyze_reweighting() / analyze_lspim()
 #   analyze_generated_data_classical_ml() / analyze_generated_data_mi_closed_form() /
@@ -12,6 +13,53 @@
 #   build_analysis_registry() / resolve_analysis_config() / run_single_analysis_method()
 
 # Analyze Single Dataset ---------------------------------------------------------------------------------------
+
+#' Run one analysis method end to end for a single simulation replicate.
+#'
+#' Collects metadata, then in a single \code{tryCatch()} validates the data,
+#' prepares it, fits the model, and extracts the standardized result row.
+#' Any error raised along the way (validation, preparation, fitting, or
+#' extraction) is caught once and turned into a standardized failure row, so
+#' each per-dataset analyzer only needs to supply its \code{fit} and
+#' \code{extract} closures.
+#'
+#' @param data         Long-format data frame for one simulation replicate.
+#' @param method       Analysis registry key recorded in the result's \code{method} column.
+#' @param engine       Engine label recorded in the result's \code{engine} column.
+#' @param prepare_type \code{type} argument forwarded to \code{prepare_analysis_data()};
+#'   defaults to \code{method}.
+#' @param fit          Function of one argument, \code{analysis_data}, returning a fit_result.
+#' @param extract      Function of \code{(fit_result, original_data, analysis_data)} returning
+#'   the one-row standardized result.
+#'
+#' @return One-row data frame with standardized analysis results.
+
+run_method <- function(data, method, engine, prepare_type = method, fit, extract) {
+  metadata <- collect_analysis_metadata(data)
+
+  tryCatch(
+    {
+      validate_analysis_data(data)
+      analysis_data <- prepare_analysis_data(data, type = prepare_type)
+      fit_result <- fit(analysis_data)
+      extract(fit_result, data, analysis_data)
+    },
+    error = function(error) {
+      build_result_row(
+        metadata = metadata,
+        method = method,
+        engine = engine,
+        status = "failure",
+        converged = FALSE,
+        singular = FALSE,
+        elapsed_seconds = NA_real_,
+        warning_message = NA_character_,
+        error_message = conditionMessage(error)
+      )
+    }
+  )
+}
+
 
 #' Run the classical ML analysis layer for one simulation replicate.
 #'
@@ -23,32 +71,18 @@
 #' @return One-row data frame with standardized classical ML analysis results.
 
 analyze_classical_ml <- function(data) {
-  metadata <- collect_analysis_metadata(data)
-
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "classical_ml")
-      fit_result <- fit_classical_ml_model(analysis_data, build_formula())
+  run_method(
+    data,
+    method = "classical_ml",
+    engine = "lme4",
+    fit = function(analysis_data) fit_classical_ml_model(analysis_data, build_formula()),
+    extract = function(fit_result, original_data, analysis_data) {
       extract_classical_ml_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "classical_ml",
         engine = "lme4"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "classical_ml",
-        engine = "lme4",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
       )
     }
   )
@@ -94,93 +128,54 @@ analyze_mi_closed_form <- function(
     )
   }
 
-  metadata <- collect_analysis_metadata(data)
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "multiple_imputation")
-      fit_result <- fit_mi_closed_form(analysis_data, impute_args, fit_args)
+  run_method(
+    data,
+    method = "multiple_imputation",
+    engine = "mice_cbc",
+    fit = function(analysis_data) fit_mi_closed_form(analysis_data, impute_args, fit_args),
+    extract = function(fit_result, original_data, analysis_data) {
       extract_closed_form_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "multiple_imputation",
         engine = "mice_cbc"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "multiple_imputation",
-        engine = "mice_cbc",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
       )
     }
   )
 }
 
 analyze_reweighting <- function(data, fit_args = set_fit_args()) {
-  metadata <- collect_analysis_metadata(data)
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "reweighting")
-      fit_result <- fit_closed_form_reweighting(analysis_data, fit_args)
+  run_method(
+    data,
+    method = "reweighting",
+    engine = "cbc",
+    fit = function(analysis_data) fit_closed_form_reweighting(analysis_data, fit_args),
+    extract = function(fit_result, original_data, analysis_data) {
       extract_closed_form_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "reweighting",
         engine = "cbc"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "reweighting",
-        engine = "cbc",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
       )
     }
   )
 }
 
 analyze_lspim <- function(data, alpha = 0.05) {
-  metadata <- collect_analysis_metadata(data)
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "LSPIM")
-      fit_result <- fit_lspim(analysis_data, alpha = alpha)
+  run_method(
+    data,
+    method = "LSPIM",
+    engine = "LSPIM",
+    fit = function(analysis_data) fit_lspim(analysis_data, alpha = alpha),
+    extract = function(fit_result, original_data, analysis_data) {
       extract_lspim_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "LSPIM",
         engine = "LSPIM"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "LSPIM",
-        engine = "LSPIM",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
       )
     }
   )
