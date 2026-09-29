@@ -88,8 +88,9 @@ canonicalize_results_scenarios_for_hash <- function(scenarios) { # nolint: objec
 
 #' Compute a deterministic 16-character hex hash of the canonical metadata.
 #'
-#' Serializes the canonical_meta list to a temporary file and returns the first
-#' 16 characters of the file's MD5 checksum via tools::md5sum().
+#' Hashes the in-memory object with digest::digest() (xxhash64, serialization
+#' version 3) and therefore does not depend on the R version recorded in the
+#' header of saveRDS() files.
 #'
 #' @param canonical_meta Named list of identity inputs to hash (e.g. the list
 #'   built in build_analysis_run_hash() or build_data_generation_canonical_meta()).
@@ -97,11 +98,7 @@ canonicalize_results_scenarios_for_hash <- function(scenarios) { # nolint: objec
 #' @return 16-character lowercase hex string.
 
 compute_results_hash <- function(canonical_meta) {
-  tmp <- tempfile(fileext = ".rds")
-  on.exit(unlink(tmp), add = TRUE)
-  saveRDS(canonical_meta, file = tmp)
-  hash_full <- unname(tools::md5sum(tmp))
-  substr(hash_full, 1L, 16L)
+  digest::digest(canonical_meta, algo = "xxhash64", serializeVersion = 3L)
 }
 
 
