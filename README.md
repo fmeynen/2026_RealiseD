@@ -42,7 +42,8 @@ are the only method names used anywhere in the code):
 
 The CbC estimator (`cbc_estimator()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)) is
 a two-stage closed-form estimator: per-subject OLS in stage 1, weighted combination in stage 2.
-If `D_tilde` has negative eigenvalues they are replaced by `epsilon_D` (with a warning).
+If `D_tilde` has negative eigenvalues they are replaced by `epsilon_D` (with a warning); such a
+repaired `D_tilde` always counts as singular (see [What *converged* means](#what-converged-means)).
 Method settings are built with `set_impute_args()` and `set_fit_args()`. LSPIM is fitted by
 `fit_lspim()` in [lspim.R](scripts/simulation/lspim.R).
 
@@ -93,12 +94,17 @@ The criterion differs per method:
 | Method | `converged = FALSE` when | Only a warning (still converged) |
 |---|---|---|
 | `classical_ml` | the optimizer return code is non-zero, or lme4's convergence checks produced any message (e.g. "Model failed to converge with max\|grad\| …", "Model is nearly unidentifiable …"); see `lme4_converged()` | lme4's "boundary (singular) fit" notice is **deliberately ignored** for convergence: singular fits count as converged and appear as `converged_singular` |
-| `multiple_imputation` | never on a successful fit (the CbC fit is closed form; `mice` runs a fixed number of iterations with no convergence test) | `D_tilde` positive-definiteness repair |
-| `reweighting` | the reweighting loop reached `max_iterations` while the largest change in beta was still above `epsilon_B` (flag `converged` returned by `cbc_estimator()`) | `D_tilde` positive-definiteness repair |
+| `multiple_imputation` | never on a successful fit (the CbC fit is closed form; `mice` runs a fixed number of iterations with no convergence test) | `D_tilde` positive-definiteness repair (also makes the fit singular, see below) |
+| `reweighting` | the reweighting loop reached `max_iterations` while the largest change in beta was still above `epsilon_B` (flag `converged` returned by `cbc_estimator()`) | `D_tilde` positive-definiteness repair (also makes the fit singular, see below) |
 | `LSPIM` | any of its three GEE fits (`geessbin`) reports a `convergence` status other than "converged": in geessbin 1.0.2 that is "maximum number of iterations consumed" (iteration limit reached without meeting the tolerance), "convergence failure", "fitted probabilities numerically 0 or 1 occurred." or "infinite scale parameter" (`lspim_gees_converged()`) | replacing the combined covariance `V` by the nearest positive semi-definite matrix (`nearest_psd()`) |
 
-**Positive-definiteness repairs (CbC `D_tilde`, LSPIM `V`) are warnings for every method, never
-non-convergence.**
+**Positive-definiteness repairs (CbC `D_tilde`, LSPIM `V`) never make a fit not converged.** A
+repaired CbC `D_tilde` (`multiple_imputation`, `reweighting`) additionally counts as a singular
+fit, because the repair sets its negative eigenvalues to `epsilon_D`: `is_singular()` treats an
+eigenvalue up to `tol * (1 + 1e-8)` as singular, so the outcome no longer depends on rounding
+noise. Such fits are `converged = TRUE` with `singular = TRUE` and show as `converged_singular`
+(with the warning still recorded). A repaired LSPIM `V` remains only a warning
+(`converged_warning`).
 
 Each result row then gets one `convergence_status` (`add_convergence_status()` in
 [artifact_store.R](scripts/simulation/artifact_store.R)); the first matching rule wins:
@@ -108,7 +114,7 @@ Each result row then gets one `convergence_status` (`add_convergence_status()` i
 | `error` | `status == "failure"` or `error_message` set |
 | `not_converged` | `converged` is `FALSE` |
 | `converged_singular` | random-effect covariance singular (`classical_ml`, `multiple_imputation`, `reweighting`; never `LSPIM`) |
-| `converged_warning` | the fit raised any warning (e.g. a `D_tilde` or `V` repair) |
+| `converged_warning` | the fit raised any warning and is not singular (e.g. an LSPIM `V` repair) |
 | `converged_ok` | none of the above |
 
 So precedence is `error` > `not_converged` > `converged_singular` > `converged_warning` >
@@ -125,7 +131,7 @@ clean fits), not the share of rows with `converged = TRUE`.
 ```
 2026_RealiseD.Rproj          RStudio project; its folder is the repo root
 BACKLOG.md                   Known issues and planned work
-plans/                       Agreed plans for the correctness, clarity and consistency passes
+plans/                       Agreed plans for the correctness, clarity, consistency and efficiency passes
 .lintr                       lintr configuration (see Code style)
 .Rprofile, renv/, renv.lock  renv project library and lockfile (see Dependencies)
 dependencies.R               Declares packages renv's scan cannot see (testthat)
@@ -168,10 +174,26 @@ supplementary_material/      CbC derivation (CBCEstimator.tex/.pdf) and papers
 4. Run the whole script (`source("scripts/run_all.R")`). Progress is printed per scenario and
    method; the return value `analysis_outputs` holds the paths and the aggregation summary.
 
-**Run time.** With B = 5000 over the full grid, a run takes a very long time: replicates are
-processed serially on Windows (`run_analysis_over_groups()` uses `parallel::mclapply()`, which
-falls back to `lapply()` there), and the CbC D-matrix step scales as O(N²). See the
-*Efficiency* section of [BACKLOG.md](BACKLOG.md).
+**Parallel running.** `run_all.R` sets `use_parallel <- TRUE` and
+`n_cores <- default_n_cores()` (physical cores minus one, at least one) and passes both as
+`parallel` and `n_cores` to `run_generation()` and `run_requested_analyses()`. Both arguments
+default to serial (`parallel = FALSE`); set `use_parallel <- FALSE` to run serially.
+
+- `run_generation()` parallelises the replicates within each scenario;
+  `run_requested_analyses()` parallelises the (`scenario_id`, `sim_id`) groups within each
+  scenario × method.
+- `parallel_map()` in [pipeline.R](scripts/simulation/pipeline.R) starts a PSOCK cluster
+  (`parallel::parLapplyLB()`) of at most `n_cores` workers; PSOCK works on every OS, including
+  Windows. Workers start with `--no-init-file`, so `.Rprofile` and renv are not activated; each
+  gets the master's `.libPaths()`, sources `scripts/simulation/*.R` (`default_paths$scripts`) and
+  attaches `miceadds`.
+- Results do not depend on `parallel` or `n_cores`: every task runs under its replicate's
+  L'Ecuyer substream (see *Reproducibility*), which `test-parallel.R` checks.
+- A new cluster is started per scenario (generation) and per scenario × method (analysis), at
+  about 2.5 s each, so small runs (e.g. a smoke run) can be slower in parallel than serially.
+
+**Run time.** With B = 5000 over the full grid a run is still long. See the *Efficiency*
+section of [BACKLOG.md](BACKLOG.md) for the remaining ideas.
 
 **Smoke run.** Set `n_simulations <- 3L` (and optionally fewer `n_values`) and run the script.
 Different settings produce a different hash, so the smoke run does not overwrite a full run.
@@ -208,8 +230,14 @@ schema versions. The analysis hash covers the generation hash, the requested met
 *resolved* method settings (registry defaults merged with `analysis_configs`), and the results,
 convergence-status, aggregation and analysis-RNG schema versions. If a hash is unchanged and
 `overwrite = FALSE`, existing valid files are reused; bumping a schema version therefore forces
-regeneration. Hashes are computed from `saveRDS()` output, so upgrading R also changes them
-(see backlog).
+regeneration. Hashes are computed with `digest::digest(algo = "xxhash64", serializeVersion = 3)`
+rather than from `saveRDS()` bytes, so they do not depend on the R version and upgrading R does
+not invalidate caches. **The efficiency pass changed every hash once** (new hash function,
+`results_schema_version` v3), so results and generated-data folders created before it are
+recomputed once. When `run_generation()` finds an existing scenario file whose md5 checksum
+matches the one in the previous generation manifest, it skips the file without reading it;
+otherwise the file is read and validated as before. Analysis still validates a generated file
+fully when it loads it.
 
 **Statuses.** Each scenario × method in `analysis_manifest.rds` has a `status`:
 
@@ -228,6 +256,10 @@ Individual fits that fail do not fail the scenario; they show up per replicate a
 (`scenario_rng_stream()`, `replicate_rng_states()`). Scenario *s* owns stream 2(*s* − 1) + 1 for
 generation and 2(*s* − 1) + 2 for analysis (used by the imputation step); replicate *b* uses
 substream *b*. Replicate draws therefore do not depend on B, and scenarios never share draws.
+Multiple imputation no longer runs a `mice(maxit = 0)` dry run (which consumed random numbers),
+so its draws, and hence its results, differ from runs made before the efficiency pass
+(statistically equivalent); `analysis_rng_scheme_version` is now
+`lecuyer_analysis_substream_v2`.
 Streams follow `scenario_id`, which is the row position in the grid: adding a value to any grid
 factor renumbers scenarios and changes their draws (backlog item).
 
@@ -317,9 +349,8 @@ testthat 3.3.2, lintr 3.4.0, renv 1.2.4).
 | mice | imputation |
 | miceadds | `2l.pmm` imputation method (attached with `library()`) |
 | reformulas | formula parsing |
-| ks | matrix vec/vech |
-| expm | matrix square root |
 | geessbin | LSPIM GEE |
+| digest | cache hashes (`xxhash64`) |
 | multcomp | Holm test |
 | dplyr | row binding |
 | testthat, withr, lintr | tests |
@@ -335,6 +366,7 @@ calls are fine; for anything longer, put the code in a file and run `Rscript fil
 ## Known issues and roadmap
 
 Open items are tracked in [BACKLOG.md](BACKLOG.md); agreed work plans are in [plans/](plans/).
-The largest open items are run time (no parallelism on Windows, O(N²) CbC step) and reweighting
-fit quality: in a B = 3 smoke run only 13 of 48 reweighting fits were `converged_ok` (measured
-before the consistency pass, when non-convergence still showed as `converged_warning`).
+The largest open item is reweighting fit quality: in a B = 3 smoke run
+only 13 of 48 reweighting fits were `converged_ok` (measured before the consistency and
+efficiency passes, when non-convergence and `D_tilde` repairs still showed as
+`converged_warning`).

@@ -73,5 +73,5 @@ test_that("an unknown requested analysis errors loudly", {
 })
 
 test_that("analysis_rng_scheme_version is a named constant with the expected value", {
-  expect_identical(analysis_rng_scheme_version, "lecuyer_analysis_substream_v1")
+  expect_identical(analysis_rng_scheme_version, "lecuyer_analysis_substream_v2")
 })

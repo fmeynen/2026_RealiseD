@@ -251,14 +251,26 @@ generate_random_effects <- function(n, d_mat) {
 #'   time_label, b0_i, b1_i.
 
 expand_subject_time_panel <- function(subjects, time_grid, scenario_id, sim_id) {
-  panel <- merge(subjects, time_grid, by = NULL) # full Cartesian cross-join
-  panel$scenario_id <- scenario_id
-  panel$sim_id <- sim_id
-  col_order <- c(
-    "sim_id", "scenario_id", "subject_id", "treatment",
-    "time_index", "time_value", "time_label", "b0_i", "b1_i"
+  subjects <- subjects[order(subjects$subject_id), ]
+  time_grid <- time_grid[order(time_grid$time_index), ]
+  n_subjects <- nrow(subjects)
+  n_times <- nrow(time_grid)
+  n_rows <- n_subjects * n_times
+
+  # Full Cartesian cross-join, subject-major: each subject repeats the whole time grid.
+  subject_row <- rep(seq_len(n_subjects), each = n_times)
+  time_row <- rep(seq_len(n_times), times = n_subjects)
+  data.frame(
+    sim_id = rep(sim_id, n_rows),
+    scenario_id = rep(scenario_id, n_rows),
+    subject_id = subjects$subject_id[subject_row],
+    treatment = subjects$treatment[subject_row],
+    time_index = time_grid$time_index[time_row],
+    time_value = time_grid$time_value[time_row],
+    time_label = time_grid$time_label[time_row],
+    b0_i = subjects$b0_i[subject_row],
+    b1_i = subjects$b1_i[subject_row]
   )
-  panel[order(panel$subject_id, panel$time_index), col_order]
 }
 
 
@@ -409,9 +421,11 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
 #' @return Canonical observed dataset with columns:
 #'   sim_id, scenario_id, subject_id, treatment, time_index, time_value,
 #'   time_label, y, observed, y_complete, eta_ij, epsilon_ij, dropout_time.
+#' @note Rows keep the order of `panel`, which must already be sorted by subject_id and
+#'   time_index (as returned by expand_subject_time_panel()).
 
 apply_missingness <- function(panel, dropout_info) {
-  panel <- merge(panel, dropout_info, by = "subject_id", all.x = TRUE)
+  panel$dropout_time <- dropout_info$dropout_time[match(panel$subject_id, dropout_info$subject_id)]
   panel$observed <- is.na(panel$dropout_time) | panel$time_index <= panel$dropout_time
   panel$y <- ifelse(panel$observed, panel$y_complete, NA_real_)
   col_order <- c(
@@ -420,7 +434,7 @@ apply_missingness <- function(panel, dropout_info) {
     "y", "observed",
     "y_complete", "eta_ij", "epsilon_ij", "dropout_time"
   )
-  panel[order(panel$subject_id, panel$time_index), col_order]
+  panel[, col_order]
 }
 
 
@@ -611,11 +625,11 @@ simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
   )
 
   time_grid <- make_time_grid(scenario_row$n_measures, ...)
-  subjects <- merge(
-    allocate_treatment(n),
-    generate_random_effects(n, d_mat),
-    by = "subject_id"
-  )
+  subjects <- allocate_treatment(n)
+  random_effects <- generate_random_effects(n, d_mat)
+  re_row <- match(subjects$subject_id, random_effects$subject_id)
+  subjects$b0_i <- random_effects$b0_i[re_row]
+  subjects$b1_i <- random_effects$b1_i[re_row]
 
   panel <- expand_subject_time_panel(subjects, time_grid, scenario_row$scenario_id, sim_id)
   panel <- compute_linear_predictor(
@@ -638,7 +652,39 @@ simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
 }
 
 
+## Bind replicates -------------------------------------------------------------------------------------------------
+
+#' Stack replicate data frames with identical columns in a single pass.
+#'
+#' Equivalent to do.call(rbind, replicates) for data frames with automatic row names, but
+#' concatenates each column once instead of growing the result replicate by replicate.
+#'
+#' @param replicates Non-empty list of data frames with identical columns.
+#'
+#' @return One data frame with automatic row names.
+
+bind_replicates <- function(replicates) {
+  columns <- lapply(names(replicates[[1L]]), function(column) {
+    unlist(lapply(replicates, `[[`, column), use.names = FALSE)
+  })
+  names(columns) <- names(replicates[[1L]])
+  structure(columns, class = "data.frame", row.names = c(NA_integer_, -length(columns[[1L]])))
+}
+
+
 ## Simulate scenario -----------------------------------------------------------------------------------------------
+
+#' Generate one replicate from a task list; top-level so it can be sent to PSOCK workers.
+#'
+#' @param task         List with `sim_id` and `state` (an L'Ecuyer-CMRG .Random.seed or NULL).
+#' @param scenario_row A single-row data frame from the scenario grid.
+#'
+#' @return Long-format data frame for one replicate (see simulate_one_dataset()).
+
+simulate_replicate_task <- function(task, scenario_row) {
+  simulate_one_dataset(scenario_row, sim_id = task$sim_id, rng_state = task$state)
+}
+
 
 #' Generate all B simulated datasets for a single scenario.
 #'
@@ -654,9 +700,13 @@ simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
 #'   with other scenarios. The caller's RNG state is left unchanged. Set to NULL and omit from
 #'   scenario_row for unseeded (non-reproducible) runs that use the current global RNG.
 #'
+#' @param parallel     Logical. Generate the replicates on a PSOCK cluster (see parallel_map());
+#'   the output is identical to the serial run.
+#' @param n_cores      Integer. Maximum number of workers when parallel = TRUE.
+#'
 #' @return A stacked long-format data frame with B replicates identified by sim_id.
 
-simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
+simulate_scenario <- function(scenario_row, B, seed_base = NULL, parallel = FALSE, n_cores = default_n_cores()) {
   effective_seed <- if (!is.null(seed_base)) {
     seed_base
   } else if (!is.null(scenario_row$seed_base) && !is.na(scenario_row$seed_base)) {
@@ -670,10 +720,19 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
     rep(list(NULL), B)
   }
 
-  replicates <- lapply(seq_len(B), function(b) {
-    simulate_one_dataset(scenario_row, sim_id = b, rng_state = rng_states[[b]])
-  })
-  do.call(rbind, replicates)
+  tasks <- lapply(seq_len(B), function(b) list(sim_id = b, state = rng_states[[b]]))
+  replicates <- parallel_map(
+    tasks,
+    simulate_replicate_task,
+    scenario_row = scenario_row,
+    parallel = parallel,
+    n_cores = n_cores,
+    chunk_size = max(1L, ceiling(B / (4L * as.integer(n_cores))))
+  )
+  if (length(replicates) == 0L) {
+    return(NULL)
+  }
+  bind_replicates(replicates)
 }
 
 ## Summarize generated data ----------------------------------------------------------------------------------------
@@ -816,6 +875,39 @@ build_generation_manifest_path <- function(run_hash, dir = default_paths$generat
 
 compute_file_md5 <- function(path) {
   unname(tools::md5sum(path))
+}
+
+
+#' Find the previous manifest entry that vouches for an existing scenario file.
+#'
+#' Reads the generation manifest left by an earlier run, if any, and returns the entry of
+#' `scenario_id` when it recorded a successful generation (status "success" or
+#' "skipped_existing") with a checksum, row count and simulation count, and the md5 of the file
+#' at `scenario_path` equals that checksum. Returns NULL otherwise (no or unreadable manifest,
+#' no checksum, or a changed file), in which case the caller must read and validate the file.
+#'
+#' @param previous_manifest Manifest from an earlier run, or NULL.
+#' @param scenario_id       Integer scenario id.
+#' @param scenario_path     Path of the existing scenario file.
+#'
+#' @return One-row data frame (the manifest entry) or NULL.
+
+find_verified_manifest_entry <- function(previous_manifest, scenario_id, scenario_path) {
+  if (is.null(previous_manifest$entries)) {
+    return(NULL)
+  }
+  entries <- previous_manifest$entries
+  idx <- match(as.integer(scenario_id), entries$scenario_id)
+  if (is.na(idx)) {
+    return(NULL)
+  }
+  entry <- entries[idx, , drop = FALSE]
+  vouched <- entry$status %in% c("success", "skipped_existing") &&
+    !is.na(entry$checksum) && !is.na(entry$n_rows) && !is.na(entry$sim_count)
+  if (!vouched || !identical(compute_file_md5(scenario_path), entry$checksum)) {
+    return(NULL)
+  }
+  entry
 }
 
 

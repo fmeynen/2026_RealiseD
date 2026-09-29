@@ -2,8 +2,6 @@
 
 # Note: method_y = "2l.pmm" requires the 'miceadds' package to be attached (library(miceadds)) before calling
 #   impute_data(). method_y = "2l.norm" is available from mice without extra dependencies.
-# Note: cbc_estimator() uses vech() from the 'ks' package.
-#   Install and attach 'ks' before calling fit_closed_form().
 
 # Internal helpers -------------------------------------------------------------------------------------------------
 
@@ -452,12 +450,14 @@ impute_data <- function(data, impute_args = set_impute_args()) {
 
   sub_df <- data[, impute_cols, drop = FALSE]
 
-  ini <- mice::mice(sub_df, maxit = 0, print = FALSE)
-  meth <- ini$method
-  pred <- ini$predictorMatrix
-
-  meth[] <- ""
+  meth <- stats::setNames(rep("", length(impute_cols)), impute_cols)
   meth[[target_col]] <- impute_args$method_y
+
+  pred <- matrix(
+    1, length(impute_cols), length(impute_cols),
+    dimnames = list(impute_cols, impute_cols)
+  )
+  diag(pred) <- 0
 
   pred_row <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
   pred[target_col, names(pred_row)] <- pred_row
@@ -478,6 +478,39 @@ impute_data <- function(data, impute_args = set_impute_args()) {
 }
 
 ## Closed-form estimator (cbc_estimator) -----------------------------------------------------------
+
+# vectorisation helpers (column-major, as in the 'ks' package)
+vec_mat <- function(x) {
+  as.vector(x)
+}
+
+# lower triangle including the diagonal, stacked column by column
+vech_mat <- function(x) {
+  x[lower.tri(x, diag = TRUE)]
+}
+
+invvec_mat <- function(x, nrow, ncol = nrow) {
+  matrix(x, nrow = nrow, ncol = ncol)
+}
+
+invvech_mat <- function(x) {
+  d <- (-1 + sqrt(8 * length(x) + 1)) / 2
+  if (round(d) != d) {
+    stop("Number of elements in x will not form a square matrix")
+  }
+  out <- matrix(0, nrow = d, ncol = d)
+  out[lower.tri(out, diag = TRUE)] <- x
+  out[upper.tri(out)] <- t(out)[upper.tri(out)]
+  out
+}
+
+# square root of a diagonal matrix; stops on a non-diagonal input rather than returning a wrong root
+sqrt_diagonal <- function(W) {
+  if (any(W[row(W) != col(W)] != 0)) {
+    stop("sqrt_diagonal() requires a diagonal matrix")
+  }
+  diag(sqrt(diag(W)), nrow = nrow(W))
+}
 
 # helper formula inv_sum_kwk
 calculate_inv_sum_kwk <- function(K_mi, weights) {
@@ -509,8 +542,7 @@ calculate_stage1_results <- function(Z, Y, n, q) {
 }
 
 # stage 2
-calculate_stage2_beta <- function(K_mi, weights, beta_hats) {
-  inv_sum_KWK <- calculate_inv_sum_kwk(K_mi, weights)
+calculate_stage2_beta <- function(K_mi, weights, beta_hats, inv_sum_KWK) {
   KWB <- mapply(
     function(K, W, B) {
       crossprod(K, W) %*% B
@@ -523,14 +555,43 @@ calculate_stage2_beta <- function(K_mi, weights, beta_hats) {
 }
 
 calculate_stage2_sigma <- function(Sigma_hats, weights) {
-  vech_Sigma_hat <- as.data.frame(do.call(rbind, lapply(Sigma_hats, ks::vech)))
-  ks::invvech(apply(vech_Sigma_hat, 2, weighted.mean, w = weights))
+  vech_Sigma_hat <- as.data.frame(do.call(rbind, lapply(Sigma_hats, vech_mat)))
+  invvech_mat(apply(vech_Sigma_hat, 2, weighted.mean, w = weights))
 }
 
-calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
+# Sum over ordered pairs i != j of
+# each term is the product of the three Kronecker products (W_j x K_i)(K_i x HH_j)(HH_j x t(W_j)),
+# which by the mixed-product rule equals (W_j K_i HH_j) x (K_i HH_j t(W_j)), with x the Kronecker product.
+# K_i enters the term twice, so the K_i cannot be summed first. Instead the clusters are grouped by
+# exactly identical K_i (compared bit for bit via hexadecimal keys, no tolerance), and for each j the
+# term is evaluated once per group with multiplicity count_g - [K_j in g]. Cost: N x (distinct K_i).
+sum_offdiag_kron_terms <- function(K_mi, sqrt_W, HH_i) {
+  keys <- vapply(K_mi, function(K) {
+    paste(c(dim(K), sprintf("%a", as.vector(K))), collapse = ",")
+  }, character(1))
+  group_of <- match(keys, unique(keys))
+  group_K <- K_mi[!duplicated(keys)]
+  group_size <- tabulate(group_of, nbins = length(group_K))
+
+  total <- 0
+  for (j in seq_along(HH_i)) {
+    W <- sqrt_W[[j]]
+    HH <- HH_i[[j]]
+    for (g in seq_along(group_K)) {
+      multiplicity <- group_size[g] - (group_of[j] == g)
+      if (multiplicity > 0) {
+        A <- group_K[[g]] %*% HH
+        total <- total + multiplicity * kronecker(W %*% A, A %*% t(W))
+      }
+    }
+  }
+  total
+}
+
+calculate_stage2_dmatrix <- function(K_mi, weights, inv_ZZ_i, inv_sum_KWK,
                                      beta_hats, beta_tilde, Sigma_tilde) {
   # square root of weights to use for matrix multiplication
-  sqrt_W <- lapply(weights, expm::sqrtm)
+  sqrt_W <- lapply(weights, sqrt_diagonal)
   # vec Sb: formula 5
   b_i_tilde <- mapply(
     function(beta_hats, K_mi) {
@@ -539,7 +600,7 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
     beta_hats, K_mi,
     SIMPLIFY = FALSE
   )
-  vec_sb <- ks::vec(Reduce("+", mapply(
+  vec_sb <- vec_mat(Reduce("+", mapply(
     function(b, W) {
       tcrossprod(W %*% b)
     },
@@ -550,7 +611,6 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
 
   # D: formula 9, c: formula 9b
   # Hii
-  inv_sum_KWK <- calculate_inv_sum_kwk(K_mi, weights)
   HH_i <- mapply(function(K, W) {
     inv_sum_KWK %*% crossprod(K, W)
   }, K_mi, weights, SIMPLIFY = FALSE)
@@ -571,25 +631,15 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
   ))
 
   # denom part 2
-  idx_combinations <- expand.grid(i = seq_along(K_mi), j = seq_along(HH_i))
-  idx_combinations <- idx_combinations[idx_combinations$i != idx_combinations$j, ]
-  denom_p2 <- Reduce(
-    `+`,
-    mapply(function(i, j) {
-      W <- sqrt_W[[j]]
-      K <- K_mi[[i]]
-      HH <- HH_i[[j]]
-      kronecker(W, K) %*% kronecker(K, HH) %*% kronecker(HH, t(W))
-    }, idx_combinations$i, idx_combinations$j, SIMPLIFY = FALSE)
-  )
+  denom_p2 <- sum_offdiag_kron_terms(K_mi, sqrt_W, HH_i)
   denom <- denom_p1 + denom_p2
   # c
-  R_i <- lapply(Z_i, function(Z) {
-    ks::vec(kronecker(Sigma_tilde, solve(crossprod(Z))))
+  R_i <- lapply(inv_ZZ_i, function(inv_ZZ) {
+    vec_mat(kronecker(Sigma_tilde, inv_ZZ))
   })
   vec_c <- Reduce("+", mapply(
     function(W, IH, R) {
-      (kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% ks::vec(R)
+      (kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% vec_mat(R)
     },
     sqrt_W, I_min_Hii, R_i,
     SIMPLIFY = FALSE
@@ -597,18 +647,14 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
 
 
   vec_D_tilde <- solve(denom) %*% (vec_sb - vec_c)
-  ks::invvec(vec_D_tilde, sqrt(length(vec_D_tilde)))
+  invvec_mat(vec_D_tilde, sqrt(length(vec_D_tilde)))
 }
 
-calculate_stage2_varbeta <- function(K_mi, weights, Z_i, D_tilde, Sigma_tilde) {
-  var_beta_i <- mapply(
-    function(Z) {
-      D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))
-    },
-    Z_i,
-    SIMPLIFY = FALSE
-  )
-  var_beta_part1 <- calculate_inv_sum_kwk(K_mi, weights)
+calculate_stage2_varbeta <- function(K_mi, weights, inv_ZZ_i, inv_sum_KWK, D_tilde, Sigma_tilde) {
+  var_beta_i <- lapply(inv_ZZ_i, function(inv_ZZ) {
+    D_tilde + kronecker(Sigma_tilde, inv_ZZ)
+  })
+  var_beta_part1 <- inv_sum_KWK
   var_beta_part2 <- Reduce("+", mapply(
     function(K, W, VB) {
       crossprod(K, W) %*% VB %*% crossprod(W, K)
@@ -643,7 +689,7 @@ cbc_estimator <- function(mats, fit_args) {
   stage1_results <- calculate_stage1_results(Z_i, Y_i, n_i, q)
 
   B_i <- lapply(stage1_results, `[[`, "beta_hat")
-  beta_hats <- lapply(B_i, ks::vec)
+  beta_hats <- lapply(B_i, vec_mat)
   Sigma_hats <- lapply(stage1_results, `[[`, "Sigma_hat")
 
   # K matrix:
@@ -663,10 +709,16 @@ cbc_estimator <- function(mats, fit_args) {
   }))
   w_i2 <- unlist(lapply(n_i, function(n) (n - q) / denom))
 
+  # quantities reused across the 2nd stage and the reweighting loop
+  inv_ZZ_i <- lapply(Z_i, function(Z) solve(crossprod(Z)))
+  inv_sum_KWK_initial <- calculate_inv_sum_kwk(K_mi, W_i1)
+
   # 2nd stage calculations
-  beta_tilde <- calculate_stage2_beta(K_mi, W_i1, beta_hats)
+  beta_tilde <- calculate_stage2_beta(K_mi, W_i1, beta_hats, inv_sum_KWK_initial)
   Sigma_tilde <- calculate_stage2_sigma(Sigma_hats, w_i2)
-  D_tilde <- calculate_stage2_dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
+  D_tilde <- calculate_stage2_dmatrix(
+    K_mi, W_i1, inv_ZZ_i, inv_sum_KWK_initial, beta_hats, beta_tilde, Sigma_tilde
+  )
   # adjust D_tilde for positive definiteness
   adjust_d_pd <- function(D_tilde, epsilon = 1e-6) {
     eig <- eigen(D_tilde)
@@ -682,30 +734,37 @@ cbc_estimator <- function(mats, fit_args) {
     warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
     D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
   }
-  variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_i1, Z_i, D_tilde, Sigma_tilde)
+  variance_beta_tilde <- calculate_stage2_varbeta(
+    K_mi, W_i1, inv_ZZ_i, inv_sum_KWK_initial, D_tilde, Sigma_tilde
+  )
   # Reweighting
 
   if (reweighting) {
     while (convergence > epsilon_B && iterations <= max_iterations) {
       beta_tilde_ori <- beta_tilde
-      var_beta_i <- mapply(function(Z) {
-        D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))
-      }, Z_i, SIMPLIFY = FALSE)
+      var_beta_i <- lapply(inv_ZZ_i, function(inv_ZZ) {
+        D_tilde + kronecker(Sigma_tilde, inv_ZZ)
+      })
       inv_Sum_V_i <- solve(Reduce("+", lapply(var_beta_i, solve)))
       W_opt1i <- lapply(var_beta_i, function(V) {
         inv_Sum_V_i %*% solve(V)
       })
 
-      beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt1i, beta_hats)
+      inv_sum_KWK_opt <- calculate_inv_sum_kwk(K_mi, W_opt1i)
+      beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt1i, beta_hats, inv_sum_KWK_opt)
       beta_tilde <- damping * beta_tilde_new + (1 - damping) * beta_tilde_ori
-      D_tilde <- calculate_stage2_dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
+      D_tilde <- calculate_stage2_dmatrix(
+        K_mi, W_i1, inv_ZZ_i, inv_sum_KWK_initial, beta_hats, beta_tilde, Sigma_tilde
+      )
       # note: optimal weights are for beta's only, keep original weights for D_tilde
 
       if (min(eigen(D_tilde, only.values = TRUE)$values) < 0) {
         warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
         D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
       }
-      variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_opt1i, Z_i, D_tilde, Sigma_tilde)
+      variance_beta_tilde <- calculate_stage2_varbeta(
+        K_mi, W_opt1i, inv_ZZ_i, inv_sum_KWK_opt, D_tilde, Sigma_tilde
+      )
 
       convergence <- max(abs(beta_tilde_ori - beta_tilde))
       iterations <- iterations + 1
@@ -914,9 +973,12 @@ lme4_converged <- function(fit) {
 
 ## Classify fit status ---------------------------------------------------------------------------------------------
 
+# An eigenvalue at the tolerance counts as singular. A D_tilde repaired for positive definiteness has its
+# smallest eigenvalue set to epsilon_D (= tol): a variance component truncated at the boundary, which is a
+# singular fit (as in lme4). The relative slack keeps that from depending on ~1e-17 rounding noise.
 is_singular <- function(cov_matrix, tol) {
   evals <- eigen(cov_matrix, symmetric = TRUE, only.values = TRUE)$values
-  any(evals <= tol)
+  any(evals <= tol * (1 + 1e-8))
 }
 
 #' Classify the classical ML fit status for downstream simulation results.

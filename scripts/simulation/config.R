@@ -26,7 +26,8 @@
 
 default_paths <- list(
   generated = "data/processed/generated",
-  results = "results/data"
+  results = "results/data",
+  scripts = "scripts/simulation"
 )
 
 
@@ -40,10 +41,10 @@ data_generation_schema_version <- "v3"
 generation_manifest_schema_version <- "v2" # nolint: object_length_linter.
 
 # Increment this string whenever the per-replicate analysis RNG stream scheme changes.
-analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
+analysis_rng_scheme_version <- "lecuyer_analysis_substream_v2"
 
 # Increment this string whenever the final results schema changes.
-results_schema_version <- "v2"
+results_schema_version <- "v3"
 
 # Increment this string whenever the convergence_status mapping rules change.
 convergence_status_version <- "v2"

@@ -19,9 +19,10 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   In the B = 3 smoke run (2026-09-29), only 13 of 48 reweighting fits were `converged_ok`;
   13 were singular and 22 ended with warnings (likely non-convergence within
   `max_iterations = 30` and/or D_tilde being adjusted for positive definiteness). Check which
-  warnings dominate per N before the full B = 5000 rerun. Since the consistency pass, loop
-  non-convergence is reported as `not_converged` rather than `converged_warning`, so rerun the
-  smoke run to separate the two.
+  warnings dominate per N before the full B = 5000 rerun. Since the consistency and efficiency
+  passes, loop non-convergence is reported as `not_converged` and a `D_tilde` repair as
+  `converged_singular` (neither as `converged_warning`), so rerun the smoke run to separate
+  the causes.
 
 - [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
   Coverage uses a normal quantile (`aggregate_results(ci_level)`, currently
@@ -31,44 +32,52 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 ## Efficiency
 
-- [ ] **[efficiency] Parallelism is disabled on Windows.**
-  `run_analysis_over_groups()` only parallelises with `mclapply`, which falls back to
-  `lapply` on Windows ([pipeline.R:55](scripts/simulation/pipeline.R#L55)).
-  Replace with `mirai::mirai_map()` or a PSOCK cluster (`parallel::parLapply`), parallelising
-  over `(scenario_id, sim_id)`. The L'Ecuyer RNG streams introduced in the correctness pass
-  already give each replicate an independent stream, so results stay reproducible.
+All items below were completed in the efficiency pass (branch `refactor/efficiency`, plan
+[plans/2026-09-29-efficiency-pass.md](plans/2026-09-29-efficiency-pass.md)); the open ones are
+follow-ups.
 
-- [ ] **[efficiency] CbC D-matrix step costs O(N²).**
-  `calculate_stage2_dmatrix()` loops over every pair i≠j with three `kronecker()` calls per
-  pair ([analysis_layer.R:625-634](scripts/simulation/analysis_layer.R#L625-L634)).
-  By the Kronecker mixed-product rule each term equals
-  `kron(W_j K_i HH_j, K_i HH_j t(W_j))` (two q×q factors). Since `K_i` only takes one value
-  per treatment arm, the double sum can be collapsed to per-arm counts, making the step O(N).
+- [x] **[efficiency] Parallelism is disabled on Windows.**
+  Done: `parallel_map()` in `pipeline.R` runs tasks on a PSOCK cluster (`parallel::parLapplyLB`)
+  on any OS; `run_generation()` and `run_requested_analyses()` take `parallel` / `n_cores`, and
+  results are identical to a serial run (`test-parallel.R`).
 
-- [ ] **[efficiency] Smaller CbC savings.**
-  - `expm::sqrtm()` is applied to diagonal weight matrices
-    ([analysis_layer.R:604](scripts/simulation/analysis_layer.R#L604)); use `sqrt()` on the diagonal.
-  - `solve(crossprod(Z))` and `calculate_inv_sum_kwk()` are recomputed several times per fit.
-  - `ks` is only used for `vec()`, `vech()`, `invvec()`, `invvech()`; replace with base-R one-liners
-    and drop the dependency.
+- [x] **[efficiency] CbC D-matrix step costs O(N²).**
+  Done: `calculate_stage2_dmatrix()` groups clusters by identical `K_i`, making the step O(N)
+  (about 20x faster reweighting at N = 100). A `D_tilde` repaired for positive definiteness now
+  always counts as singular (`converged_singular`).
 
-- [ ] **[efficiency] Vectorise data generation.**
-  `simulate_one_dataset()` builds each replicate with two `merge()` calls and an `order()`, then
-  `simulate_scenario()` row-binds B data frames
-  ([data_generation_layer.R:420-488](scripts/simulation/data_generation_layer.R#L420-L488)).
-  Use index vectors instead of `merge()`, or generate all replicates of a scenario at once.
+- [x] **[efficiency] Smaller CbC savings.**
+  Done: `solve(crossprod(Z_i))` and `inv_sum_KWK` computed once per fit, `sqrt()` of the diagonal
+  instead of `expm::sqrtm()`, base-R `vec`/`vech` helpers; `ks` and `expm` dropped from the code
+  and `renv.lock`.
 
-- [ ] **[efficiency] Multiple imputation calls `mice()` twice per replicate.**
-  `impute_data()` runs `mice(maxit = 0)` only to obtain the method vector and predictor matrix
-  ([analysis_layer.R:536-544](scripts/simulation/analysis_layer.R#L536-L544)). Build these once.
+- [x] **[efficiency] Vectorise data generation.**
+  Done: index vectors instead of `merge()`; output identical, about 2.7x faster.
 
-- [ ] **[efficiency] Hashes change whenever R is upgraded.**
-  `compute_results_hash()` hashes a `saveRDS()` file, whose header records the R version
-  ([artifact_store.R:106](scripts/simulation/artifact_store.R#L106)). An R upgrade
-  therefore invalidates every cache. Use `rlang::hash()` or `digest::digest()`.
+- [x] **[efficiency] Multiple imputation calls `mice()` twice per replicate.**
+  Done: the method vector and predictor matrix are built directly. The dry run consumed random
+  numbers, so MI draws changed (statistically equivalent); `analysis_rng_scheme_version` is now
+  `lecuyer_analysis_substream_v2`.
 
-- [ ] **[efficiency] Generated scenario files are read twice.**
-  Skipped scenarios are fully read and validated during generation and read again during analysis.
+- [x] **[efficiency] Hashes change whenever R is upgraded.**
+  Done: hashes use `digest::digest(algo = "xxhash64", serializeVersion = 3)`; `results_schema_version`
+  v3. All caches were recomputed once.
+
+- [x] **[efficiency] Generated scenario files are read twice.**
+  Done: `run_generation()` reuses the previous manifest's md5 checksum to skip existing files
+  without reading them (otherwise read and validate as before); analysis still validates on load.
+
+- [ ] **[efficiency] Reuse one PSOCK cluster across scenarios and methods.**
+  A new cluster is started per scenario (generation) and per scenario x method (analysis), about
+  2.5 s each, which dominates small runs.
+
+- [ ] **[efficiency] Vectorise `generate_dropout_process()`.**
+  It draws per subject in a `vapply`; vectorising it must keep the draw order so the generated
+  data stay bit-identical.
+
+- [ ] **[robustness] An invalid generated scenario file stops the run.**
+  If a generated scenario file exists but is invalid, `run_generation()` stops instead of
+  regenerating it.
 
 ## Clarity
 
