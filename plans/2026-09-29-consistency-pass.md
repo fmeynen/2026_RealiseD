@@ -146,7 +146,7 @@ Ground rules:
   - Check `renv::status()` is clean and the suite passes inside the renv library.
   - Record the R version in the lockfile.
 
-- [ ] **10. Close-out.**
+- [x] **10. Close-out.**
   - README:
     - new function and file names;
     - `half_missing`;

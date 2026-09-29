@@ -19,7 +19,9 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   In the B = 3 smoke run (2026-09-29), only 13 of 48 reweighting fits were `converged_ok`;
   13 were singular and 22 ended with warnings (likely non-convergence within
   `max_iterations = 30` and/or D_tilde being adjusted for positive definiteness). Check which
-  warnings dominate per N before the full B = 5000 rerun.
+  warnings dominate per N before the full B = 5000 rerun. Since the consistency pass, loop
+  non-convergence is reported as `not_converged` rather than `converged_warning`, so rerun the
+  smoke run to separate the two.
 
 - [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
   Coverage uses a normal quantile (`aggregate_results(ci_level)`, currently
@@ -92,24 +94,34 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
 
 ## Consistency
 
-- [ ] **[consistency] One name per method.**
-  Multiple imputation is called `multiple_imputation` / `imputation`; reweighting is
-  `reweighting` / `weighting` / `closed_form_reweighting` / `closed_form_weights`; engines are
-  `cbc` / `mice_cbc`. Use the keys of `build_analysis_registry()` everywhere.
+Items below were worked on in the consistency pass (branch `refactor/consistency`, plan
+[plans/2026-09-29-consistency-pass.md](plans/2026-09-29-consistency-pass.md)); the open ones are
+follow-ups.
+
+- [x] **[consistency] One name per method.**
+  Multiple imputation was called `multiple_imputation` / `imputation`; reweighting was
+  `reweighting` / `weighting` / `closed_form_reweighting` / `closed_form_weights`. Done:
+  `prepare_analysis_data()`, `classify_fit_status()` and the extractors use the registry keys
+  (`classical_ml`, `multiple_imputation`, `reweighting`, `LSPIM`), and the reweighting analyzers
+  are `analyze_reweighting()` / `analyze_generated_data_reweighting()`.
 
 - [x] **[consistency] Dropout mechanism names mix separators.**
   `"half-missing"` renamed to `"half_missing"` everywhere; the old spelling now errors loudly
   in `validate_scenario_grid()` (consistency pass, branch `refactor/consistency`).
 
-- [ ] **[consistency] Code style.**
+- [x] **[consistency] Code style.**
   Mixed 2/4-space argument indentation, `if(` vs `if (`, `=` for assignment, `T`/`F`,
-  `&` where `&&` is meant. Run `styler` and `lintr::lint_dir("scripts")`.
+  `&` where `&&` is meant. Done: code and tests formatted with styler (tidyverse style), all
+  lintr findings fixed, and `tests/testthat/test-lint.R` keeps them at zero.
 
 - [x] **[consistency] Function names violate the project's own `.lintr` rule.**
   `CbCEstimator` → `cbc_estimator`, `fit_LSPIM` → `fit_lspim`, and other offending function
-  names renamed to snake_case (consistency pass, branch `refactor/consistency`). Matrix-notation
-  local variables (`K_mi`, `W_i1`, `D_tilde`, ...) are left as is; extending the allowed
-  pattern for statistical notation is tracked separately.
+  names renamed to snake_case; `LSPIM_subversion.R` renamed to `lspim.R`.
+
+- [x] **[consistency] `.lintr` naming rule for matrix notation.**
+  Done: the `object_name_linter` pattern in `.lintr` now allows the CbC paper's notation in
+  variable names (`K_mi`, `W_i1`, `D_tilde`, `Sigma_tilde`, ...); `object_usage_linter` is
+  disabled (false positives for functions defined in other sourced files).
 
 - [x] **[consistency] Centralise paths and schema versions.**
   Default paths and all six schema-version constants now live in
@@ -129,8 +141,14 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
 - [x] **[consistency] Declare dependencies.**
   Done: `renv.lock` pins exact versions (107 packages, R 4.6.1); restore with `renv::restore()`.
 
-- [ ] **[consistency] `not_converged` status can never occur.**
-  Every analyzer sets `converged = status != "failure"`, so `add_convergence_status()`'s
-  `not_converged` level is unreachable, and non-convergence (e.g. the reweighting loop hitting
-  `max_iterations`) shows up only as `converged_warning`. Either record real convergence per
-  method or drop the level.
+- [x] **[consistency] `not_converged` status can never occur.**
+  Every analyzer set `converged = status != "failure"`, so `add_convergence_status()`'s
+  `not_converged` level was unreachable. Done: `converged` now records each method's own
+  convergence criterion (lme4 checks, reweighting loop vs `epsilon_B`, LSPIM GEE status; MI is
+  always converged on success); `convergence_status_version` bumped. See "What *converged*
+  means" in the README.
+
+- [ ] **[statistics] Mice convergence diagnostic for multiple imputation.**
+  `multiple_imputation` is always `converged = TRUE` on success because `mice` runs a fixed
+  number of iterations with no convergence test. Add a diagnostic, e.g. R-hat across the
+  imputation chains, and decide whether it should feed `converged`.
