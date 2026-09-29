@@ -96,7 +96,7 @@ Ground rules:
     `run_method()` / the registry directly".
   - Golden unchanged; `test-failure-labels.R` and `test-cbc-errors.R` must pass unchanged.
 
-- [ ] **7. Real convergence.** Set `converged` from what each method reports, instead of
+- [x] **7. Real convergence.** Set `converged` from what each method reports, instead of
   `status != "failure"`:
   - `classical_ml`: FALSE if the optimizer return code (`fit@optinfo$conv$opt`) is non-zero OR
     lme4's convergence checks produced a message (`fit@optinfo$conv$lme4$messages`, e.g.
@@ -155,7 +155,11 @@ Ground rules:
     - renv setup (`renv::restore()`);
     - a dedicated section **"What *converged* means"**, stressed clearly: a per-method table of
       exactly what sets `converged = FALSE` and what stays only a warning (including that
-      positive-definiteness repairs, CbC `D_tilde` and LSPIM `V`, are warnings for every method), and
+      positive-definiteness repairs, CbC `D_tilde` and LSPIM `V`, are warnings for every method;
+      that lme4's "boundary (singular) fit" notice is deliberately ignored for convergence, so singular
+      lme4 fits count as converged and show as `converged_singular`; and that for LSPIM any `geessbin`
+      outcome other than "converged" counts as not converged, including "fitted probabilities
+      numerically 0 or 1 occurred" and "infinite scale parameter"), and
       how `convergence_status` is derived (error > not_converged > converged_singular >
       converged_warning > converged_ok).
   - Tick the Consistency items in `BACKLOG.md`.

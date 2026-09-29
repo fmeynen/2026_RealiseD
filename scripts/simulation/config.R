@@ -45,7 +45,7 @@ analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
 results_schema_version <- "v2"
 
 # Increment this string whenever the convergence_status mapping rules change.
-convergence_status_version <- "v1"
+convergence_status_version <- "v2"
 
 # Increment this string whenever the aggregation output schema changes.
 aggregation_schema_version <- "v4"

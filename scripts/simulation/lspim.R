@@ -30,6 +30,33 @@ nearest_psd <- function(V, eps = 1e-8) {
   out
 }
 
+# Fit one of the three LSPIM GEEs (clustered by `id`, a column of dat_gee).
+# Kept as a separate top-level function so tests can stub it.
+fit_lspim_gee <- function(dat_gee, id) {
+  ord <- order(dat_gee[[id]])
+  geessbin::geessbin(
+    y ~ . - 1 - C1 - C2 - C3,
+    data = dat_gee[ord, , drop = FALSE],
+    id = dat_gee[[id]][ord],
+    corstr = "independence",
+    beta.method = "PGEE",
+    SE.method = "FW"
+  )
+}
+
+# Whether all LSPIM GEE fits converged: FALSE if any geessbin fit reports a
+# `convergence` other than "converged".
+lspim_gees_converged <- function(gee_fits) {
+  all(vapply(gee_fits, function(mod) identical(mod$convergence, "converged"), logical(1)))
+}
+
+#' Fit the LSPIM model for one dataset.
+#'
+#' Convergence: converged = FALSE if any of the three geessbin fits reports a
+#' `convergence` other than "converged"; replacing the combined V via
+#' nearest_psd() is only a warning.
+#'
+#' @return A list with fit, converged, elapsed_seconds, warnings, and error_message.
 fit_lspim <- function(dat, alpha = 0.05) {
   if (!requireNamespace("geessbin", quietly = TRUE)) {
     stop("Package 'geessbin' is required for LSPIM.")
@@ -43,6 +70,7 @@ fit_lspim <- function(dat, alpha = 0.05) {
 
   warning_messages <- character(0)
   error_message <- NULL
+  converged <- FALSE
   start_time <- proc.time()[["elapsed"]]
   fit <- withCallingHandlers(
     tryCatch(
@@ -106,19 +134,10 @@ fit_lspim <- function(dat, alpha = 0.05) {
         dat_GEE <- data.frame(y = y, X, C1 = C1, C2 = C2)
         dat_GEE$C3 <- paste(dat_GEE$C1, dat_GEE$C2, sep = "_")
 
-        fit_gee <- function(id) {
-          geessbin::geessbin(
-            y ~ . - 1 - C1 - C2 - C3,
-            data = dat_GEE[order(dat_GEE[[id]]), , drop = FALSE],
-            id = dat_GEE[[id]][order(dat_GEE[[id]])],
-            corstr = "independence",
-            beta.method = "PGEE",
-            SE.method = "FW"
-          )
-        }
-        mod1 <- fit_gee("C1")
-        mod2 <- fit_gee("C2")
-        mod3 <- fit_gee("C3")
+        mod1 <- fit_lspim_gee(dat_GEE, "C1")
+        mod2 <- fit_lspim_gee(dat_GEE, "C2")
+        mod3 <- fit_lspim_gee(dat_GEE, "C3")
+        converged <- lspim_gees_converged(list(mod1, mod2, mod3))
 
         V_raw <- mod1$covb + mod2$covb - mod3$covb
         beta <- colMeans(rbind(stats::coef(mod1), stats::coef(mod2), stats::coef(mod3)), na.rm = TRUE)
@@ -166,6 +185,7 @@ fit_lspim <- function(dat, alpha = 0.05) {
   )
   list(
     fit = fit,
+    converged = !is.null(fit) && converged,
     elapsed_seconds = as.numeric(proc.time()[["elapsed"]] - start_time),
     warnings = unique(warning_messages),
     error_message = error_message

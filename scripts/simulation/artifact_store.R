@@ -23,12 +23,14 @@
 
 #' Map raw fit diagnostics to a standardized convergence_status label.
 #'
-#' Applies a deterministic precedence hierarchy (v1):
+#' Applies a deterministic precedence hierarchy (v2):
 #'   "error"              if status != "success" OR error_message is not NA
 #'   "not_converged"      if success but converged == FALSE
 #'   "converged_singular" if success, converged, and singular == TRUE
 #'   "converged_warning"  if success, converged, non-singular, warning present
 #'   "converged_ok"       if success, converged, non-singular, no warning
+#' converged is the method's real convergence (v2): lme4 optimizer code/convergence
+#' checks; reweighting loop stopped by epsilon_B; MI always; LSPIM all three GEEs converged.
 #'
 #' @param data Data frame with columns status, converged, singular,
 #'   warning_message, and error_message.

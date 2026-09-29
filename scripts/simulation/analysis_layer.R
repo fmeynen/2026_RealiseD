@@ -718,7 +718,10 @@ cbc_estimator <- function(mats, fit_args) {
     Sigma_tilde = Sigma_tilde,
     D_tilde = D_tilde,
     variance_beta_tilde = variance_beta_tilde,
-    iterations = if (reweighting) iterations - 1 else 0
+    iterations = if (reweighting) iterations - 1 else 0,
+    # Reweighting converged unless the loop hit max_iterations with the beta
+    # change still above epsilon_B; the non-reweighted fit is closed form.
+    converged = if (reweighting) convergence <= epsilon_B else TRUE
   )
 }
 
@@ -738,9 +741,10 @@ cbc_estimator <- function(mats, fit_args) {
 #'   MI path, the stacked imputations from \code{impute_data()}).
 #' @param fit_args  List of fit arguments as returned by \code{set_fit_args()}.
 #'
-#' @return Named numeric vector with elements \code{estimate_beta0..estimate_beta3},
-#'   \code{sigma2_hat}, \code{se_beta0..se_beta3}, \code{var_b0}, \code{cov_b0b1},
-#'   \code{var_b1}.
+#' @return List with \code{estimates}, a named numeric vector with elements
+#'   \code{estimate_beta0..estimate_beta3}, \code{sigma2_hat},
+#'   \code{se_beta0..se_beta3}, \code{var_b0}, \code{cov_b0b1}, \code{var_b1};
+#'   and \code{converged}, the \code{cbc_estimator()} convergence flag.
 
 fit_closed_form <- function(
   long_data,
@@ -750,11 +754,14 @@ fit_closed_form <- function(
     stop("'long_data' must be a data.frame.")
   }
   cbc <- apply_cbc(long_data, fit_args)
-  extract_cbc_result(cbc)
+  list(estimates = extract_cbc_result(cbc), converged = cbc$converged)
 }
 
 
 ## Fit MI closed form -------------------------------------------------------------------------------
+
+# Convergence: converged = TRUE whenever the fit succeeds (single closed-form
+# CbC fit; mice has no convergence criterion). A D_tilde PD adjustment is only a warning.
 fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args = set_fit_args()) {
   warning_messages <- character(0)
   error_message <- NULL
@@ -768,7 +775,7 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
     tryCatch(
       {
         imputed_data <- impute_data(data, impute_args)
-        fit_closed_form(long_data = imputed_data, fit_args = fit_args)
+        fit_closed_form(long_data = imputed_data, fit_args = fit_args)$estimates
       },
       error = function(error) {
         error_message <<- conditionMessage(error)
@@ -788,6 +795,7 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
 
   list(
     fit = fit,
+    converged = !is.null(fit),
     elapsed_seconds = as.numeric(elapsed_seconds),
     warnings = unique(warning_messages),
     error_message = error_message
@@ -795,11 +803,14 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
 }
 
 ## Fit closed form + reweighting---------------------------------------------------------------------
+
+# Convergence: converged = FALSE only if the reweighting loop reached max_iterations
+# with the beta change still above epsilon_B. A D_tilde PD adjustment is only a warning.
 fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
   warning_messages <- character(0)
   error_message <- NULL
   start_time <- proc.time()[["elapsed"]]
-  fit <- withCallingHandlers(
+  closed_form <- withCallingHandlers(
     tryCatch(
       {
         fit_closed_form(long_data = data, fit_args = fit_args)
@@ -817,7 +828,8 @@ fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
   elapsed_seconds <- proc.time()[["elapsed"]] - start_time
 
   list(
-    fit = fit,
+    fit = closed_form$estimates,
+    converged = isTRUE(closed_form$converged),
     elapsed_seconds = as.numeric(elapsed_seconds),
     warnings = unique(warning_messages),
     error_message = error_message
@@ -830,11 +842,13 @@ fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
 #'
 #' Uses `lme4::lmer()` with `REML = FALSE`, captures elapsed runtime, and stores
 #' warnings or errors in a structured return object.
+#' Convergence: converged = FALSE if the optimizer return code is non-zero or
+#' lme4's convergence checks produced any message (see lme4_converged()).
 #'
 #' @param data    Prepared analysis data as returned by prepare_analysis_data().
 #' @param formula Model formula, typically from build_formula().
 #'
-#' @return A list with fit, formula, elapsed_seconds, warnings, and error_message.
+#' @return A list with fit, formula, converged, elapsed_seconds, warnings, and error_message.
 
 fit_classical_ml_model <- function(data, formula = build_formula()) {
   warning_messages <- character(0)
@@ -865,11 +879,34 @@ fit_classical_ml_model <- function(data, formula = build_formula()) {
   list(
     fit = fit,
     formula = formula,
+    converged = !is.null(fit) && lme4_converged(fit),
     elapsed_seconds = as.numeric(elapsed_seconds),
     warnings = unique(c(warning_messages, optimizer_messages)),
     error_message = error_message
   )
 }
+#' Whether an lme4 fit converged.
+#'
+#' @param fit A merMod object.
+#'
+#' @return FALSE if the optimizer return code (\code{optinfo$conv$opt}) is non-zero or
+#'   lme4's convergence checks produced any message other than the
+#'   "boundary (singular) fit" notice; TRUE otherwise (singular fits count as
+#'   converged and are labelled via the singular flag instead).
+
+lme4_converged <- function(fit) {
+  conv <- fit@optinfo$conv
+  opt_code <- conv$opt
+  opt_ok <- is.null(opt_code) || identical(as.numeric(opt_code), 0)
+  # lme4 records its singular-fit notice alongside the convergence-check messages.
+  check_messages <- grep(
+    "boundary (singular) fit",
+    conv$lme4$messages,
+    fixed = TRUE, value = TRUE, invert = TRUE
+  )
+  opt_ok && length(check_messages) == 0L
+}
+
 ## Classify fit status ---------------------------------------------------------------------------------------------
 
 is_singular <- function(cov_matrix, tol) {
@@ -887,11 +924,6 @@ is_singular <- function(cov_matrix, tol) {
 
 classify_fit_status <- function(fit_result, singular_tol = 1e-06,
                                 method = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")) {
-  # TODO fix implementaiton
-  if (method == "LSPIM") {
-    return("success")
-  }
-
   if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) {
     return("failure")
   }
@@ -945,7 +977,7 @@ extract_classical_ml_results <- function(
     method = method,
     engine = engine,
     status = status,
-    converged = status != "failure",
+    converged = status != "failure" && isTRUE(fit_result$converged),
     singular = status == "singular_fit",
     elapsed_seconds = fit_result$elapsed_seconds,
     warning_message = warning_message,
@@ -996,7 +1028,7 @@ extract_closed_form_results <- function(
     method          = method,
     engine          = engine,
     status          = status,
-    converged       = status != "failure",
+    converged       = status != "failure" && isTRUE(fit_result$converged),
     singular        = status == "singular_fit",
     elapsed_seconds = fit_result$elapsed_seconds,
     warning_message = warning_message,
@@ -1019,7 +1051,7 @@ extract_lspim_results <- function(
   engine = "LSPIM"
 ) {
   metadata <- collect_analysis_metadata(original_data)
-  status <- if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) "failure" else "success"
+  status <- classify_fit_status(fit_result, method = method)
   warning_message <- if (length(fit_result$warnings) > 0L) {
     paste(fit_result$warnings, collapse = " | ")
   } else {
@@ -1031,7 +1063,7 @@ extract_lspim_results <- function(
     method          = method,
     engine          = engine,
     status          = status,
-    converged       = status != "failure",
+    converged       = status != "failure" && isTRUE(fit_result$converged),
     singular        = FALSE,
     elapsed_seconds = fit_result$elapsed_seconds,
     warning_message = warning_message,
