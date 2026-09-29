@@ -23,6 +23,8 @@ scenarios <- build_scenario_grid(
   seed_base = 260925
 )
 n_simulations <- 5000L
+use_parallel <- TRUE
+n_cores <- default_n_cores()
 generated_output_dir <- default_paths$generated
 analysis_output_dir <- default_paths$results
 analysis_configs <- list(
@@ -44,7 +46,9 @@ generation_manifest <- run_generation(
   scenarios,
   n_simulations,
   output_dir = generated_output_dir,
-  overwrite = FALSE
+  overwrite = FALSE,
+  parallel = use_parallel,
+  n_cores = n_cores
 )
 
 # Run all requested analyses with one orchestrator call -----------------------------------------------------------
@@ -55,7 +59,9 @@ analysis_outputs <- run_requested_analyses(
   n_simulations = n_simulations,
   analysis_configs = analysis_configs,
   output_dir = analysis_output_dir,
-  overwrite = FALSE
+  overwrite = FALSE,
+  parallel = use_parallel,
+  n_cores = n_cores
 )
 
 # Scratchpad ------------------------------------------------------------------------------------------------------

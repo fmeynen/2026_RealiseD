@@ -7,10 +7,90 @@
 # aggregation output).
 #
 # Function hierarchy:
+#   default_n_cores, worker_setup, parallel_map
 #   run_generation
 #   build_group_analysis_rng_states, run_analysis_over_groups
 #   sort_analysis_results_deterministically
 #   run_requested_analyses
+
+# Parallel execution -------------------------------------------------------------------------------------------
+
+#' Default number of worker processes: physical cores minus one, at least one.
+#'
+#' @return Integer scalar.
+
+default_n_cores <- function() {
+  detected <- parallel::detectCores(logical = FALSE)
+  if (is.na(detected)) {
+    return(1L)
+  }
+  max(1L, as.integer(detected) - 1L)
+}
+
+
+#' Prepare a PSOCK worker: set the library paths and source the simulation scripts.
+#'
+#' Runs once on each worker of a cluster created by parallel_map(). The scripts are sourced
+#' into the worker's global environment, so every function the analyzers and generators call
+#' is defined there, and miceadds is attached because method_y = "2l.pmm" requires it.
+#'
+#' @param lib_paths   Character vector. Library paths of the master process.
+#' @param scripts_dir Absolute path of the directory holding the simulation scripts.
+#'
+#' @return NULL, invisibly.
+
+worker_setup <- function(lib_paths, scripts_dir) {
+  .libPaths(lib_paths)
+  script_files <- sort(list.files(scripts_dir, pattern = "\\.R$", full.names = TRUE))
+  for (script_file in script_files) {
+    source(script_file, local = globalenv())
+  }
+  suppressPackageStartupMessages(library(miceadds))
+  invisible(NULL)
+}
+
+
+#' Apply a function over a list, serially or on a PSOCK cluster.
+#'
+#' With parallel = FALSE (or a single task or core) this is lapply(). Otherwise a PSOCK cluster
+#' of min(n_cores, length(X)) workers is created (the only backend available on Windows). The
+#' workers start without .Rprofile/renv and are prepared entirely by worker_setup(); the tasks
+#' are run with parallel::parLapplyLB() and the cluster is stopped on exit. FUN must be a
+#' top-level function (not a closure over large objects) because it is serialised to the
+#' workers; everything it needs beyond X travels through `...`. Results do not depend on the
+#' backend, the number of cores or the task order as long as every task fixes its own RNG state.
+#'
+#' @param X           List of tasks.
+#' @param FUN         Function applied to each element of X.
+#' @param ...         Further arguments passed to FUN.
+#' @param parallel    Logical. Run on a PSOCK cluster when TRUE.
+#' @param n_cores     Integer. Maximum number of workers.
+#' @param scripts_dir Directory holding the simulation scripts sourced on each worker.
+#' @param chunk_size  Integer. Number of tasks sent to a worker at a time.
+#'
+#' @return List of results, aligned with X.
+
+parallel_map <- function(
+  X,
+  FUN,
+  ...,
+  parallel = FALSE,
+  n_cores = default_n_cores(),
+  scripts_dir = default_paths$scripts,
+  chunk_size = 1L
+) {
+  n_workers <- min(as.integer(n_cores), length(X))
+  if (!isTRUE(parallel) || n_workers <= 1L) {
+    return(lapply(X, FUN, ...))
+  }
+
+  scripts_dir <- normalizePath(scripts_dir, mustWork = TRUE)
+  cluster <- parallel::makeCluster(n_workers, rscript_args = "--no-init-file")
+  on.exit(parallel::stopCluster(cluster), add = TRUE)
+  parallel::clusterCall(cluster, worker_setup, .libPaths(), scripts_dir)
+  parallel::parLapplyLB(cluster, X, FUN, ..., chunk.size = chunk_size)
+}
+
 
 # Generate Data -----------------------------------------------------------------------------------------------
 
@@ -29,6 +109,9 @@
 #' @param output_dir    Directory the generated scenario files and manifest are written under.
 #' @param overwrite     Logical. Passed to save_generated_scenario(); when FALSE (default),
 #'   an existing valid scenario file is reused instead of being regenerated.
+#' @param parallel      Logical. Generate the replicates of each scenario on a PSOCK cluster
+#'   (see parallel_map()); the output is identical to the serial run.
+#' @param n_cores       Integer. Maximum number of workers when parallel = TRUE.
 #'
 #' @return The finalized generation manifest (see finalize_generation_manifest()).
 
@@ -36,7 +119,9 @@ run_generation <- function(
   scenarios,
   n_simulations,
   output_dir = default_paths$generated,
-  overwrite = FALSE
+  overwrite = FALSE,
+  parallel = FALSE,
+  n_cores = default_n_cores()
 ) {
   validate_scenario_grid(scenarios)
 
@@ -99,7 +184,12 @@ run_generation <- function(
 
     generation_manifest <- tryCatch(
       {
-        scenario_data <- simulate_scenario(scenario_row, B = n_simulations)
+        scenario_data <- simulate_scenario(
+          scenario_row,
+          B = n_simulations,
+          parallel = parallel,
+          n_cores = n_cores
+        )
         save_info <- save_generated_scenario(
           data = scenario_data,
           scenario_id = scenario_id,
@@ -222,12 +312,32 @@ build_group_analysis_rng_states <- function(split_data, scenarios) { # nolint: o
   group_states
 }
 
+#' Run one analysis group under its replicate's "analysis" RNG substream.
+#'
+#' Top-level so it can be serialised to PSOCK workers without dragging any data along.
+#'
+#' @param task        List with `data` (one scenario_id x sim_id group) and `state` (its
+#'   L'Ecuyer-CMRG .Random.seed, or NULL to use the current RNG).
+#' @param analyzer_fn Function taking the group's data frame and returning its results.
+#' @param ...         Further arguments passed to analyzer_fn.
+#'
+#' @return The value of analyzer_fn.
+
+run_analysis_task <- function(task, analyzer_fn, ...) {
+  if (is.null(task$state)) {
+    analyzer_fn(task$data, ...)
+  } else {
+    with_rng_state(task$state, analyzer_fn(task$data, ...))
+  }
+}
+
+
 run_analysis_over_groups <- function(
   data,
   scenarios = NULL,
   analyzer_fn,
   parallel = FALSE,
-  n_cores = max(1L, parallel::detectCores(logical = FALSE) - 1L),
+  n_cores = default_n_cores(),
   ...
 ) {
   required_split_cols <- c("scenario_id", "sim_id")
@@ -252,35 +362,17 @@ run_analysis_over_groups <- function(
   # Each group runs under its replicate's "analysis" substream when one is available, so any
   # stochastic step (e.g. MI) is independent across replicates, reproducible within a
   # replicate, and leaves the caller's RNG untouched. Without a seed, the current RNG is used.
-  run_group <- function(i, ...) {
-    state <- group_states[[i]]
-    if (is.null(state)) {
-      analyzer_fn(split_data[[i]], ...)
-    } else {
-      with_rng_state(state, analyzer_fn(split_data[[i]], ...))
-    }
-  }
-  group_idx <- seq_along(split_data)
-
-  if (isTRUE(parallel)) {
-    if (.Platform$OS.type == "windows") {
-      warning(
-        "parallel=TRUE requested, but mclapply is not supported on Windows; falling back to lapply."
-      )
-      results <- lapply(group_idx, run_group, ...)
-    } else {
-      mc_cores <- min(as.integer(n_cores), length(split_data))
-      mc_cores <- max(1L, mc_cores)
-      results <- parallel::mclapply(
-        group_idx,
-        run_group,
-        ...,
-        mc.cores = mc_cores
-      )
-    }
-  } else {
-    results <- lapply(group_idx, run_group, ...)
-  }
+  tasks <- lapply(seq_along(split_data), function(i) {
+    list(data = split_data[[i]], state = group_states[[i]])
+  })
+  results <- parallel_map(
+    tasks,
+    run_analysis_task,
+    analyzer_fn = analyzer_fn,
+    ...,
+    parallel = parallel,
+    n_cores = n_cores
+  )
   names(results) <- names(split_data)
   combined_results <- do.call(rbind, results)
   combined_results <- combined_results[
@@ -328,7 +420,9 @@ run_requested_analyses <- function(
   analysis_configs = list(),
   aggregation_include_engine = FALSE,
   output_dir = default_paths$results,
-  overwrite = FALSE
+  overwrite = FALSE,
+  parallel = FALSE,
+  n_cores = default_n_cores()
 ) {
   analysis_registry <- build_analysis_registry()
   available_analyses <- names(analysis_registry)
@@ -478,7 +572,9 @@ run_requested_analyses <- function(
                 scenario_data = scenario_data,
                 scenarios = scenario_metadata,
                 user_config = analysis_configs[[analysis_name]],
-                analysis_registry = analysis_registry
+                analysis_registry = analysis_registry,
+                parallel = parallel,
+                n_cores = n_cores
               )
               saved <- save_analysis_scenario_method_artifact(
                 analysis_results = method_results,

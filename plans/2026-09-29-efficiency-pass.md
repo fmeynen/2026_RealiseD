@@ -25,7 +25,7 @@ Ground rules:
 
 ## Items
 
-- [ ] **1. Parallelism with a PSOCK cluster.**
+- [x] **1. Parallelism with a PSOCK cluster.**
   - Add one helper (e.g. `parallel_map(X, FUN, ..., parallel, n_cores)` in `pipeline.R`) that,
     when `parallel = TRUE`, creates a `parallel::makeCluster(n_cores)` PSOCK cluster, sources
     `scripts/simulation/*.R` on every worker (and loads the packages the analyzers need), runs
@@ -44,7 +44,7 @@ Ground rules:
     serial run, for generation and for analysis (all four methods).
   - Golden unchanged.
 
-- [ ] **2. Small CbC savings.**
+- [x] **2. Small CbC savings.**
   - `sqrt_W`: the weight matrices are diagonal, so use `diag(sqrt(diag(W)))` instead of
     `expm::sqrtm()` (`calculate_stage2_dmatrix()`).
   - Compute `solve(crossprod(Z_i))` once per cluster per fit and pass it to the stage-2 D-matrix,
@@ -81,7 +81,7 @@ Ground rules:
     message. If nothing changes (the dry run turned out not to use the RNG), don't regenerate.
   - Bump `analysis_rng_scheme_version` if the MI results change.
 
-- [ ] **5. Vectorised data generation.**
+- [x] **5. Vectorised data generation.**
   - In `simulate_one_dataset()`, `expand_subject_time_panel()`, `apply_missingness()` and
     `simulate_scenario()`, replace `merge()` / `order()` / repeated `rbind()` with index vectors
     (`rep()`, `match()`) and a single bind of preallocated columns.
@@ -91,7 +91,7 @@ Ground rules:
     or captured as a small fixture) for every dropout mechanism.
   - Golden unchanged.
 
-- [ ] **6. R-version-independent hashes.**
+- [x] **6. R-version-independent hashes.**
   - `compute_results_hash()` (and any other helper that hashes `saveRDS()` bytes) uses
     `digest::digest(canonical_object, algo = "xxhash64", serializeVersion = 3)` instead.
   - Bump `results_schema_version` (and the generation manifest version if generation hashes

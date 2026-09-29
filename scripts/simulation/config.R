@@ -26,7 +26,8 @@
 
 default_paths <- list(
   generated = "data/processed/generated",
-  results = "results/data"
+  results = "results/data",
+  scripts = "scripts/simulation"
 )
 
 

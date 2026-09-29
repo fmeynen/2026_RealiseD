@@ -191,17 +191,25 @@ analyze_lspim <- function(data, alpha = 0.05) {
 #' @param scenarios Optional data frame of scenario metadata (as returned by
 #'   build_scenario_grid()). When supplied, the function warns if any scenario_id
 #'   in the results is absent from scenarios$scenario_id.
+#' @param parallel  Logical. Analyze the replicates on a PSOCK cluster (see parallel_map()).
+#' @param n_cores   Integer. Maximum number of workers when parallel = TRUE.
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
 # Name mirrors the registry's other analyze_generated_data_* wrappers and is used across
 # pipeline.R, analysis_methods.R and tests; not renamed to stay under 30 characters.
-analyze_generated_data_classical_ml <- function(data, scenarios = NULL) { # nolint: object_length_linter.
+analyze_generated_data_classical_ml <- function( # nolint: object_length_linter.
+  data,
+  scenarios = NULL,
+  parallel = FALSE,
+  n_cores = default_n_cores()
+) {
   run_analysis_over_groups(
     data,
     scenarios,
     analyze_classical_ml,
-    parallel = .Platform$OS.type != "windows"
+    parallel = parallel,
+    n_cores = n_cores
   )
 }
 
@@ -227,13 +235,16 @@ analyze_generated_data_mi_closed_form <- function( # nolint: object_length_linte
   data,
   scenarios = NULL,
   impute_args = set_impute_args(),
-  fit_args = set_fit_args()
+  fit_args = set_fit_args(),
+  parallel = FALSE,
+  n_cores = default_n_cores()
 ) {
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
     analyzer_fn = analyze_mi_closed_form,
-    parallel = .Platform$OS.type != "windows",
+    parallel = parallel,
+    n_cores = n_cores,
     impute_args = impute_args,
     fit_args = fit_args
   )
@@ -257,13 +268,16 @@ analyze_generated_data_mi_closed_form <- function( # nolint: object_length_linte
 analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
   data,
   scenarios = NULL,
-  fit_args = set_fit_args()
+  fit_args = set_fit_args(),
+  parallel = FALSE,
+  n_cores = default_n_cores()
 ) {
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
     analyzer_fn = analyze_reweighting,
-    parallel = .Platform$OS.type != "windows",
+    parallel = parallel,
+    n_cores = n_cores,
     fit_args = fit_args
   )
 }
@@ -271,13 +285,16 @@ analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
 analyze_generated_data_lspim <- function(
   data,
   scenarios = NULL,
-  alpha = 0.05
+  alpha = 0.05,
+  parallel = FALSE,
+  n_cores = default_n_cores()
 ) {
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
     analyzer_fn = analyze_lspim,
-    parallel = .Platform$OS.type != "windows",
+    parallel = parallel,
+    n_cores = n_cores,
     alpha = alpha
   )
 }
@@ -287,8 +304,13 @@ build_analysis_registry <- function() {
   list(
     classical_ml = list(
       default_config = list(),
-      runner = function(scenario_data, scenarios, config) {
-        analyze_generated_data_classical_ml(scenario_data, scenarios)
+      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
+        analyze_generated_data_classical_ml(
+          scenario_data,
+          scenarios,
+          parallel = parallel,
+          n_cores = n_cores
+        )
       }
     ),
     multiple_imputation = list(
@@ -296,12 +318,14 @@ build_analysis_registry <- function() {
         impute_args = set_impute_args(method_y = "2l.pmm"),
         fit_args = set_fit_args()
       ),
-      runner = function(scenario_data, scenarios, config) {
+      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
         analyze_generated_data_mi_closed_form(
           data = scenario_data,
           scenarios = scenarios,
           impute_args = config$impute_args,
-          fit_args = config$fit_args
+          fit_args = config$fit_args,
+          parallel = parallel,
+          n_cores = n_cores
         )
       }
     ),
@@ -309,11 +333,13 @@ build_analysis_registry <- function() {
       default_config = list(
         fit_args = set_fit_args(reweighting = TRUE)
       ),
-      runner = function(scenario_data, scenarios, config) {
+      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
         analyze_generated_data_reweighting(
           data = scenario_data,
           scenarios = scenarios,
-          fit_args = config$fit_args
+          fit_args = config$fit_args,
+          parallel = parallel,
+          n_cores = n_cores
         )
       }
     ),
@@ -333,11 +359,13 @@ build_analysis_registry <- function() {
         }
         scenario_row$n <= config$lspim_max_n
       },
-      runner = function(scenario_data, scenarios, config) {
+      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
         analyze_generated_data_lspim(
           data = scenario_data,
           scenarios = scenarios,
-          alpha = config$alpha
+          alpha = config$alpha,
+          parallel = parallel,
+          n_cores = n_cores
         )
       }
     )
@@ -362,7 +390,9 @@ run_single_analysis_method <- function(
   scenario_data,
   scenarios,
   user_config = list(),
-  analysis_registry = NULL
+  analysis_registry = NULL,
+  parallel = FALSE,
+  n_cores = default_n_cores()
 ) {
   if (is.null(analysis_registry)) {
     analysis_registry <- build_analysis_registry()
@@ -372,5 +402,5 @@ run_single_analysis_method <- function(
     stop("Unsupported analysis requested: ", analysis_name)
   }
   final_config <- resolve_analysis_config(analysis_entry, user_config)
-  analysis_entry$runner(scenario_data, scenarios, final_config)
+  analysis_entry$runner(scenario_data, scenarios, final_config, parallel, n_cores)
 }

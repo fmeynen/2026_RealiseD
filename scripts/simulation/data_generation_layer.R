@@ -674,6 +674,18 @@ bind_replicates <- function(replicates) {
 
 ## Simulate scenario -----------------------------------------------------------------------------------------------
 
+#' Generate one replicate from a task list; top-level so it can be sent to PSOCK workers.
+#'
+#' @param task         List with `sim_id` and `state` (an L'Ecuyer-CMRG .Random.seed or NULL).
+#' @param scenario_row A single-row data frame from the scenario grid.
+#'
+#' @return Long-format data frame for one replicate (see simulate_one_dataset()).
+
+simulate_replicate_task <- function(task, scenario_row) {
+  simulate_one_dataset(scenario_row, sim_id = task$sim_id, rng_state = task$state)
+}
+
+
 #' Generate all B simulated datasets for a single scenario.
 #'
 #' Repeats simulate_one_dataset() B times, manages replicate IDs and RNG states,
@@ -688,9 +700,13 @@ bind_replicates <- function(replicates) {
 #'   with other scenarios. The caller's RNG state is left unchanged. Set to NULL and omit from
 #'   scenario_row for unseeded (non-reproducible) runs that use the current global RNG.
 #'
+#' @param parallel     Logical. Generate the replicates on a PSOCK cluster (see parallel_map());
+#'   the output is identical to the serial run.
+#' @param n_cores      Integer. Maximum number of workers when parallel = TRUE.
+#'
 #' @return A stacked long-format data frame with B replicates identified by sim_id.
 
-simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
+simulate_scenario <- function(scenario_row, B, seed_base = NULL, parallel = FALSE, n_cores = default_n_cores()) {
   effective_seed <- if (!is.null(seed_base)) {
     seed_base
   } else if (!is.null(scenario_row$seed_base) && !is.na(scenario_row$seed_base)) {
@@ -704,9 +720,15 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
     rep(list(NULL), B)
   }
 
-  replicates <- lapply(seq_len(B), function(b) {
-    simulate_one_dataset(scenario_row, sim_id = b, rng_state = rng_states[[b]])
-  })
+  tasks <- lapply(seq_len(B), function(b) list(sim_id = b, state = rng_states[[b]]))
+  replicates <- parallel_map(
+    tasks,
+    simulate_replicate_task,
+    scenario_row = scenario_row,
+    parallel = parallel,
+    n_cores = n_cores,
+    chunk_size = max(1L, ceiling(B / (4L * as.integer(n_cores))))
+  )
   if (length(replicates) == 0L) {
     return(NULL)
   }
