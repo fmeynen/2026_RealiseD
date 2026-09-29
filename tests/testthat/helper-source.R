@@ -2,7 +2,7 @@
 # Locates the repo root and sources the simulation layer scripts so that
 # their functions are visible to the tests in this directory. This mirrors
 # the sourcing behavior of scripts/run_all.R (source every .R file in
-# scripts/Simulation Layer/ alphabetically), but is robust to testthat
+# scripts/simulation/ alphabetically), but is robust to testthat
 # changing the working directory to tests/testthat.
 
 find_repo_root <- function(start = getwd()) {
@@ -25,7 +25,7 @@ find_repo_root <- function(start = getwd()) {
 repo_root <- find_repo_root()
 
 simulation_layer_files <- list.files(
-  file.path(repo_root, "scripts", "Simulation Layer"),
+  file.path(repo_root, "scripts", "simulation"),
   pattern = "\\.R$",
   full.names = TRUE
 )

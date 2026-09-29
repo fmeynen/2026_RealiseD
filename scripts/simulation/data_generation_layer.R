@@ -683,13 +683,20 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
 #' @return Named list of summary data frames:
 #'   \describe{
 #'     \item{treatment_balance}{Subject counts per treatment arm per scenario/replicate.}
-#'     \item{obs_rate_by_time}{Proportion of observed values by time_index and scenario.}
+#'     \item{obs_rate_by_time}{Proportion of observed values by time_value and scenario.}
 #'     \item{mean_y_by_treatment_time}{Empirical mean of y by treatment, time, and scenario.}
 #'     \item{n_obs_per_subject}{Mean number of observed measurements per subject.}
 #'   }
+#'
+#' @note The `fixed_effects` and `random_effect_cov` elements come from a single
+#'   \code{lme4::lmer()} fit over all rows of \code{data}. If \code{data} contains more than one
+#'   replicate (multiple sim_id values) or more than one scenario, subject_id repeats across
+#'   them and the fit pools unrelated subjects together, so its parameter estimates are not
+#'   meaningful. Pass a single replicate (one scenario_id x sim_id) for interpretable model
+#'   parameters.
 
 summarize_generated_data <- function(data) {
-  
+
   #Treatment Balance
   unique_subjects <- data[!duplicated(data[, c("scenario_id", "sim_id", "subject_id")]), ]
   treatment_balance <- aggregate(
@@ -701,12 +708,18 @@ summarize_generated_data <- function(data) {
 
   #observation rate by time
   obs_rate_by_time <- aggregate(
-    observed ~ scenario_id + time_index,
+    observed ~ scenario_id + time_value,
     data = data,
     FUN = mean
   )
   names(obs_rate_by_time)[names(obs_rate_by_time) == "observed"] <- "obs_rate"
-  obs_rate_by_time$dropout <- c(NA,head(obs_rate_by_time$obs_rate, -1)) - obs_rate_by_time$obs_rate
+  obs_rate_by_time <- obs_rate_by_time[order(obs_rate_by_time$scenario_id, obs_rate_by_time$time_value), ]
+  obs_rate_by_time$dropout <- ave(
+    obs_rate_by_time$obs_rate,
+    obs_rate_by_time$scenario_id,
+    FUN = function(x) c(NA, head(x, -1)) - x
+  )
+  rownames(obs_rate_by_time) <- NULL
 
   #mean outcome by treatment * time
   mean_y_by_treatment_time <- aggregate(
@@ -763,7 +776,7 @@ ensure_results_artifact_helpers <- function() {
     stop(
       paste0(
         "Results artifact helpers are not available. ",
-        "Source 'scripts/results_layer.R' before using ",
+        "Source 'scripts/simulation/artifact_store.R' before using ",
         "data-generation artifact persistence helpers."
       )
     )

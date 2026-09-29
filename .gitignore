@@ -54,3 +54,10 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 .positai
+
+# LaTeX build artifacts
+*.log
+*.aux
+
+# personal file, kept locally
+Tijd.xlsx

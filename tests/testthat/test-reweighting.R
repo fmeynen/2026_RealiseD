@@ -46,3 +46,27 @@ test_that("iterations is 0 when reweighting is disabled", {
 
   expect_identical(fit$iterations, 0)
 })
+
+test_that("set_fit_args() defaults damping to 0.7", {
+  expect_identical(set_fit_args()$damping, 0.7)
+})
+
+test_that("set_fit_args() rejects an invalid damping", {
+  expect_error(set_fit_args(damping = 0), "damping")
+  expect_error(set_fit_args(damping = 1.5), "damping")
+  expect_error(set_fit_args(damping = -0.1), "damping")
+  expect_error(set_fit_args(damping = NA_real_), "damping")
+  expect_error(set_fit_args(damping = c(0.5, 0.6)), "damping")
+  expect_error(set_fit_args(damping = "0.7"), "damping")
+})
+
+test_that("damping changes the reweighted beta on a small dataset", {
+  mats <- build_reweighting_mats()
+  args_default <- set_fit_args(reweighting = TRUE, damping = 0.7, max_iterations = 1)
+  args_full    <- set_fit_args(reweighting = TRUE, damping = 1,   max_iterations = 1)
+
+  fit_default <- suppressWarnings(CbCEstimator(mats, args_default))
+  fit_full    <- suppressWarnings(CbCEstimator(mats, args_full))
+
+  expect_false(isTRUE(all.equal(fit_default$beta_tilde, fit_full$beta_tilde)))
+})
