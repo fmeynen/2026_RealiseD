@@ -138,7 +138,7 @@ Ground rules:
     returns no findings; skip if lintr is not installed.
   - Golden unchanged.
 
-- [ ] **9. renv.**
+- [x] **9. renv.**
   - Install `renv` and run `renv::init()` (implicit snapshot of the packages used in the
     project).
   - Commit `renv.lock`, `.Rprofile` and `renv/activate.R` / `renv/settings.json`; make sure

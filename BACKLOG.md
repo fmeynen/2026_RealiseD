@@ -126,10 +126,8 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
   They add little beyond `run_method()`; callers (registry runners, tests) could call
   `run_method()`/the registry directly.
 
-- [ ] **[consistency] Declare dependencies.**
-  lme4, mice, miceadds, ks, expm, reformulas, geessbin, multcomp, dplyr (only `bind_rows`),
-  testthat, withr (the reference code in `scripts/reference/` also uses mvnfast). The README
-  lists them for now; use `renv` or a `DESCRIPTION` file.
+- [x] **[consistency] Declare dependencies.**
+  Done: `renv.lock` pins exact versions (107 packages, R 4.6.1); restore with `renv::restore()`.
 
 - [ ] **[consistency] `not_converged` status can never occur.**
   Every analyzer sets `converged = status != "failure"`, so `add_convergence_status()`'s
