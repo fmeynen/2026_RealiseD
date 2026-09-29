@@ -124,5 +124,5 @@ Ground rules:
   - required R packages;
   - a link to `BACKLOG.md`.
 
-- [ ] **10. Close out.** Tick the Clarity items in `BACKLOG.md` and fix any stale paths there.
+- [x] **10. Close out.** Tick the Clarity items in `BACKLOG.md` and fix any stale paths there.
   Run the full suite once with `RUN_SLOW_TESTS=true`, then draft the PR description.

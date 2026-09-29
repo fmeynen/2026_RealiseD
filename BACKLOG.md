@@ -70,45 +70,25 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 ## Clarity
 
-- [x] **[clarity] Split `orchestration.R` (1,350 lines).**
-  Done: split into `analysis_methods.R`, `artifact_store.R`, `pipeline.R`; `orchestration.R`
-  deleted.
+All items below were completed in the clarity pass (branch `refactor/clarity`, plan
+[plans/2026-09-29-clarity-pass.md](plans/2026-09-29-clarity-pass.md)).
 
-- [ ] **[clarity] Move the generation loop out of `run_all.R`.**
-  Generation is a ~120-line inline loop while analysis is one `run_requested_analyses()` call.
-  Add a matching `run_generation()`.
-
-- [ ] **[clarity] Remove dead and legacy code.**
-  - `impute_mi_by_sim_scenario()`, `validate_mi_imputation_input()`, `check_mi_*()` are not used by the pipeline.
-  - [x] The flat `build_and_save_results()` / `sim_results_latest.rds` flow and
-    `find/load_results_artifact_exact()` were only used by validation scripts; removed, with the
-    still-used pieces (`add_convergence_status()`, hashing/canonicalization helpers, schema
-    version constants) folded into `artifact_store.R`.
-  - Unused: `identity` in `calculate_stage2_Dmatrix()`, `n_c` argument, `mats$clusterID`,
-    `return_mids` / `strict_checks` in `set_impute_args()`.
-
-- [ ] **[clarity] CbC error messages are lost.**
-  `apply_cbc()` swallows the error, `extract_cbc_result()` returns NAs, and `is_singular()` then
-  fails on the NA matrix, so the stored `error_message` is an `eigen()` error instead of the real
-  cause ([analysis_layer.R:448-491](scripts/simulation/analysis_layer.R#L448-L491)).
-  Keep one error boundary per method.
-
-- [ ] **[clarity] Name the magic numbers.**
-  Dampening `lambda <- 0.7` (analysis_layer.R:721), the `>= 3` observation filter for reweighting,
-  `1.96` in the coverage computation (consider a t quantile for N = 10). Move into `fit_args` or config.
-
-- [ ] **[clarity] Update the README.**
-  It lists scripts that no longer exist, says three methods instead of four, has an empty
-  Documentation section and no dependency list.
-
-- [ ] **[clarity] Rename confusing files and folders.**
-  `Simulation Layer/validation.R` (input checks) vs `scripts/Validation/` (check scripts);
-  spaces in folder names; "Code Alvaro" vs "Alvara"; stray root files
-  (`CBCEstimator.tex/.pdf/.log`, `Tijd.xlsx`).
-
-- [ ] **[clarity] Convert `scripts/Validation/` to testthat.**
-  The correctness pass added `tests/testthat/` with focused regression tests; migrate the
-  remaining ad-hoc validation scripts into it.
+- [x] **[clarity] Split `orchestration.R`** into `analysis_methods.R`, `artifact_store.R`,
+  `pipeline.R`.
+- [x] **[clarity] Move the generation loop out of `run_all.R`** into `run_generation()`.
+- [x] **[clarity] Remove dead and legacy code**: the legacy grouped-MI path, the flat
+  `build_and_save_results()` / `sim_results_latest.rds` flow (`results_layer.R` folded into
+  `artifact_store.R`), and unused variables and `set_impute_args()` fields.
+- [x] **[clarity] CbC error messages are lost**: errors are now caught once per method, and
+  failure rows keep the original message, timing and warnings.
+- [x] **[clarity] Name the magic numbers**: `set_fit_args(damping)`, `aggregate_results(ci_level)`,
+  and a comment explaining the `>= 3` observations filter. The t-quantile idea is a separate item
+  above.
+- [x] **[clarity] Update the README.**
+- [x] **[clarity] Rename confusing files and folders**: `scripts/simulation/`,
+  `input_checks.R`, `scripts/reference/alvaro_cbc/`; root files moved or untracked.
+- [x] **[clarity] Convert `scripts/Validation/` to testthat**; slow statistical checks run with
+  `RUN_SLOW_TESTS=true`.
 
 ## Consistency
 
@@ -139,4 +119,11 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 - [ ] **[consistency] Declare dependencies.**
   lme4, mice, miceadds, ks, expm, reformulas, geessbin, multcomp, dplyr (only `bind_rows`),
-  mvnfast, testthat. Use `renv` or a `DESCRIPTION` file.
+  testthat, withr (the reference code in `scripts/reference/` also uses mvnfast). The README
+  lists them for now; use `renv` or a `DESCRIPTION` file.
+
+- [ ] **[consistency] `not_converged` status can never occur.**
+  Every analyzer sets `converged = status != "failure"`, so `add_convergence_status()`'s
+  `not_converged` level is unreachable, and non-convergence (e.g. the reweighting loop hitting
+  `max_iterations`) shows up only as `converged_warning`. Either record real convergence per
+  method or drop the level.
