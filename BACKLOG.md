@@ -4,6 +4,23 @@ Known issues deferred from the correctness pass (branch `fix/correctness`, 2026-
 Each item is written so it can be turned into a GitHub issue later; the label in brackets
 is the suggested issue label. Line numbers refer to the code as of commit `d0ce14f`.
 
+## Follow-ups from the correctness-pass review
+
+- [ ] **[reproducibility] Derive RNG streams from scenario parameters, not grid position.**
+  The stream index is `2 * (scenario_id - 1) + purpose`
+  ([data_generation_layer.R](scripts/Simulation%20Layer/data_generation_layer.R), `scenario_rng_stream()`),
+  and `scenario_id` is the row number produced by `expand.grid()`. Adding a value to any grid
+  factor renumbers the scenarios, so an unchanged scenario gets different random draws and
+  cannot be compared replicate-by-replicate across grid versions. Caching stays correct because
+  the generation hash covers the whole grid. Target: derive each scenario's stream from a hash of
+  its parameter values, so the same scenario always gets the same draws.
+
+- [ ] **[statistics] Investigate reweighting fit quality.**
+  In the B = 3 smoke run (2026-09-29), only 13 of 48 reweighting fits were `converged_ok`;
+  13 were singular and 22 ended with warnings (likely non-convergence within
+  `max_iterations = 30` and/or D_tilde being adjusted for positive definiteness). Check which
+  warnings dominate per N before the full B = 5000 rerun.
+
 ## Efficiency
 
 - [ ] **[efficiency] Parallelism is disabled on Windows.**
