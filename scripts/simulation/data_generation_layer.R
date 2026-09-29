@@ -31,7 +31,7 @@
 
 # Constants --------------------------------------------------------------------------------------------------------
 
-data_generation_schema_version <- "v2"
+data_generation_schema_version <- "v3"
 
 # Increment this string whenever the per-replicate analysis RNG stream scheme changes.
 analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
@@ -58,7 +58,7 @@ analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
 #' @param d12_values          Numeric vector. Values for cov(b0_i, b1_i).
 #' @param sigma2_values       Numeric vector. Residual variance values.
 #' @param dropout_mechanism   String vector. Dropout mechanism: 'none', 'uniform',
-#'   'half-missing', 'three_obs_minimum', 'fixed_rate', or NA/NULL (default) to derive
+#'   'half_missing', 'three_obs_minimum', 'fixed_rate', or NA/NULL (default) to derive
 #'   the mechanism from dropout_rate at generation time (see simulate_one_dataset()).
 #' @param dropout_rate_values Numeric vector. Per-visit dropout probabilities.
 #' @param seed_base           Integer. Global base seed, stored unchanged on every row. It seeds a
@@ -142,8 +142,11 @@ validate_scenario_grid <- function(scenario_grid) {
     stop("dropout_rate must be in [0, 1] for all scenarios.")
   }
   if ("dropout_mechanism" %in% names(scenario_grid)) {
-    allowed_mechanisms <- c("none", "uniform", "half-missing", "three_obs_minimum", "fixed_rate")
     observed_mechanisms <- scenario_grid$dropout_mechanism[!is.na(scenario_grid$dropout_mechanism)]
+    if ("half-missing" %in% observed_mechanisms) {
+      stop("dropout_mechanism 'half-missing' was renamed to 'half_missing'.")
+    }
+    allowed_mechanisms <- c("none", "uniform", "half_missing", "three_obs_minimum", "fixed_rate")
     invalid_mechanisms <- setdiff(unique(observed_mechanisms), allowed_mechanisms)
     if (length(invalid_mechanisms) > 0) {
       stop(
@@ -335,7 +338,7 @@ generate_outcomes <- function(panel, epsilon) {
 #' @param panel        Long-format data frame with at least subject_id, time_index.
 #' @param dropout_rate Numeric. Per-visit probability of dropping out (used by
 #'   mechanism = 'fixed_rate'). Ignored when mechanism = 'none'.
-#' @param mechanism    Character. Dropout mechanism: 'none', 'uniform', 'half-missing',
+#' @param mechanism    Character. Dropout mechanism: 'none', 'uniform', 'half_missing',
 #'   'three_obs_minimum', or 'fixed_rate'.
 #'
 #' @return Data frame with columns subject_id and dropout_time
@@ -353,7 +356,7 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
     dropout_time <- vapply(subject_ids, function(id) {
       return(sample.int(n = n_measures, size = 1))
     }, integer(1L))
-  } else if (mechanism == "half-missing") {
+  } else if (mechanism == "half_missing") {
     # Randomly split subjects in two groups.
     # One half remains fully observed, the other half has dropout time sampled uniformly from 1..(n_measures - 1).
     n_subjects <- length(subject_ids)
@@ -394,7 +397,7 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
   } else {
     stop(
       "Unknown dropout mechanism: '", mechanism,
-      "'. Use 'none', 'uniform', 'half-missing', 'three_obs_minimum', or 'fixed_rate'."
+      "'. Use 'none', 'uniform', 'half_missing', 'three_obs_minimum', or 'fixed_rate'."
     )
   }
 

@@ -19,7 +19,7 @@ fast_classical_ml_scenario <- function(seed_base = 1) {
     d22_values = 1,
     d12_values = 0.4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = seed_base
   )
 }
@@ -96,7 +96,7 @@ test_that("analyze_generated_data_classical_ml() returns one labeled, non-NA-est
     d22_values = 1,
     d12_values = 0.4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 2
   )
   generated_stacked <- do.call(rbind, lapply(seq_len(nrow(scenarios)), function(i) {

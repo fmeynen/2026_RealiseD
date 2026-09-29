@@ -45,7 +45,7 @@ test_that("run_requested_analyses skips oversized scenarios as skipped_by_config
     n_values = c(6, 8),
     n_measures = 4,
     beta2_values = 0.3,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   n_simulations <- 2L
@@ -117,7 +117,7 @@ test_that("run_requested_analyses fails loudly when lspim_max_n is malformed", {
     n_values = c(6, 8),
     n_measures = 4,
     beta2_values = 0.3,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   n_simulations <- 2L

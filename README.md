@@ -23,8 +23,8 @@ Dropout is monotone (`generate_dropout_process()`):
 |---|---|
 | `none` | Everyone observed at every visit |
 | `uniform` | Last observed visit drawn uniformly from 1..`n_measures` |
-| `half-missing` | Half the subjects complete; the other half drop out after visit 1..`n_measures` − 1 |
-| `three_obs_minimum` | As `half-missing`, but dropouts keep at least 3 visits |
+| `half_missing` | Half the subjects complete; the other half drop out after visit 1..`n_measures` − 1 |
+| `three_obs_minimum` | As `half_missing`, but dropouts keep at least 3 visits |
 | `fixed_rate` | Drop out with probability `dropout_rate` at each visit after the first |
 
 The four methods (names as they appear in the `method` column of the results):

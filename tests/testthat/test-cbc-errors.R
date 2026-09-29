@@ -13,7 +13,7 @@ build_cbc_error_data <- function() {
     beta0_values = 1,
     beta2_values = 0.3,
     beta3_values = 0.1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   simulate_scenario(sc[1, , drop = FALSE], B = 1)
@@ -73,7 +73,7 @@ test_that("extract_cbc_result() returns a fully named 12-element vector on a suc
     beta0_values = 1,
     beta2_values = 0.3,
     beta3_values = 0.1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)

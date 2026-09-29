@@ -19,7 +19,7 @@ scenarios <- build_scenario_grid(
   d22_values = 0.2239,
   d12_values = -0.4985,
   sigma2_values = 3.1508,
-  dropout_mechanism = c("half-missing", "three_obs_minimum"),
+  dropout_mechanism = c("half_missing", "three_obs_minimum"),
   seed_base = 260925
 )
 n_simulations <- 5000L

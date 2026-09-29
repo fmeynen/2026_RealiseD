@@ -11,7 +11,7 @@ test_that("stacked_variance_inflation inflates fixed-effect SEs by sqrt(m) only"
     beta0_values = 1,
     beta2_values = 0.3,
     beta3_values = 0.1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 7
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)
@@ -57,7 +57,7 @@ test_that("fit_closed_form_reweighting() output is unaffected by stacked_varianc
     beta0_values = 1,
     beta2_values = 0.3,
     beta3_values = 0.1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 7
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)

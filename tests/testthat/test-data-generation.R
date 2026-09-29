@@ -45,11 +45,11 @@ test_that("generate_random_effects() returns one row per subject with the expect
   expect_equal(nrow(re), 20L)
 })
 
-test_that("half-missing dropout leaves everyone observed at the first visit and exactly half of subjects fully observed", {
+test_that("half_missing dropout leaves everyone observed at the first visit and exactly half of subjects fully observed", {
   scenario <- build_scenario_grid(
     n_values = 40,
     n_measures = 6,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 99
   )
   dat <- simulate_scenario(scenario[1, , drop = FALSE], B = 1)
@@ -68,7 +68,7 @@ test_that("allocate_treatment() balances subjects exactly across arms for even n
   scenario <- build_scenario_grid(
     n_values = 40,
     n_measures = 6,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 99
   )
   dat <- simulate_scenario(scenario[1, , drop = FALSE], B = 1)
@@ -81,7 +81,7 @@ test_that("summarize_generated_data() runs on canonical simulate_scenario() outp
   scenario <- build_scenario_grid(
     n_values = 10,
     n_measures = 4,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   dat <- simulate_scenario(scenario[1, , drop = FALSE], B = 2, seed_base = 1)

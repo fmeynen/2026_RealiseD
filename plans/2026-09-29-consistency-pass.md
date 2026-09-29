@@ -64,7 +64,7 @@ Ground rules:
     and `analyze_closed_form_reweighting()` → `analyze_reweighting()`.
   - Update callers and tests. Golden unchanged.
 
-- [ ] **4. Dropout mechanism names.**
+- [x] **4. Dropout mechanism names.**
   - `"half-missing"` → `"half_missing"` everywhere (data generation, `validate_scenario_grid()`
     allowed values, `run_all.R`, tests, README).
   - `validate_scenario_grid()` rejects `"half-missing"` with the message:

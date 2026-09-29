@@ -5,7 +5,7 @@ small_seeding_grid <- function(seed_base = 20260928) {
     n_values = 6,
     n_measures = 4,
     beta3_values = c(0, 0.5),
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = seed_base
   )
 }
@@ -22,7 +22,7 @@ run_all_grid <- function() {
     d22_values = 0.2239,
     d12_values = -0.4985,
     sigma2_values = 3.1508,
-    dropout_mechanism = c("half-missing", "three_obs_minimum"),
+    dropout_mechanism = c("half_missing", "three_obs_minimum"),
     seed_base = 260925
   )
 }

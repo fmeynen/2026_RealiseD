@@ -38,7 +38,7 @@ fast_mi_scenario <- function(seed_base = 2609) {
     d22_values = 1,
     d12_values = 0.4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = seed_base
   )
 }

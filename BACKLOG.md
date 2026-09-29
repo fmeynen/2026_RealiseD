@@ -97,8 +97,9 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
   `reweighting` / `weighting` / `closed_form_reweighting` / `closed_form_weights`; engines are
   `cbc` / `mice_cbc`. Use the keys of `build_analysis_registry()` everywhere.
 
-- [ ] **[consistency] Dropout mechanism names mix separators.**
-  `"half-missing"` vs `"three_obs_minimum"`.
+- [x] **[consistency] Dropout mechanism names mix separators.**
+  `"half-missing"` renamed to `"half_missing"` everywhere; the old spelling now errors loudly
+  in `validate_scenario_grid()` (consistency pass, branch `refactor/consistency`).
 
 - [ ] **[consistency] Code style.**
   Mixed 2/4-space argument indentation, `if(` vs `if (`, `=` for assignment, `T`/`F`,

@@ -81,7 +81,7 @@ tiny_scenario_grid <- function(seed_base = 1) {
     n_values = 10,
     n_measures = 4,
     beta2_values = 0.3,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = seed_base
   )
 }

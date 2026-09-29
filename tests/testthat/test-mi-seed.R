@@ -5,7 +5,7 @@ build_two_identical_replicates <- function() {
     beta0_values = 1,
     beta2_values = 0.3,
     beta3_values = 0.1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 11
   )
   one <- simulate_scenario(sc[1, , drop = FALSE], B = 1)
