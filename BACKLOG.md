@@ -30,6 +30,13 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   subjects a t-quantile (df based on N, e.g. N − p) may be more appropriate. Would change
   coverage results.
 
+- [ ] **[statistics] Satterthwaite t-test for the classical_ml interaction decision.**
+  The parametric methods decide the interaction test with a Wald z test on beta3
+  (`wald_interaction_decision()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)). For
+  classical_ml a t-test with Satterthwaite degrees of freedom (`lmerTest`) might be more accurate
+  at small n, where the z test can be anti-conservative. Would change type I error and power for
+  classical_ml at small N.
+
 ## Efficiency
 
 All items below were completed in the efficiency pass (branch `refactor/efficiency`, plan

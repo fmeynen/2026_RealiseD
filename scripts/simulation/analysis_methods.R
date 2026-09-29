@@ -67,7 +67,7 @@ run_method <- function(data, method, engine, prepare_type = method, fit, extract
 #' always returns a standardized one-row result even when fitting fails.
 #'
 #' @param data  Long-format data frame for one simulation replicate.
-#' @param alpha Significance level shared by all methods. Accepted but not used yet.
+#' @param alpha Significance level shared by all methods.
 #'
 #' @return One-row data frame with standardized classical ML analysis results.
 
@@ -83,7 +83,8 @@ analyze_classical_ml <- function(data, alpha = 0.05) {
         original_data = original_data,
         analysis_data = analysis_data,
         method = "classical_ml",
-        engine = "lme4"
+        engine = "lme4",
+        alpha = alpha
       )
     }
   )
@@ -98,7 +99,7 @@ analyze_classical_ml <- function(data, alpha = 0.05) {
 #' @param data        Long-format data frame for one simulation replicate.
 #' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
 #' @param fit_args    Named list of fit arguments, as returned by \code{set_fit_args()}.
-#' @param alpha       Significance level shared by all methods. Accepted but not used yet.
+#' @param alpha       Significance level shared by all methods.
 #' @param rng_state   Optional L'Ecuyer-CMRG \code{.Random.seed} (e.g. from
 #'   \code{replicate_rng_states(..., purpose = "analysis")}). When NULL, imputation draws from
 #'   the current global RNG; call \code{set.seed()} first for reproducible direct calls. The
@@ -142,7 +143,8 @@ analyze_mi_closed_form <- function(
         original_data = original_data,
         analysis_data = analysis_data,
         method = "multiple_imputation",
-        engine = "mice_cbc"
+        engine = "mice_cbc",
+        alpha = alpha
       )
     }
   )
@@ -160,7 +162,8 @@ analyze_reweighting <- function(data, fit_args = set_fit_args(), alpha = 0.05) {
         original_data = original_data,
         analysis_data = analysis_data,
         method = "reweighting",
-        engine = "cbc"
+        engine = "cbc",
+        alpha = alpha
       )
     }
   )
