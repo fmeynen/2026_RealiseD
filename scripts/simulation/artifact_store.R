@@ -488,8 +488,7 @@ save_aggregation_summary <- function(
   output_dir = default_paths$results,
   overwrite = FALSE,
   include_engine = FALSE,
-  source_signature = NULL,
-  ci_level = 0.95
+  source_signature = NULL
 ) {
   if (
     is.null(combined_artifact$results) || nrow(combined_artifact$results) == 0L
@@ -531,8 +530,7 @@ save_aggregation_summary <- function(
           as.character(meta$aggregation_schema_version),
           as.character(aggregation_schema_version)
         ) &&
-        identical(isTRUE(meta$include_engine), isTRUE(include_engine)) &&
-        identical(as.numeric(meta$ci_level), as.numeric(ci_level))
+        identical(isTRUE(meta$include_engine), isTRUE(include_engine))
     ) {
       return(existing)
     }
@@ -540,8 +538,7 @@ save_aggregation_summary <- function(
 
   aggregation <- aggregate_results(
     combined_artifact,
-    include_engine = include_engine,
-    ci_level = ci_level
+    include_engine = include_engine
   )
   aggregation$meta$analysis_run_hash <- analysis_run_hash
   aggregation$metadata <- aggregation$meta
@@ -555,7 +552,6 @@ save_aggregation_summary <- function(
       source_signature = source_signature,
       aggregation_schema_version = aggregation_schema_version,
       include_engine = isTRUE(include_engine),
-      ci_level = ci_level,
       created_at = Sys.time()
     )
   )

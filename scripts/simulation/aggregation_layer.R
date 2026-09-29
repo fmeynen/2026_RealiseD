@@ -3,25 +3,28 @@
 # "research_question/meeting_notes/programming_planning.qmd".
 #
 # Consumes the scenario-wise combined convenience analysis artifact and returns per-scenario x per-method
-# summary statistics:
-#   - Mean convergence and status proportions
-#   - Signed bias and relative bias for beta0..beta3
-#   - MSE for beta0..beta3 when a method estimates those parameters
+# summary statistics (one row per scenario_id x method[, engine]):
+#   - Design columns of the scenario (n, n_measures, beta0..beta3, d11, d22, d12, sigma2, dropout_*)
+#   - Convergence status counts and proportions
+#   - MSE for beta0..beta3 (NA for methods that do not estimate them) and the number of estimated fits
+#   - Wald CI coverage for beta3 at level 1 - alpha, where alpha is read from interaction_alpha
+#   - Type I error (true beta3 == 0) or power (true beta3 != 0) of the interaction test, computed the
+#     same way for every method; the metric that does not apply to a group is NA with a count of 0
 #   - Mean and median computation time
-#   - 95% Wald CI coverage for beta3 when a method supplies a standard error
-#   - Interaction-test rejection rate, type I error, and power for methods
-#     that explicitly test the interaction
 #
 # Relative efficiency is deferred until multiple analysis methods exist.
-# Relative bias returns NA when the true parameter value is zero.
+# Results without an interaction decision on every non-failure row, or with more than one distinct
+# interaction_alpha, are rejected by validate_aggregation_inputs().
 #
 # Function hierarchy:
 #   aggregate_results
 #     validate_aggregation_inputs
+#     extract_interaction_alpha
 #     compute_convergence_summary
-#     compute_bias_summary
+#     compute_accuracy_summary
 #     compute_time_summary
-#     compute_beta3_coverage_summary
+#     compute_coverage_summary
+#     compute_testing_summary
 #     merge_aggregation_summaries
 
 
@@ -36,15 +39,25 @@ convergence_status_levels <- c(
   "error"
 )
 
+# Scenario columns that describe the simulated design; every other scenario column (seeds, hashes, ...) is
+# left out of the aggregation table.
+design_columns <- c(
+  "n", "n_measures", "beta0", "beta1", "beta2", "beta3",
+  "d11", "d22", "d12", "sigma2", "dropout_mechanism", "dropout_rate"
+)
+
 
 # Validation -------------------------------------------------------------------------------------------------------
 
 #' Validate inputs before aggregation.
 #'
 #' Performs hard-stop checks on required columns, key uniqueness, and
-#' non-emptiness. Warns (does not stop) when all elapsed_seconds values are
-#' missing. If beta truth columns (beta0..beta3) are absent from results_df,
-#' they are joined from scenarios_df by scenario_id.
+#' non-emptiness. Stops when a non-failure row has no interaction decision
+#' (results from before the unified interaction decision, which must be
+#' rerun) or when the results contain more than one distinct interaction_alpha.
+#' Warns (does not stop) when all elapsed_seconds values are missing. If beta
+#' truth columns (beta0..beta3) are absent from results_df, they are joined
+#' from scenarios_df by scenario_id.
 #'
 #' @param results_df   Data frame of simulation results as stored in the
 #'   combined analysis artifact (combined$results).
@@ -65,7 +78,8 @@ validate_aggregation_inputs <- function(results_df, scenarios_df = NULL, include
   required_cols <- c(
     "scenario_id", "sim_id", "method",
     "status", "convergence_status",
-    "elapsed_seconds"
+    "elapsed_seconds",
+    "interaction_tested", "interaction_rejected", "interaction_alpha"
   )
   if (include_engine) {
     required_cols <- c(required_cols, "engine")
@@ -75,6 +89,16 @@ validate_aggregation_inputs <- function(results_df, scenarios_df = NULL, include
   if (length(missing_cols) > 0L) {
     stop("results_df is missing required columns: ", paste(missing_cols, collapse = ", "))
   }
+
+  # Every non-failure row must carry an interaction decision. Older results (results schema before v4) leave it
+  # NA for the parametric methods.
+  if (any(results_df$status != "failure" & is.na(results_df$interaction_tested))) {
+    stop(
+      "results_df contains non-failure rows with interaction_tested = NA. These results predate the unified ",
+      "interaction decision; rerun the analyses before aggregating."
+    )
+  }
+  extract_interaction_alpha(results_df)
 
   # Join true beta values from scenarios if absent from results.
   beta_truth_cols <- c("beta0", "beta1", "beta2", "beta3")
@@ -130,6 +154,46 @@ safe_proportion <- function(n_match, n_total) {
 }
 
 
+## Interaction alpha -----------------------------------------------------------------------------------------------
+
+#' Read the significance level used by the analyses from the results.
+#'
+#' All methods share one alpha (see run_requested_analyses()), stored on every
+#' non-failure row as interaction_alpha. Stops when more than one distinct
+#' value is present. Returns NA_real_ when no row has an alpha (for example when
+#' every replicate failed); coverage is then NA and no row is eligible for
+#' testing.
+#'
+#' @param results_df Data frame of simulation results with interaction_alpha.
+#'
+#' @return Single numeric alpha, or NA_real_ when the data hold none.
+
+extract_interaction_alpha <- function(results_df) {
+  alphas <- unique(results_df$interaction_alpha[!is.na(results_df$interaction_alpha)])
+  if (length(alphas) > 1L) {
+    stop(
+      "results_df contains more than one distinct interaction_alpha (",
+      paste(sort(alphas), collapse = ", "),
+      "); all methods must be analysed with the same alpha."
+    )
+  }
+  if (length(alphas) == 0L) NA_real_ else as.numeric(alphas)
+}
+
+# Returns the column `name` of grp, or an all-NA numeric vector when the column is absent (a method that does not
+# estimate that parameter).
+column_or_na <- function(grp, name) {
+  if (name %in% names(grp)) grp[[name]] else rep(NA_real_, nrow(grp))
+}
+
+# Row-binds a list of per-group lists into a data frame.
+bind_group_rows <- function(rows) {
+  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
+  rownames(out) <- NULL
+  out
+}
+
+
 # Aggregation functions --------------------------------------------------------------------------------------------
 
 ## Convergence summary ---------------------------------------------------------------------------------------------
@@ -140,12 +204,11 @@ safe_proportion <- function(n_match, n_total) {
 #' @param group_cols Character vector of grouping column names.
 #'
 #' @return Data frame with one row per group and columns:
-#'   group columns, n_total, n_converged_ok,
-#'   mean_convergence, prop_converged_ok, prop_converged_warning,
+#'   group columns, n_total, prop_converged_ok, prop_converged_warning,
 #'   prop_converged_singular, prop_not_converged, prop_error.
 
 compute_convergence_summary <- function(results_df, group_cols) {
-  groups <- split(results_df, results_df[, group_cols, drop = FALSE])
+  groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
 
   rows <- lapply(groups, function(grp) {
     n_total <- nrow(grp)
@@ -161,8 +224,6 @@ compute_convergence_summary <- function(results_df, group_cols) {
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
         n_total = n_total,
-        n_converged_ok = n_converged_ok,
-        mean_convergence = safe_proportion(n_converged_ok, n_total),
         prop_converged_ok = safe_proportion(n_converged_ok, n_total),
         prop_converged_warning = safe_proportion(n_converged_warning, n_total),
         prop_converged_singular = safe_proportion(n_converged_singular, n_total),
@@ -172,117 +233,52 @@ compute_convergence_summary <- function(results_df, group_cols) {
     )
   })
 
-  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  rownames(out) <- NULL
-  out
+  bind_group_rows(rows)
 }
 
 
-## Bias summary ----------------------------------------------------------------------------------------------------
+## Accuracy summary ------------------------------------------------------------------------------------------------
 
-#' Compute per-group signed and relative bias for beta0..beta3.
+#' Compute per-group MSE for beta0..beta3 and the number of estimated fits.
 #'
-#' Signed bias per group: mean(estimate - true) over eligible replicates.
-#' Relative bias per group: mean(estimate - true) / true over eligible
-#' replicates, additionally excluding rows where true == 0. Within a
-#' (scenario_id, method) group the true value is constant, so this equals
-#' mean((estimate - true) / true) over those rows.
+#' Squared error per replicate: (estimate - true)^2. MSE is the mean over
+#' replicates where both are non-missing, and NA when there are none (for
+#' example LSPIM, which does not estimate the betas). n_estimated counts the
+#' replicates with a non-missing estimate_beta3.
 #'
 #' @param results_df Data frame of simulation results (validated, with beta
 #'   truth columns present).
 #' @param group_cols Character vector of grouping column names.
 #'
 #' @return Data frame with one row per group and columns:
-#'   group columns, then for each k in {0,1,2,3}:
-#'   bias_beta{k}, rel_bias_beta{k},
-#'   n_bias_beta{k}, n_rel_bias_beta{k}.
+#'   group columns, n_estimated, mse_beta0, mse_beta1, mse_beta2, mse_beta3.
 
-compute_bias_summary <- function(results_df, group_cols) {
-  groups <- split(results_df, results_df[, group_cols, drop = FALSE])
-
-  rows <- lapply(groups, function(grp) {
-    bias_parts <- list()
-
-    for (k in 0:3) {
-      est_col <- paste0("estimate_beta", k)
-      true_col <- paste0("beta", k)
-
-      est <- grp[[est_col]]
-      true <- grp[[true_col]]
-
-      # Signed bias: eligible when both estimate and true are non-missing.
-      eligible_abs <- !is.na(est) & !is.na(true)
-      bias_vec <- est[eligible_abs] - true[eligible_abs]
-
-      n_bias <- sum(eligible_abs)
-      bias <- if (n_bias > 0L) mean(bias_vec) else NA_real_
-
-      # Relative bias: additionally exclude rows where true value is zero.
-      eligible_rel <- eligible_abs & (true != 0)
-      rel_bias_vec <- (est[eligible_rel] - true[eligible_rel]) / true[eligible_rel]
-
-      n_rel_bias <- sum(eligible_rel)
-      rel_bias <- if (n_rel_bias > 0L) mean(rel_bias_vec) else NA_real_
-
-      bias_parts[[paste0("bias_beta", k)]] <- bias
-      bias_parts[[paste0("rel_bias_beta", k)]] <- rel_bias
-      bias_parts[[paste0("n_bias_beta", k)]] <- n_bias
-      bias_parts[[paste0("n_rel_bias_beta", k)]] <- n_rel_bias
-    }
-
-    c(as.list(grp[1L, group_cols, drop = FALSE]), bias_parts)
-  })
-
-  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  rownames(out) <- NULL
-  out
-}
-
-
-## MSE summary ----------------------------------------------------------------------------------------------------
-
-#' Compute per-group MSE for beta0..beta3.
-#'
-#' SE per replicate: (estimate - true)^2.
-#'
-#' @param results_df Data frame of simulation results (validated, with beta
-#'   truth columns present).
-#' @param group_cols Character vector of grouping column names.
-#'
-#' @return Data frame with one row per group and columns:
-#'   group columns, then for each k in {0,1,2,3}:
-#'   mean_square_error_beta{k}, n_mse_beta{k}
-
-compute_mse_summary <- function(results_df, group_cols) {
-  groups <- split(results_df, results_df[, group_cols, drop = FALSE])
+compute_accuracy_summary <- function(results_df, group_cols) {
+  groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
 
   rows <- lapply(groups, function(grp) {
     mse_parts <- list()
 
     for (k in 0:3) {
-      est_col <- paste0("estimate_beta", k)
-      true_col <- paste0("beta", k)
+      est <- column_or_na(grp, paste0("estimate_beta", k))
+      true <- grp[[paste0("beta", k)]]
 
-      est <- grp[[est_col]]
-      true <- grp[[true_col]]
-
-      # MSE: eligible when both estimate and true are non-missing.
       eligible <- !is.na(est) & !is.na(true)
-      mse_vec <- (est[eligible] - true[eligible])^2
-      n_mse <- sum(eligible)
-      mse <- if (n_mse > 0L) mean(mse_vec) else NA_real_
-
-
-      mse_parts[[paste0("mse_beta", k)]] <- mse
-      mse_parts[[paste0("n_mse_beta", k)]] <- n_mse
+      mse_parts[[paste0("mse_beta", k)]] <- if (any(eligible)) {
+        mean((est[eligible] - true[eligible])^2)
+      } else {
+        NA_real_
+      }
     }
 
-    c(as.list(grp[1L, group_cols, drop = FALSE]), mse_parts)
+    c(
+      as.list(grp[1L, group_cols, drop = FALSE]),
+      list(n_estimated = sum(!is.na(column_or_na(grp, "estimate_beta3")))),
+      mse_parts
+    )
   })
 
-  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  rownames(out) <- NULL
-  out
+  bind_group_rows(rows)
 }
 
 
@@ -294,28 +290,24 @@ compute_mse_summary <- function(results_df, group_cols) {
 #' @param group_cols Character vector of grouping column names.
 #'
 #' @return Data frame with one row per group and columns:
-#'   group columns, time_mean_seconds, time_median_seconds, n_time.
+#'   group columns, time_mean_seconds, time_median_seconds.
 
 compute_time_summary <- function(results_df, group_cols) {
-  groups <- split(results_df, results_df[, group_cols, drop = FALSE])
+  groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
 
   rows <- lapply(groups, function(grp) {
     t <- grp$elapsed_seconds[!is.na(grp$elapsed_seconds)]
-    n_time <- length(t)
 
     c(
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
-        time_mean_seconds   = if (n_time > 0L) mean(t) else NA_real_,
-        time_median_seconds = if (n_time > 0L) stats::median(t) else NA_real_,
-        n_time              = n_time
+        time_mean_seconds   = if (length(t) > 0L) mean(t) else NA_real_,
+        time_median_seconds = if (length(t) > 0L) stats::median(t) else NA_real_
       )
     )
   })
 
-  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  rownames(out) <- NULL
-  out
+  bind_group_rows(rows)
 }
 
 
@@ -324,148 +316,118 @@ compute_time_summary <- function(results_df, group_cols) {
 #' Compute per-group Wald CI coverage for beta3.
 #'
 #' Coverage indicator per replicate: 1 if true beta3 lies within
-#' estimate_beta3 +/- z * se_beta3, 0 otherwise, NA when any
-#' of the three inputs is missing, where
-#' z = qnorm(1 - (1 - ci_level) / 2) is the Wald CI's normal quantile for
-#' the requested `ci_level`.
+#' estimate_beta3 +/- z * se_beta3, 0 otherwise, where
+#' z = qnorm(1 - alpha / 2) gives a Wald interval at level 1 - alpha. Replicates
+#' with a missing estimate, standard error or true value are not eligible.
 #'
 #' @param results_df Data frame of simulation results (validated, with beta3
 #'   truth column present).
 #' @param group_cols Character vector of grouping column names.
-#' @param ci_level Numeric in (0, 1). Confidence level for the Wald interval
-#'   (default 0.95, i.e. z = qnorm(0.975) ~= 1.96).
+#' @param alpha Numeric in (0, 1), or NA_real_ when the data hold no alpha; the
+#'   coverage is then NA with n_coverage_beta3 = 0.
 #'
 #' @return Data frame with one row per group and columns:
-#'   group columns, coverage95_beta3 (named for the default 95% level; holds
-#'   the coverage at whatever `ci_level` was requested), n_coverage_beta3,
-#'   wald_rejection_rate_beta3, and n_wald_rejection_beta3.
+#'   group columns, coverage_beta3, n_coverage_beta3.
 
-compute_beta3_coverage_summary <- function(results_df, group_cols, ci_level = 0.95) {
-  if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
-        ci_level <= 0 || ci_level >= 1) {
-    stop("ci_level must be a single number in (0, 1).")
-  }
-  z <- stats::qnorm(1 - (1 - ci_level) / 2)
+compute_coverage_summary <- function(results_df, group_cols, alpha) {
+  z <- stats::qnorm(1 - alpha / 2)
 
-  groups <- split(results_df, results_df[, group_cols, drop = FALSE])
+  groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
 
   rows <- lapply(groups, function(grp) {
-    est <- grp$estimate_beta3
-    se <- grp$se_beta3
+    est <- column_or_na(grp, "estimate_beta3")
+    se <- column_or_na(grp, "se_beta3")
     true <- grp$beta3
 
-    eligible <- !is.na(est) & !is.na(se) & !is.na(true)
-
-    lower <- est[eligible] - z * se[eligible]
-    upper <- est[eligible] + z * se[eligible]
-
-    covered <- (true[eligible] >= lower) & (true[eligible] <= upper)
-    excludes_zero <- (lower > 0) | (upper < 0) # CI does not contain 0 -> "significant"
-
+    eligible <- !is.na(est) & !is.na(se) & !is.na(true) & !is.na(z)
+    covered <- abs(est[eligible] - true[eligible]) <= z * se[eligible]
     n_coverage <- sum(eligible)
 
     c(
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
-        coverage95_beta3 = if (n_coverage > 0L) mean(covered) else NA_real_,
-        n_coverage_beta3 = n_coverage,
-        wald_rejection_rate_beta3 = if (n_coverage > 0L) mean(excludes_zero) else NA_real_,
-        n_wald_rejection_beta3 = n_coverage
+        coverage_beta3 = if (n_coverage > 0L) mean(covered) else NA_real_,
+        n_coverage_beta3 = n_coverage
       )
     )
   })
 
-  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  rownames(out) <- NULL
-  out
+  bind_group_rows(rows)
 }
 
 
-## Interaction-test summary ---------------------------------------------------------------------------------------
+## Testing summary -------------------------------------------------------------------------------------------------
 
-#' Compute interaction-test rejection rates, type I error, and power.
+#' Compute type I error and power of the interaction test.
 #'
-#' A row is eligible when a method completed successfully, explicitly tested
-#' the interaction, and returned a non-missing decision. Under the linear
-#' simulation model, beta3 == 0 identifies null scenarios and beta3 != 0
-#' identifies alternative scenarios.
+#' A row is eligible when its status is not "failure" and it has a non-missing
+#' interaction_rejected; singular and non-converged fits therefore count. The
+#' rate is the share of eligible rows that rejected. Within a group the true
+#' beta3 gates the metric: beta3 == 0 gives type1_error (power is NA with
+#' n_power = 0), beta3 != 0 gives power (type1_error is NA with
+#' n_type1_error = 0). The rule is the same for every method.
 #'
-#' @param results_df Data frame with interaction-test and beta3 truth columns.
+#' @param results_df Data frame with status, interaction_rejected and beta3
+#'   truth columns (validated).
 #' @param group_cols Character vector of grouping column names.
 #'
-#' @return Data frame with one row per group and interaction-test rates plus
-#'   their eligible denominators.
+#' @return Data frame with one row per group and columns:
+#'   group columns, type1_error, n_type1_error, power, n_power.
 
-compute_interaction_summary <- function(results_df, group_cols) {
-  required_cols <- c(
-    "status", "interaction_tested", "interaction_rejected", "beta3"
-  )
-  missing_cols <- setdiff(required_cols, names(results_df))
-  if (length(missing_cols) > 0L) {
-    stop(
-      "results_df is missing interaction-test columns: ",
-      paste(missing_cols, collapse = ", ")
-    )
-  }
+compute_testing_summary <- function(results_df, group_cols) {
+  groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
 
-  groups <- split(results_df, results_df[, group_cols, drop = FALSE])
   rows <- lapply(groups, function(grp) {
-    eligible <- grp$status == "success" &
-      !is.na(grp$interaction_tested) &
-      as.logical(grp$interaction_tested) &
-      !is.na(grp$interaction_rejected) &
-      !is.na(grp$beta3)
-    rejected <- as.logical(grp$interaction_rejected)
-    null_eligible <- eligible & grp$beta3 == 0
-    alternative_eligible <- eligible & grp$beta3 != 0
+    eligible <- grp$status != "failure" & !is.na(grp$interaction_rejected)
+    rejected <- as.logical(grp$interaction_rejected[eligible])
+    n_eligible <- sum(eligible)
+    rate <- if (n_eligible > 0L) mean(rejected) else NA_real_
 
-    n_tested <- sum(eligible)
-    n_null <- sum(null_eligible)
-    n_alternative <- sum(alternative_eligible)
+    # beta3 is constant within a group.
+    beta3 <- grp$beta3[1L]
+    is_null <- !is.na(beta3) && beta3 == 0
+    is_alternative <- !is.na(beta3) && beta3 != 0
 
     c(
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
-        n_interaction_tested = n_tested,
-        interaction_rejection_rate = if (n_tested > 0L) mean(rejected[eligible]) else NA_real_,
-        n_type1_error_interaction = n_null,
-        type1_error_interaction = if (n_null > 0L) mean(rejected[null_eligible]) else NA_real_,
-        n_power_interaction = n_alternative,
-        power_interaction = if (n_alternative > 0L) mean(rejected[alternative_eligible]) else NA_real_
+        type1_error = if (is_null) rate else NA_real_,
+        n_type1_error = if (is_null) n_eligible else 0L,
+        power = if (is_alternative) rate else NA_real_,
+        n_power = if (is_alternative) n_eligible else 0L
       )
     )
   })
 
-  out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
-  rownames(out) <- NULL
-  out
+  bind_group_rows(rows)
 }
 
 
 ## Merge all summaries ---------------------------------------------------------------------------------------------
 
-#' Merge convergence, estimator, interaction-test, and time summaries into one table.
+#' Merge the per-group summaries into one table.
 #'
-#' All four data frames must share the same set of group key columns and the
-#' same set of groups (one row per group each). Merge is performed sequentially
-#' on the group columns.
+#' All data frames must share the same set of group key columns and the same
+#' set of groups (one row per group each). Merge is performed sequentially on
+#' the group columns; columns come out as convergence, accuracy, coverage,
+#' testing, time.
 #'
 #' @param convergence_df Data frame returned by compute_convergence_summary().
-#' @param bias_df        Data frame returned by compute_bias_summary().
+#' @param accuracy_df    Data frame returned by compute_accuracy_summary().
+#' @param coverage_df    Data frame returned by compute_coverage_summary().
+#' @param testing_df     Data frame returned by compute_testing_summary().
 #' @param time_df        Data frame returned by compute_time_summary().
-#' @param coverage_df    Data frame returned by compute_beta3_coverage_summary().
 #' @param group_cols     Character vector of grouping column names (merge keys).
 #'
 #' @return Single merged data frame with one row per group.
 
 merge_aggregation_summaries <- function(
-  convergence_df, bias_df, mse_df, time_df, coverage_df, interaction_test_df, group_cols
+  convergence_df, accuracy_df, coverage_df, testing_df, time_df, group_cols
 ) {
-  out <- merge(convergence_df, bias_df, by = group_cols, all = TRUE, sort = FALSE)
-  out <- merge(out, mse_df, by = group_cols, all = TRUE, sort = FALSE)
-  out <- merge(out, time_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(convergence_df, accuracy_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out, coverage_df, by = group_cols, all = TRUE, sort = FALSE)
-  out <- merge(out, interaction_test_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out, testing_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out, time_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- out[do.call(order, unname(out[group_cols])), , drop = FALSE]
   rownames(out) <- NULL
   out
@@ -481,10 +443,14 @@ merge_aggregation_summaries <- function(
 #' Orchestrates the full aggregation pipeline:
 #'   1. Extract results and (optionally) scenarios from the input object.
 #'   2. Validate inputs and join true-beta columns from scenarios when absent.
-#'   3. Compute convergence, estimator, time, and interaction-test summaries
+#'   3. Compute convergence, accuracy, coverage, testing, and time summaries
 #'      per group.
-#'   4. Merge summaries into a single tidy table.
+#'   4. Merge summaries into a single tidy table and add the scenario design
+#'      columns.
 #'   5. Return a list with the summary table and provenance metadata.
+#'
+#' The Wald CI level is 1 - alpha, with alpha read from the results'
+#' interaction_alpha (one value shared by all methods).
 #'
 #' @param results_obj  Combined analysis artifact as returned by
 #'   save_combined_convenience_artifact() (see artifact_store.R) or loaded
@@ -492,15 +458,14 @@ merge_aggregation_summaries <- function(
 #'   (data frame).
 #' @param include_engine Logical. When TRUE, engine is included as an
 #'   additional grouping column (default FALSE).
-#' @param ci_level Numeric in (0, 1). Confidence level for the beta3 Wald CI
-#'   coverage summary (default 0.95); see compute_beta3_coverage_summary().
 #'
 #' @return Named list:
 #'   \describe{
-#'     \item{summary}{Tidy data frame with one row per group and all
-#'       aggregated metrics.}
+#'     \item{summary}{Tidy data frame with one row per group: keys, design
+#'       columns, convergence, accuracy, coverage, testing, and time
+#'       columns.}
 #'     \item{meta}{List with aggregation_schema_version, timestamp,
-#'       group_cols, and ci_level.}
+#'       group_cols, and alpha.}
 #'   }
 #'
 #' @examples
@@ -512,7 +477,7 @@ merge_aggregation_summaries <- function(
 #' # combined <- readRDS(build_analysis_combined_convenience_path(analysis_run_hash))
 #' # agg <- aggregate_results(combined)
 #' # str(agg$summary)
-#' # agg$meta$aggregation_schema_version  # "v4"
+#' # agg$meta$aggregation_schema_version  # "v5"
 #' #
 #' # -- Include engine as an extra grouping column --
 #' # agg_eng <- aggregate_results(combined, include_engine = TRUE)
@@ -520,16 +485,12 @@ merge_aggregation_summaries <- function(
 #' # -- True-beta fallback join from scenarios --
 #' # results_no_betas <- combined$results[, setdiff(names(combined$results), c("beta0","beta1","beta2","beta3"))]
 #' # agg2 <- aggregate_results(list(results = results_no_betas, scenarios = combined$scenarios))
-aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.95) {
-  if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
-        ci_level <= 0 || ci_level >= 1) {
-    stop("ci_level must be a single number in (0, 1).")
-  }
-
+aggregate_results <- function(results_obj, include_engine = FALSE) {
   results_df <- results_obj$results
   scenarios_df <- results_obj$scenarios
 
   results_df <- validate_aggregation_inputs(results_df, scenarios_df, include_engine = include_engine)
+  alpha <- extract_interaction_alpha(results_df)
 
   group_cols <- if (include_engine) {
     c("scenario_id", "method", "engine")
@@ -538,28 +499,39 @@ aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.
   }
 
   convergence_df <- compute_convergence_summary(results_df, group_cols)
-  bias_df <- compute_bias_summary(results_df, group_cols)
-  mse_df <- compute_mse_summary(results_df, group_cols)
+  accuracy_df <- compute_accuracy_summary(results_df, group_cols)
+  coverage_df <- compute_coverage_summary(results_df, group_cols, alpha = alpha)
+  testing_df <- compute_testing_summary(results_df, group_cols)
   time_df <- compute_time_summary(results_df, group_cols)
-  coverage_df <- compute_beta3_coverage_summary(results_df, group_cols, ci_level = ci_level)
-  interaction_test_df <- compute_interaction_summary(results_df, group_cols)
 
   summary_df <- merge_aggregation_summaries(
     convergence_df,
-    bias_df,
-    mse_df,
-    time_df,
+    accuracy_df,
     coverage_df,
-    interaction_test_df,
+    testing_df,
+    time_df,
     group_cols
   )
-  summary_df <- merge(summary_df, scenarios_df, by = "scenario_id", all.x = TRUE, sort = FALSE)
+
+  # Only the design columns of the scenarios are merged; the keys come first, then the design, then the metrics.
+  design_cols <- intersect(design_columns, names(scenarios_df))
+  if (length(design_cols) > 0L) {
+    summary_df <- merge(
+      summary_df,
+      scenarios_df[, c("scenario_id", design_cols), drop = FALSE],
+      by = "scenario_id", all.x = TRUE, sort = FALSE
+    )
+  }
+  metric_cols <- setdiff(names(summary_df), c(group_cols, design_cols))
+  summary_df <- summary_df[, c(group_cols, design_cols, metric_cols), drop = FALSE]
+  summary_df <- summary_df[do.call(order, unname(summary_df[group_cols])), , drop = FALSE]
+  rownames(summary_df) <- NULL
 
   meta <- list(
     aggregation_schema_version = aggregation_schema_version,
     timestamp = Sys.time(),
     group_cols = group_cols,
-    ci_level = ci_level
+    alpha = alpha
   )
 
   list(summary = summary_df, meta = meta)
