@@ -320,3 +320,25 @@ test_that("validate_aggregation_inputs() rejects empty input, missing columns an
     "duplicate rows"
   )
 })
+
+test_that("n_power + n_type1_error equals the hand-counted eligible rows and the rate the hand-counted rejections", {
+  artifact <- build_agg_artifact()
+  agg <- aggregate_results(artifact)
+  res <- artifact$results
+
+  for (i in seq_len(nrow(agg$summary))) {
+    row <- agg$summary[i, ]
+    rows <- res[res$scenario_id == row$scenario_id & res$method == row$method, ]
+
+    # Independent hand count: not a failure and a decision present.
+    keep <- which(rows$status != "failure" & !is.na(rows$interaction_rejected))
+    n_rejected <- sum(rows$interaction_rejected[keep])
+    rate <- if (length(keep) > 0L) n_rejected / length(keep) else NA_real_
+
+    expect_identical(row$n_power + row$n_type1_error, length(keep))
+    expect_equal(sum(row$type1_error, row$power, na.rm = TRUE), rate)
+    # Exactly one of the two metrics is filled, matching the true beta3.
+    expect_identical(is.na(row$type1_error), row$beta3 != 0)
+    expect_identical(is.na(row$power), row$beta3 == 0)
+  }
+})
