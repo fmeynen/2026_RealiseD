@@ -133,6 +133,56 @@ test_that("relative bias is NA (with zero eligible rows) when the true beta is 0
 })
 
 
+test_that("compute_beta3_coverage_summary() at ci_level = 0.90 narrows the interval and can drop coverage", {
+  # Hand-built case: true beta3 = 1, estimate = 1.5, se = 0.3.
+  # 95% CI: 1.5 +/- 1.959964 * 0.3 = [0.912, 2.088] -> covers 1 (TRUE).
+  # 90% CI: 1.5 +/- 1.644854 * 0.3 = [1.006, 1.994] -> does not cover 1 (FALSE).
+  results_df <- data.frame(
+    scenario_id    = 1L,
+    method         = "classical_ml",
+    estimate_beta3 = 1.5,
+    se_beta3       = 0.3,
+    beta3          = 1,
+    stringsAsFactors = FALSE
+  )
+
+  cov_95 <- compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 0.95)
+  cov_90 <- compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 0.90)
+
+  expect_equal(cov_95$coverage95_beta3, 1)
+  expect_equal(cov_90$coverage95_beta3, 0)
+})
+
+test_that("compute_beta3_coverage_summary() rejects an invalid ci_level", {
+  results_df <- data.frame(
+    scenario_id = 1L, method = "classical_ml",
+    estimate_beta3 = 1, se_beta3 = 0.1, beta3 = 1,
+    stringsAsFactors = FALSE
+  )
+  expect_error(
+    compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 0),
+    "ci_level"
+  )
+  expect_error(
+    compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 1),
+    "ci_level"
+  )
+})
+
+test_that("aggregate_results() records ci_level in meta and rejects an invalid ci_level", {
+  agg_default <- aggregate_results(build_synthetic_combined_artifact())
+  expect_identical(agg_default$meta$ci_level, 0.95)
+
+  agg_90 <- aggregate_results(build_synthetic_combined_artifact(), ci_level = 0.90)
+  expect_identical(agg_90$meta$ci_level, 0.90)
+
+  expect_error(
+    aggregate_results(build_synthetic_combined_artifact(), ci_level = 1.5),
+    "ci_level"
+  )
+})
+
+
 test_that("bias, coverage, and convergence proportions match a hand-computed spot check for scenario 2", {
   agg <- aggregate_results(build_synthetic_combined_artifact())
   scenario2 <- agg$summary[agg$summary$scenario_id == 2L, ]

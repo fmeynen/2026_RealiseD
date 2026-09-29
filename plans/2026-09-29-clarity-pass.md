@@ -104,7 +104,7 @@ Ground rules:
     reweighting row must show that exact message, a non-NA `elapsed_seconds`, and status
     `failure`.
 
-- [ ] **8. Constants.**
+- [x] **8. Constants.**
   - Add `set_fit_args(damping = 0.7)` and use it in place of `lambda <- 0.7` in `CbCEstimator()`;
     remove the commented-out `# lambda <- 1`.
   - Add a comment at the `>= 3` observations filter in `prepare_analysis_data()`: a random

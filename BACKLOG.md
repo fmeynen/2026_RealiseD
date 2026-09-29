@@ -21,6 +21,12 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   `max_iterations = 30` and/or D_tilde being adjusted for positive definiteness). Check which
   warnings dominate per N before the full B = 5000 rerun.
 
+- [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
+  Coverage uses a normal quantile (`aggregate_results(ci_level)`, currently
+  `z = qnorm(1 - (1 - ci_level) / 2)` in `compute_beta3_coverage_summary()`); with N = 10
+  subjects a t-quantile (df based on N, e.g. N − p) may be more appropriate. Would change
+  coverage results.
+
 ## Efficiency
 
 - [ ] **[efficiency] Parallelism is disabled on Windows.**

@@ -63,6 +63,9 @@ prepare_analysis_data <- function(data, type = c("imputation", "weighting", "cla
   }
   
   if(type == "weighting") {
+    # The closed-form estimator fits a random intercept and a random slope per
+    # subject, which needs at least three observations per subject to identify
+    # both; the threshold itself depends on the data at hand.
     obs_per_subject   <- table(analysis_data$subject_id)
     keep_subjects     <- names(obs_per_subject)[obs_per_subject >= 3]
     excluded_subjects <- names(obs_per_subject)[obs_per_subject < 3]
@@ -274,6 +277,7 @@ set_impute_args <- function(
 #' @param epsilon_B Numeric. Convergence tolerance on beta for reweighting.
 #' @param max_iterations Integer. Maximum number of reweighting iterations.
 #' @param stacked_variance_inflation Logical. Multiple-imputation method only: when TRUE, multiply the fixed-effect standard errors by sqrt(m) to account for fitting the m stacked imputations at once. Ignored by the reweighting method.
+#' @param damping Numeric in (0, 1]. Dampening factor for the reweighting update: beta_new = damping * beta_reweighted + (1 - damping) * beta_previous.
 #'
 #' @return Named list of fit settings.
 
@@ -282,7 +286,12 @@ set_fit_args <- function(
     formula        = build_formula(),
     epsilon_D      = 1e-6,
     reweighting    = FALSE, epsilon_B = 1e-6, max_iterations = 30,
-    stacked_variance_inflation = FALSE) {
+    stacked_variance_inflation = FALSE,
+    damping        = 0.7) {
+  if (!is.numeric(damping) || length(damping) != 1L || is.na(damping) ||
+      damping <= 0 || damping > 1) {
+    stop("damping must be a single number in (0, 1].")
+  }
   list(
     subject_col     = subject_col,
     time_col        = time_col,
@@ -293,7 +302,8 @@ set_fit_args <- function(
     reweighting     = reweighting,
     epsilon_B       = epsilon_B,
     max_iterations = max_iterations,
-    stacked_variance_inflation = stacked_variance_inflation
+    stacked_variance_inflation = stacked_variance_inflation,
+    damping         = damping
   )
 }
 
@@ -565,6 +575,7 @@ CbCEstimator <- function(mats, fit_args){
   n_i <- mats$n_i
   epsilon_D   <- fit_args$epsilon_D
   reweighting <- fit_args$reweighting
+  damping     <- fit_args$damping
   if(reweighting) {
     epsilon_B      <- fit_args$epsilon_B
     convergence    <- epsilon_B + 1L
@@ -617,14 +628,12 @@ CbCEstimator <- function(mats, fit_args){
     while(convergence > epsilon_B && iterations <= max_iterations){
 
       beta_tilde_ori <- beta_tilde
-      lambda         <- 0.7 #dampening factor
-      # lambda         <- 1
       var_beta_i     <- mapply(function(Z) {D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))},Z_i, SIMPLIFY = F)
       inv_Sum_V_i    <- solve(Reduce('+',lapply(var_beta_i, solve)))
       W_opt_1i       <- lapply(var_beta_i, function(V){inv_Sum_V_i %*% solve(V)})
-      
+
       beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt_1i, beta_hats)
-      beta_tilde     <- lambda * beta_tilde_new + (1 - lambda) * beta_tilde_ori
+      beta_tilde     <- damping * beta_tilde_new + (1 - damping) * beta_tilde_ori
       D_tilde        <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
           #note: optimal weights are for beta's only, keep original weights for D_tilde
       

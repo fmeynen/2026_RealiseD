@@ -28,7 +28,7 @@
 # Constants --------------------------------------------------------------------------------------------------------
 
 # Increment this string whenever the aggregation output schema changes.
-aggregation_schema_version <- "v3"
+aggregation_schema_version <- "v4"
 
 # All convergence_status levels recognised by the results layer (v1).
 convergence_status_levels <- c(
@@ -323,21 +323,32 @@ compute_time_summary <- function(results_df, group_cols) {
 
 ## Coverage summary ------------------------------------------------------------------------------------------------
 
-#' Compute per-group 95% Wald CI coverage for beta3.
+#' Compute per-group Wald CI coverage for beta3.
 #'
 #' Coverage indicator per replicate: 1 if true beta3 lies within
-#' estimate_beta3 +/- 1.96 * se_beta3, 0 otherwise, NA when any
-#' of the three inputs is missing.
+#' estimate_beta3 +/- z * se_beta3, 0 otherwise, NA when any
+#' of the three inputs is missing, where
+#' z = qnorm(1 - (1 - ci_level) / 2) is the Wald CI's normal quantile for
+#' the requested `ci_level`.
 #'
 #' @param results_df Data frame of simulation results (validated, with beta3
 #'   truth column present).
 #' @param group_cols Character vector of grouping column names.
+#' @param ci_level Numeric in (0, 1). Confidence level for the Wald interval
+#'   (default 0.95, i.e. z = qnorm(0.975) ~= 1.96).
 #'
 #' @return Data frame with one row per group and columns:
-#'   group columns, coverage95_beta3, n_coverage_beta3,
+#'   group columns, coverage95_beta3 (named for the default 95% level; holds
+#'   the coverage at whatever `ci_level` was requested), n_coverage_beta3,
 #'   wald_rejection_rate_beta3, and n_wald_rejection_beta3.
 
-compute_beta3_coverage_summary <- function(results_df, group_cols) {
+compute_beta3_coverage_summary <- function(results_df, group_cols, ci_level = 0.95) {
+  if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
+      ci_level <= 0 || ci_level >= 1) {
+    stop("ci_level must be a single number in (0, 1).")
+  }
+  z <- stats::qnorm(1 - (1 - ci_level) / 2)
+
   groups <- split(results_df, results_df[, group_cols, drop = FALSE])
 
   rows <- lapply(groups, function(grp) {
@@ -346,9 +357,9 @@ compute_beta3_coverage_summary <- function(results_df, group_cols) {
     true <- grp$beta3
 
     eligible <- !is.na(est) & !is.na(se) & !is.na(true)
-    
-    lower <- est[eligible] - 1.96 * se[eligible]
-    upper <- est[eligible] + 1.96 * se[eligible]
+
+    lower <- est[eligible] - z * se[eligible]
+    upper <- est[eligible] + z * se[eligible]
     
     covered  <- (true[eligible] >= lower) & (true[eligible] <= upper)
     excludes_zero <- (lower > 0) | (upper < 0)  # CI does not contain 0 -> "significant"
@@ -483,13 +494,15 @@ merge_aggregation_summaries <- function(
 #'   (data frame).
 #' @param include_engine Logical. When TRUE, engine is included as an
 #'   additional grouping column (default FALSE).
+#' @param ci_level Numeric in (0, 1). Confidence level for the beta3 Wald CI
+#'   coverage summary (default 0.95); see compute_beta3_coverage_summary().
 #'
 #' @return Named list:
 #'   \describe{
 #'     \item{summary}{Tidy data frame with one row per group and all
 #'       aggregated metrics.}
-#'     \item{meta}{List with aggregation_schema_version, timestamp, and
-#'       group_cols.}
+#'     \item{meta}{List with aggregation_schema_version, timestamp,
+#'       group_cols, and ci_level.}
 #'   }
 #'
 #' @examples
@@ -501,7 +514,7 @@ merge_aggregation_summaries <- function(
 #' # combined <- readRDS(build_analysis_combined_convenience_path(analysis_run_hash))
 #' # agg <- aggregate_results(combined)
 #' # str(agg$summary)
-#' # agg$meta$aggregation_schema_version  # "v3"
+#' # agg$meta$aggregation_schema_version  # "v4"
 #' #
 #' # -- Include engine as an extra grouping column --
 #' # agg_eng <- aggregate_results(combined, include_engine = TRUE)
@@ -510,7 +523,12 @@ merge_aggregation_summaries <- function(
 #' # results_no_betas <- combined$results[, setdiff(names(combined$results), c("beta0","beta1","beta2","beta3"))]
 #' # agg2 <- aggregate_results(list(results = results_no_betas, scenarios = combined$scenarios))
 
-aggregate_results <- function(results_obj, include_engine = FALSE) {
+aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.95) {
+  if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
+      ci_level <= 0 || ci_level >= 1) {
+    stop("ci_level must be a single number in (0, 1).")
+  }
+
   results_df  <- results_obj$results
   scenarios_df <- results_obj$scenarios
 
@@ -526,7 +544,7 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
   bias_df        <- compute_bias_summary(results_df, group_cols)
   mse_df         <- compute_mse_summary(results_df, group_cols)
   time_df        <- compute_time_summary(results_df, group_cols)
-  coverage_df    <- compute_beta3_coverage_summary(results_df, group_cols)
+  coverage_df    <- compute_beta3_coverage_summary(results_df, group_cols, ci_level = ci_level)
   interaction_test_df <- compute_interaction_test_summary(results_df, group_cols)
 
   summary_df <- merge_aggregation_summaries(
@@ -543,7 +561,8 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
   meta <- list(
     aggregation_schema_version = aggregation_schema_version,
     timestamp  = Sys.time(),
-    group_cols = group_cols
+    group_cols = group_cols,
+    ci_level   = ci_level
   )
 
   list(summary = summary_df, meta = meta)
