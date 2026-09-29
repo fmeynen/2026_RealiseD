@@ -1,13 +1,181 @@
 # pipeline.R
-# Running things: maps generated-data groups to their replicate RNG substreams,
-# runs an analyzer across all scenario_id x sim_id groups, sorts analysis
-# results deterministically, and drives the end-to-end run of all requested
-# analyses across scenarios (with caching, manifest, and aggregation output).
+# Running things: drives the end-to-end generation of all scenarios' simulated
+# datasets (with caching and manifest), maps generated-data groups to their
+# replicate RNG substreams, runs an analyzer across all scenario_id x sim_id
+# groups, sorts analysis results deterministically, and drives the end-to-end
+# run of all requested analyses across scenarios (with caching, manifest, and
+# aggregation output).
 #
 # Function hierarchy:
+#   run_generation()
 #   build_group_analysis_rng_states() / run_analysis_over_groups()
 #   sort_analysis_results_deterministically()
 #   run_requested_analyses()
+
+# Generate Data -----------------------------------------------------------------------------------------------
+
+#' Drive the end-to-end generation of all scenarios' simulated datasets.
+#'
+#' Validates the scenario grid, computes the data-generation run hash, initialises and
+#' persists a generation manifest, then generates (or reuses) each scenario's simulated
+#' data in turn: an existing, valid scenario file is skipped (status "skipped_existing"
+#' in the manifest); otherwise simulate_scenario() is run and the result saved via
+#' save_generated_scenario(). The manifest is saved to disk after every scenario, then
+#' finalised (finalize_generation_manifest()) and saved once more. Stops if the
+#' finalised manifest status is not "completed".
+#'
+#' @param scenarios     Scenario grid data frame, as returned by build_scenario_grid().
+#' @param n_simulations Integer. Number of simulation replicates B per scenario.
+#' @param output_dir    Directory the generated scenario files and manifest are written under.
+#' @param overwrite     Logical. Passed to save_generated_scenario(); when FALSE (default),
+#'   an existing valid scenario file is reused instead of being regenerated.
+#'
+#' @return The finalized generation manifest (see finalize_generation_manifest()).
+
+run_generation <- function(
+  scenarios,
+  n_simulations,
+  output_dir = "data/processed/generated",
+  overwrite = FALSE
+) {
+  validate_scenario_grid(scenarios)
+
+  data_hash <- compute_data_generation_hash_from_spec(
+    scenarios = scenarios,
+    n_simulations = n_simulations
+  )
+
+  generation_manifest <- initialize_generation_manifest(
+    run_hash = data_hash,
+    scenarios = scenarios,
+    n_simulations = n_simulations,
+    dir = output_dir
+  )
+  generation_manifest_path <- save_generation_manifest(
+    generation_manifest,
+    dir = output_dir
+  )
+
+  for (i in seq_len(nrow(scenarios))) {
+    scenario_row <- scenarios[i, , drop = FALSE]
+    scenario_id <- scenario_row$scenario_id[[1L]]
+    scenario_start_time <- Sys.time()
+    message(sprintf("[generation][scenario %d] started", scenario_id))
+    scenario_path <- build_generated_scenario_path(
+      run_hash = data_hash,
+      scenario_id = scenario_id,
+      dir = output_dir
+    )
+
+    if (file.exists(scenario_path) && !overwrite) {
+      existing_data <- readRDS(scenario_path)
+      validate_generated_scenario_data(
+        data = existing_data,
+        scenario_id = scenario_id,
+        n_simulations = n_simulations
+      )
+      generation_manifest <- update_generation_manifest_entry(
+        manifest = generation_manifest,
+        scenario_id = scenario_id,
+        status = "skipped_existing",
+        checksum = compute_file_md5(scenario_path),
+        n_rows = nrow(existing_data),
+        sim_count = length(unique(existing_data$sim_id)),
+        error = NA_character_,
+        started_at = scenario_start_time,
+        finished_at = Sys.time()
+      )
+      message(sprintf(
+        "[generation][scenario %d] skipped_existing (%.2fs)",
+        scenario_id,
+        as.numeric(difftime(Sys.time(), scenario_start_time, units = "secs"))
+      ))
+      generation_manifest_path <- save_generation_manifest(
+        generation_manifest,
+        dir = output_dir
+      )
+      next
+    }
+
+    generation_manifest <- tryCatch(
+      {
+        scenario_data <- simulate_scenario(scenario_row, B = n_simulations)
+        save_info <- save_generated_scenario(
+          data = scenario_data,
+          scenario_id = scenario_id,
+          run_hash = data_hash,
+          n_simulations = n_simulations,
+          dir = output_dir,
+          overwrite = overwrite
+        )
+        manifest_updated <- update_generation_manifest_entry(
+          manifest = generation_manifest,
+          scenario_id = scenario_id,
+          status = if (identical(save_info$status, "skipped_existing")) {
+            "skipped_existing"
+          } else {
+            "success"
+          },
+          checksum = save_info$checksum,
+          n_rows = save_info$n_rows,
+          sim_count = save_info$sim_count,
+          error = NA_character_,
+          started_at = scenario_start_time,
+          finished_at = Sys.time()
+        )
+        message(sprintf(
+          "[generation][scenario %d] %s (%.2fs)",
+          scenario_id,
+          save_info$status,
+          as.numeric(difftime(Sys.time(), scenario_start_time, units = "secs"))
+        ))
+        manifest_updated
+      },
+      error = function(e) {
+        message(sprintf(
+          "[generation][scenario %d] failure: %s (%.2fs)",
+          scenario_id,
+          conditionMessage(e),
+          as.numeric(difftime(Sys.time(), scenario_start_time, units = "secs"))
+        ))
+        update_generation_manifest_entry(
+          manifest = generation_manifest,
+          scenario_id = scenario_id,
+          status = "failure",
+          checksum = NA_character_,
+          n_rows = NA_integer_,
+          sim_count = NA_integer_,
+          error = conditionMessage(e),
+          started_at = scenario_start_time,
+          finished_at = Sys.time()
+        )
+      }
+    )
+
+    generation_manifest_path <- save_generation_manifest(
+      generation_manifest,
+      dir = output_dir
+    )
+  }
+
+  generation_manifest <- finalize_generation_manifest(generation_manifest)
+  generation_manifest_path <- save_generation_manifest(
+    generation_manifest,
+    dir = output_dir
+  )
+  message("Generation manifest: ", generation_manifest_path)
+  message("Generation run hash: ", generation_manifest$run_hash)
+  message("Generation status: ", generation_manifest$status)
+  if (!identical(generation_manifest$status, "completed")) {
+    stop(
+      "Generation run did not complete successfully. Status: ",
+      generation_manifest$status
+    )
+  }
+
+  generation_manifest
+}
+
 
 # Analyze Generated dataset ---------------------------------------------------------------------------------------
 

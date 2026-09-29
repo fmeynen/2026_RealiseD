@@ -68,73 +68,14 @@ run_golden_pipeline <- function(root_dir) {
   n_simulations <- 2L
   generated_output_dir <- file.path(root_dir, "generated")
 
-  data_hash <- compute_data_generation_hash_from_spec(
-    scenarios = scenarios,
-    n_simulations = n_simulations
-  )
-
-  generation_manifest <- initialize_generation_manifest(
-    run_hash = data_hash,
-    scenarios = scenarios,
-    n_simulations = n_simulations,
-    dir = generated_output_dir
-  )
-
-  for (i in seq_len(nrow(scenarios))) {
-    scenario_row <- scenarios[i, , drop = FALSE]
-    scenario_id <- scenario_row$scenario_id[[1L]]
-    scenario_start_time <- Sys.time()
-
-    generation_manifest <- tryCatch(
-      {
-        scenario_data <- simulate_scenario(scenario_row, B = n_simulations)
-        save_info <- save_generated_scenario(
-          data = scenario_data,
-          scenario_id = scenario_id,
-          run_hash = data_hash,
-          n_simulations = n_simulations,
-          dir = generated_output_dir,
-          overwrite = FALSE
-        )
-        update_generation_manifest_entry(
-          manifest = generation_manifest,
-          scenario_id = scenario_id,
-          status = if (identical(save_info$status, "skipped_existing")) {
-            "skipped_existing"
-          } else {
-            "success"
-          },
-          checksum = save_info$checksum,
-          n_rows = save_info$n_rows,
-          sim_count = save_info$sim_count,
-          error = NA_character_,
-          started_at = scenario_start_time,
-          finished_at = Sys.time()
-        )
-      },
-      error = function(e) {
-        update_generation_manifest_entry(
-          manifest = generation_manifest,
-          scenario_id = scenario_id,
-          status = "failure",
-          checksum = NA_character_,
-          n_rows = NA_integer_,
-          sim_count = NA_integer_,
-          error = conditionMessage(e),
-          started_at = scenario_start_time,
-          finished_at = Sys.time()
-        )
-      }
+  generation_manifest <- suppressMessages(
+    run_generation(
+      scenarios,
+      n_simulations,
+      output_dir = generated_output_dir,
+      overwrite = FALSE
     )
-  }
-
-  generation_manifest <- finalize_generation_manifest(generation_manifest)
-  if (!identical(generation_manifest$status, "completed")) {
-    stop(
-      "Golden pipeline generation did not complete successfully. Status: ",
-      generation_manifest$status
-    )
-  }
+  )
 
   analysis_outputs <- suppressWarnings(suppressMessages(
     run_requested_analyses(

@@ -86,7 +86,7 @@ Ground rules:
     `skip_if_not(identical(Sys.getenv("RUN_SLOW_TESTS"), "true"), "slow test")`.
   - Delete `scripts/Validation/`.
 
-- [ ] **6. `run_generation()`.**
+- [x] **6. `run_generation()`.**
   - Move the generation loop from `run_all.R` into
     `run_generation(scenarios, n_simulations, output_dir, overwrite)` in `pipeline.R`. It returns
     the finalized manifest and stops if the status is not `completed`.
