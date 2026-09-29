@@ -26,7 +26,11 @@ validate_scenario_grid(scenarios)
 # Showcase one end-to-end dataset ----------------------------------------------------------------------------------
 
 scenario_one <- scenarios[1, , drop = FALSE]
-generated_one <- simulate_one_dataset(scenario_one, sim_id = 1, seed = 260925)
+generated_one <- simulate_one_dataset(
+  scenario_one,
+  sim_id = 1,
+  rng_state = replicate_rng_states(scenario_one$seed_base, scenario_one$scenario_id, 1L)[[1L]]
+)
 
 validate_analysis_data(generated_one)
 prepared_one <- prepare_analysis_data(generated_one, type = "classical_ml")

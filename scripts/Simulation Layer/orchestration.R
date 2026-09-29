@@ -247,11 +247,34 @@ analyze_classical_ml <- function(data) {
 }
 
 
+#' Run the multiple-imputation + closed-form analysis layer for one simulation replicate.
+#'
+#' Performs validation, preparation, MI + model fitting, and result extraction, and
+#' always returns a standardized one-row result even when fitting fails.
+#'
+#' @param data        Long-format data frame for one simulation replicate.
+#' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
+#' @param fit_args    Named list of fit arguments, as returned by \code{set_fit_args()}.
+#' @param rng_state   Optional L'Ecuyer-CMRG \code{.Random.seed} (e.g. from
+#'   \code{replicate_rng_states(..., purpose = "analysis")}). When NULL, imputation draws from
+#'   the current global RNG; call \code{set.seed()} first for reproducible direct calls. The
+#'   pipeline supplies the replicate's analysis substream via \code{run_analysis_over_groups()}.
+#'
+#' @return One-row data frame with standardized MI + closed-form analysis results.
+
 analyze_mi_closed_form <- function(
   data,
   impute_args = set_impute_args(),
-  fit_args = set_fit_args()
+  fit_args = set_fit_args(),
+  rng_state = NULL
 ) {
+  if (!is.null(rng_state)) {
+    return(with_rng_state(
+      rng_state,
+      analyze_mi_closed_form(data, impute_args, fit_args, rng_state = NULL)
+    ))
+  }
+
   method_y <- impute_args$method_y
   if (
     method_y == "2l.pmm" && !exists("mice.impute.2l.pmm", mode = "function")
@@ -313,7 +336,8 @@ analyze_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
     error = function(error) {
       build_result_row(
         metadata = metadata,
-        method = "closed_form_reweighting",
+        method = "reweighting",
+        engine = "cbc",
         status = "failure",
         converged = FALSE,
         singular = FALSE,
@@ -359,6 +383,47 @@ analyze_LSPIM <- function(data, alpha = 0.05) {
 
 # Analyze Generated dataset ---------------------------------------------------------------------------------------
 
+#' Map each scenario_id x sim_id group to its replicate "analysis" RNG state.
+#'
+#' For every scenario_id present in split_data whose row in scenarios has a non-missing
+#' seed_base, replicate_rng_states() is called once (purpose "analysis") for that scenario's
+#' sim_ids. Groups without an available seed get NULL.
+#'
+#' @param split_data List of per-group data frames (one scenario_id x sim_id each).
+#' @param scenarios  Scenario metadata data frame with scenario_id and seed_base, or NULL.
+#'
+#' @return List aligned with split_data: an L'Ecuyer-CMRG .Random.seed or NULL per group.
+
+build_group_analysis_rng_states <- function(split_data, scenarios) {
+  group_states <- vector("list", length(split_data))
+  if (
+    is.null(scenarios) ||
+      !all(c("scenario_id", "seed_base") %in% names(scenarios)) ||
+      length(split_data) == 0L
+  ) {
+    return(group_states)
+  }
+
+  group_scenario_ids <- vapply(split_data, function(group) as.numeric(group$scenario_id[[1L]]), numeric(1L))
+  group_sim_ids <- vapply(split_data, function(group) as.numeric(group$sim_id[[1L]]), numeric(1L))
+
+  for (scenario_id in unique(group_scenario_ids)) {
+    seed_base <- scenarios$seed_base[scenarios$scenario_id == scenario_id]
+    if (length(seed_base) == 0L || is.na(seed_base[[1L]])) {
+      next
+    }
+    in_scenario <- which(group_scenario_ids == scenario_id)
+    states <- replicate_rng_states(
+      seed_base = seed_base[[1L]],
+      scenario_id = scenario_id,
+      sim_ids = unique(group_sim_ids[in_scenario]),
+      purpose = "analysis"
+    )
+    group_states[in_scenario] <- states[as.character(as.integer(group_sim_ids[in_scenario]))]
+  }
+  group_states
+}
+
 run_analysis_over_groups <- function(
   data,
   scenarios = NULL,
@@ -384,25 +449,41 @@ run_analysis_over_groups <- function(
     data,
     interaction(data$scenario_id, data$sim_id, drop = TRUE, lex.order = TRUE)
   )
+  group_states <- build_group_analysis_rng_states(split_data, scenarios)
+
+  # Each group runs under its replicate's "analysis" substream when one is available, so any
+  # stochastic step (e.g. MI) is independent across replicates, reproducible within a
+  # replicate, and leaves the caller's RNG untouched. Without a seed, the current RNG is used.
+  run_group <- function(i, ...) {
+    state <- group_states[[i]]
+    if (is.null(state)) {
+      analyzer_fn(split_data[[i]], ...)
+    } else {
+      with_rng_state(state, analyzer_fn(split_data[[i]], ...))
+    }
+  }
+  group_idx <- seq_along(split_data)
+
   if (isTRUE(parallel)) {
     if (.Platform$OS.type == "windows") {
       warning(
         "parallel=TRUE requested, but mclapply is not supported on Windows; falling back to lapply."
       )
-      results <- lapply(split_data, analyzer_fn, ...)
+      results <- lapply(group_idx, run_group, ...)
     } else {
       mc_cores <- min(as.integer(n_cores), length(split_data))
       mc_cores <- max(1L, mc_cores)
       results <- parallel::mclapply(
-        split_data,
-        analyzer_fn,
+        group_idx,
+        run_group,
         ...,
         mc.cores = mc_cores
       )
     }
   } else {
-    results <- lapply(split_data, analyzer_fn, ...)
+    results <- lapply(group_idx, run_group, ...)
   }
+  names(results) <- names(split_data)
   combined_results <- do.call(rbind, results)
   combined_results <- combined_results[
     order(combined_results$scenario_id, combined_results$sim_id),
@@ -452,7 +533,8 @@ analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
 #' one standardized result row per scenario_id x sim_id.
 #'
 #' @param data        Long-format data frame with all scenarios and simulations.
-#' @param scenarios   Optional scenario metadata data frame (currently unused).
+#' @param scenarios   Optional scenario metadata data frame. When it carries seed_base, each
+#'   replicate is analyzed under its "analysis" RNG substream (see run_analysis_over_groups()).
 #' @param impute_args Named list of additional arguments forwarded to
 #'   \code{impute_mi_by_sim_scenario()}.
 #' @param fit_args    Named list of additional arguments forwarded to
@@ -482,7 +564,8 @@ analyze_generated_data_mi_closed_form <- function(
 #' one standardized result row per scenario_id x sim_id.
 #'
 #' @param data        Long-format data frame with all scenarios and simulations.
-#' @param scenarios   Optional scenario metadata data frame (currently unused).
+#' @param scenarios   Optional scenario metadata data frame. When it carries seed_base, each
+#'   replicate is analyzed under its "analysis" RNG substream (see run_analysis_over_groups()).
 #' @param fit_args    Named list of additional arguments forwarded to
 #'   \code{fit_closed_form()}.
 #'
@@ -541,7 +624,8 @@ build_analysis_run_hash <- function(
   generation_manifest,
   analyses,
   analysis_configs = list(),
-  aggregation_include_engine = FALSE
+  aggregation_include_engine = FALSE,
+  analysis_registry = build_analysis_registry()
 ) {
   config_names <- names(analysis_configs)
   if (
@@ -553,25 +637,38 @@ build_analysis_run_hash <- function(
       "analysis_configs contains unnamed entries; all entries must be named by analysis method."
     )
   }
-  canonical_configs <- if (is.null(config_names)) {
-    analysis_configs
-  } else if (length(config_names) == 0L) {
-    list()
-  } else {
-    analysis_configs[sort(config_names)]
+
+  requested_analyses <- sort(unique(analyses))
+  unknown_analyses <- setdiff(requested_analyses, names(analysis_registry))
+  if (length(unknown_analyses) > 0L) {
+    stop(
+      "Unknown analyses requested: ",
+      paste(unknown_analyses, collapse = ", ")
+    )
   }
-  canonical_configs <- canonicalize_nested_list(canonical_configs)
+
+  resolved_configs <- stats::setNames(
+    lapply(requested_analyses, function(analysis_name) {
+      resolve_analysis_config(
+        analysis_registry[[analysis_name]],
+        analysis_configs[[analysis_name]]
+      )
+    }),
+    requested_analyses
+  )
+  canonical_configs <- canonicalize_nested_list(resolved_configs)
 
   identity <- list(
     generation_run_hash = generation_manifest$run_hash,
     generation_manifest_schema_version = generation_manifest$schema_version,
     data_generation_schema_version = generation_manifest$data_generation_schema_version,
-    analyses = sort(unique(analyses)),
+    analyses = requested_analyses,
     analysis_configs = canonical_configs,
     aggregation_include_engine = isTRUE(aggregation_include_engine),
     results_schema_version = results_schema_version,
     convergence_status_version = convergence_status_version,
-    aggregation_schema_version = aggregation_schema_version
+    aggregation_schema_version = aggregation_schema_version,
+    analysis_rng_scheme = analysis_rng_scheme_version
   )
   compute_results_hash(identity)
 }
@@ -671,7 +768,21 @@ build_analysis_registry <- function() {
       }
     ),
     LSPIM = list(
-      default_config = list(alpha = 0.05),
+      default_config = list(alpha = 0.05, lspim_max_n = 50),
+      applies_to = function(scenario_row, config) {
+        if (!is.numeric(config$lspim_max_n) ||
+              length(config$lspim_max_n) != 1L ||
+              is.na(config$lspim_max_n)) {
+          stop(
+            "LSPIM config 'lspim_max_n' must be a single number; ",
+            "set it in analysis_configs$LSPIM"
+          )
+        }
+        if (is.null(scenario_row$n) || is.na(scenario_row$n)) {
+          stop("scenario metadata has no 'n' column")
+        }
+        scenario_row$n <= config$lspim_max_n
+      },
       runner = function(scenario_data, scenarios, config) {
         analyze_generated_data_LSPIM(
           data = scenario_data,
@@ -681,6 +792,18 @@ build_analysis_registry <- function() {
       }
     )
   )
+}
+
+
+resolve_analysis_config <- function(analysis_entry, user_config = NULL) {
+  if (is.null(user_config)) {
+    analysis_entry$default_config
+  } else {
+    utils::modifyList(
+      analysis_entry$default_config,
+      user_config
+    )
+  }
 }
 
 
@@ -698,14 +821,7 @@ run_single_analysis_method <- function(
   if (is.null(analysis_entry)) {
     stop("Unsupported analysis requested: ", analysis_name)
   }
-  if (is.null(user_config)) {
-    final_config <- analysis_entry$default_config
-  } else {
-    final_config <- utils::modifyList(
-      analysis_entry$default_config,
-      user_config
-    )
-  }
+  final_config <- resolve_analysis_config(analysis_entry, user_config)
   analysis_entry$runner(scenario_data, scenarios, final_config)
 }
 
@@ -871,6 +987,11 @@ save_combined_convenience_artifact <- function(
     ,
     drop = FALSE
   ]
+  skipped_by_config_records <- artifact_records[
+    artifact_records$status == "skipped_by_config",
+    ,
+    drop = FALSE
+  ]
   successful_has_path <- !is.na(successful$path)
   successful_exists <- successful_has_path & file.exists(successful$path)
   missing_successful <- successful[!successful_exists, , drop = FALSE]
@@ -900,7 +1021,8 @@ save_combined_convenience_artifact <- function(
         derived_convenience_artifact = TRUE,
         n_source_artifacts = 0L,
         source_artifacts = character(0L),
-        failed_exclusions = failed_exclusions
+        failed_exclusions = failed_exclusions,
+        skipped_by_config = skipped_by_config_records
       )
     )
     saveRDS(combined_artifact, combined_path)
@@ -932,7 +1054,8 @@ save_combined_convenience_artifact <- function(
       derived_convenience_artifact = TRUE,
       n_source_artifacts = length(successful_paths),
       source_artifacts = successful_paths,
-      failed_exclusions = failed_exclusions
+      failed_exclusions = failed_exclusions,
+      skipped_by_config = skipped_by_config_records
     )
   )
   saveRDS(combined_artifact, combined_path)
@@ -1061,7 +1184,8 @@ run_requested_analyses <- function(
     generation_manifest = generation_manifest,
     analyses = analyses,
     analysis_configs = analysis_configs,
-    aggregation_include_engine = aggregation_include_engine
+    aggregation_include_engine = aggregation_include_engine,
+    analysis_registry = analysis_registry
   )
   run_root <- build_analysis_run_root(
     analysis_run_hash = analysis_run_hash,
@@ -1149,44 +1273,66 @@ run_requested_analyses <- function(
 
       method_outcome <- tryCatch(
         {
-          existing_path <- find_valid_analysis_scenario_method_artifact(
-            analysis_run_hash = analysis_run_hash,
-            scenario_entry = scenario_entry,
-            method = analysis_name,
-            output_dir = output_dir,
-            overwrite = overwrite
+          analysis_entry <- analysis_registry[[analysis_name]]
+          final_config <- resolve_analysis_config(
+            analysis_entry,
+            analysis_configs[[analysis_name]]
           )
-          if (!is.null(existing_path)) {
+          applies <- if (is.null(analysis_entry$applies_to)) {
+            TRUE
+          } else {
+            analysis_entry$applies_to(scenario_metadata, final_config)
+          }
+          if (!is.logical(applies) || length(applies) != 1L || is.na(applies)) {
+            stop(
+              "applies_to() for analysis '", analysis_name,
+              "' must return a single TRUE or FALSE; got: ",
+              paste(deparse(applies), collapse = "")
+            )
+          }
+          if (!applies) {
             list(
-              status = "skipped_existing",
-              path = existing_path,
+              status = "skipped_by_config",
+              path = NA_character_,
               error = NA_character_
             )
           } else {
-            if (analysis_name == "LSPIM" & scenario_entry$n_rows == 12000) {
-              stop("This analysis cannot be done")
-            }
-            method_results <- run_single_analysis_method(
-              analysis_name = analysis_name,
-              scenario_data = scenario_data,
-              scenarios = scenario_metadata,
-              user_config = analysis_configs[[analysis_name]],
-              analysis_registry = analysis_registry
-            )
-            saved <- save_analysis_scenario_method_artifact(
-              analysis_results = method_results,
+            existing_path <- find_valid_analysis_scenario_method_artifact(
               analysis_run_hash = analysis_run_hash,
-              generation_manifest = generation_manifest,
               scenario_entry = scenario_entry,
               method = analysis_name,
               output_dir = output_dir,
               overwrite = overwrite
             )
-            list(
-              status = saved$status,
-              path = saved$path,
-              error = NA_character_
-            )
+            if (!is.null(existing_path)) {
+              list(
+                status = "skipped_existing",
+                path = existing_path,
+                error = NA_character_
+              )
+            } else {
+              method_results <- run_single_analysis_method(
+                analysis_name = analysis_name,
+                scenario_data = scenario_data,
+                scenarios = scenario_metadata,
+                user_config = analysis_configs[[analysis_name]],
+                analysis_registry = analysis_registry
+              )
+              saved <- save_analysis_scenario_method_artifact(
+                analysis_results = method_results,
+                analysis_run_hash = analysis_run_hash,
+                generation_manifest = generation_manifest,
+                scenario_entry = scenario_entry,
+                method = analysis_name,
+                output_dir = output_dir,
+                overwrite = overwrite
+              )
+              list(
+                status = saved$status,
+                path = saved$path,
+                error = NA_character_
+              )
+            }
           }
         },
         error = function(e) {
@@ -1274,6 +1420,10 @@ run_requested_analyses <- function(
         artifact_records$status == "skipped_existing",
         na.rm = TRUE
       ),
+      n_skipped_by_config = sum(
+        artifact_records$status == "skipped_by_config",
+        na.rm = TRUE
+      ),
       n_failure = sum(artifact_records$status == "failure", na.rm = TRUE)
     )
   )
@@ -1330,6 +1480,10 @@ run_requested_analyses <- function(
   message(
     "Skipped existing artifacts: ",
     analysis_manifest$summary$n_skipped_existing
+  )
+  message(
+    "Skipped by config: ",
+    analysis_manifest$summary$n_skipped_by_config
   )
   message("Failed artifacts: ", analysis_manifest$summary$n_failure)
   message(

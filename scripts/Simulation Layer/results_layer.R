@@ -471,7 +471,8 @@ print_results_summary <- function(metadata, paths) {
 #' #   dropout_mechanism = "half-missing",
 #' #   seed_base = 260925
 #' # )
-#' # # scenarios$seed_base == c(261925L, 262925L) -- per-scenario seeds stored in grid
+#' # # scenarios$seed_base == c(260925L, 260925L) -- global seed; each scenario uses its own
+#' # # L'Ecuyer-CMRG streams derived from it (see scenario_rng_stream())
 #' #
 #' # generated <- do.call(rbind, lapply(seq_len(nrow(scenarios)), function(i) {
 #' #   simulate_scenario(scenarios[i, , drop = FALSE], B = 10)
@@ -483,7 +484,7 @@ print_results_summary <- function(metadata, paths) {
 #' # -- Inspect results --
 #' # str(out$results)              # tidy data frame, one row per sim x method
 #' # out$metadata$hash             # 16-character deterministic hash
-#' # out$results$seed_base         # per-row seed from joined scenario metadata
+#' # out$results$seed_base         # global seed from joined scenario metadata
 #' # out$paths                     # paths to both saved files
 #' # table(out$results$convergence_status)
 #' #

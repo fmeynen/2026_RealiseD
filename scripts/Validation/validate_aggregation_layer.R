@@ -131,7 +131,7 @@ cat("Check passed: all denominator counts non-negative.\n")
 # Identify scenarios where each beta is zero in the scenario grid.
 for (k in 0:3) {
   true_col <- paste0("beta", k)
-  rel_bias_col <- paste0("mean_rel_bias_beta", k)
+  rel_bias_col <- paste0("rel_bias_beta", k)
 
   if (!(true_col %in% names(out$scenarios))) next
 
@@ -145,7 +145,7 @@ for (k in 0:3) {
   matching_rows <- agg$summary$scenario_id %in% zero_scenarios
   if (!any(matching_rows)) next
 
-  # n_rel_bias should be 0 and mean_rel_bias should be NA for those groups.
+  # n_rel_bias should be 0 and rel_bias should be NA for those groups.
   n_col <- paste0("n_rel_bias_beta", k)
   n_vals <- agg$summary[[n_col]][matching_rows]
   rel_vals <- agg$summary[[rel_bias_col]][matching_rows]
@@ -156,7 +156,7 @@ for (k in 0:3) {
   )
   expect_true_msg(
     all(is.na(rel_vals)),
-    paste0("mean_rel_bias_beta", k, " should be NA for scenarios where true beta", k, " = 0")
+    paste0("rel_bias_beta", k, " should be NA for scenarios where true beta", k, " = 0")
   )
 }
 cat("Check passed: relative bias is NA when true beta is 0.\n")
@@ -168,7 +168,7 @@ cat("\n=== Key metrics per group ===\n")
 display_cols <- c(
   agg$meta$group_cols, "n",
   "n_total", "mean_convergence",
-  "mean_abs_bias_beta3", "mean_rel_bias_beta3",
+  "bias_beta3", "rel_bias_beta3",
   "time_mean_seconds", "coverage95_beta3"
 )
 display_cols <- intersect(display_cols, names(agg$summary))

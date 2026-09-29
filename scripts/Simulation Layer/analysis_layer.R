@@ -328,7 +328,6 @@ set_impute_args <- function(
     method_y         = c("2l.pmm", "2l.norm"),
     m                = 3,
     maxit            = 10,
-    seed             = 123,
     include_original = FALSE,
     strict_checks    = TRUE,
     return_mids      = FALSE
@@ -346,7 +345,6 @@ set_impute_args <- function(
     method_y = method_y,
     m = m,
     maxit = maxit,
-    seed = seed,
     include_original = include_original,
     strict_checks = strict_checks,
     return_mids = return_mids
@@ -355,11 +353,27 @@ set_impute_args <- function(
 
 ## Model Fit Argument ------------------------------------------------------------------------------------------------
 
+#' Build the argument list for the closed-form CbC fits.
+#'
+#' @param subject_col Character. Name of the subject identifier column.
+#' @param time_col Character. Name of the time variable column.
+#' @param treatment_col Character. Name of the treatment variable column.
+#' @param outcome_col Character. Name of the outcome variable column.
+#' @param formula Model formula for lme4::lmer(); see build_formula().
+#' @param epsilon_D Numeric. Eigenvalue floor used to make D_tilde positive definite.
+#' @param reweighting Logical. When TRUE, run iterative reweighting instead of standard closed-form.
+#' @param epsilon_B Numeric. Convergence tolerance on beta for reweighting.
+#' @param max_iterations Integer. Maximum number of reweighting iterations.
+#' @param stacked_variance_inflation Logical. Multiple-imputation method only: when TRUE, multiply the fixed-effect standard errors by sqrt(m) to account for fitting the m stacked imputations at once. Ignored by the reweighting method.
+#'
+#' @return Named list of fit settings.
+
 set_fit_args <- function(
     subject_col    = "subject_id", time_col = "time_value", treatment_col = "treatment", outcome_col = "y",
     formula        = build_formula(),
     epsilon_D      = 1e-6,
-    reweighting    = FALSE, epsilon_B = 1e-6, max_iterations = 30) {
+    reweighting    = FALSE, epsilon_B = 1e-6, max_iterations = 30,
+    stacked_variance_inflation = FALSE) {
   list(
     subject_col     = subject_col,
     time_col        = time_col,
@@ -369,7 +383,8 @@ set_fit_args <- function(
     epsilon_D       = epsilon_D,
     reweighting     = reweighting,
     epsilon_B       = epsilon_B,
-    max_iterations = max_iterations
+    max_iterations = max_iterations,
+    stacked_variance_inflation = stacked_variance_inflation
   )
 }
 
@@ -543,13 +558,14 @@ impute_data <- function(data, impute_args = set_impute_args()){
   pred_row                          <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
   pred[target_col, names(pred_row)] <- pred_row
   
+  # No seed is passed: mice draws from the current global RNG, which the orchestration layer
+  # sets to the replicate's "analysis" L'Ecuyer-CMRG substream (see run_analysis_over_groups()).
   imp <- mice::mice(
     sub_df,
     method          = meth,
     predictorMatrix = pred,
     m               = impute_args$m,
     maxit           = impute_args$maxit,
-    seed            = impute_args$seed,
     print           = FALSE
   )
   
@@ -715,8 +731,8 @@ CbCEstimator <- function(mats, fit_args){
   #Reweighting
   
   if(reweighting){
-    while((convergence > epsilon_D) & (iterations <= max_iterations)){
-      
+    while(convergence > epsilon_B && iterations <= max_iterations){
+
       beta_tilde_ori <- beta_tilde
       lambda         <- 0.7 #dampening factor
       # lambda         <- 1
@@ -738,50 +754,39 @@ CbCEstimator <- function(mats, fit_args){
       convergence <- max(abs(beta_tilde_ori - beta_tilde))
       iterations  <- iterations + 1
     }
-    if(convergence > epsilon_D) {
+    if(convergence > epsilon_B) {
       warning(paste("Convergence of beta parameters not reached.
-                    Maximal absolute difference:", convergence, " > ", epsilon_D))
+                    Maximal absolute difference:", convergence, " > ", epsilon_B))
       }
   }
-  
+
   # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma (3) Estimates D,
   # and (4) variance of estimates for fixed effects
   list(beta_tilde          = beta_tilde,
        Sigma_tilde         = Sigma_tilde,
        D_tilde             = D_tilde,
-       variance_beta_tilde = variance_beta_tilde)
-  
+       variance_beta_tilde = variance_beta_tilde,
+       iterations          = if (reweighting) iterations - 1 else 0)
+
 }
 
 
-#' Fit the cluster-by-cluster closed-form estimator on data.
+#' Fit the cluster-by-cluster closed-form estimator once on the supplied data.
 #'
-#' For each \code{(id_cols, .imp)} group in \code{long_data}, constructs
-#' the outcome matrix \code{Y}, the random-effects design matrix \code{Z}
-#' (\code{cbind(1, time_value)}), and the fixed-effects design matrix \code{X}
-#' (\code{cbind(1, treatment, time_value, treatment * time_value)}), then calls
-#' \code{CbCEstimator()} to obtain closed-form mixed-model estimates.
-#' Errors from individual groups are caught and stored in the \code{error_message}
-#' column; all groups always produce a result row.
+#' Fits the CbC estimator a single time on \code{long_data}, clustering by
+#' \code{fit_args$subject_col}. For the MI path (see \code{fit_mi_closed_form()}),
+#' \code{long_data} is the long-format stack of all \code{m} imputations produced
+#' by \code{impute_data()}, so each subject contributes \code{m * n_visits} rows
+#' to the single fit clustered by \code{subject_id}. On failure of the underlying
+#' \code{CbCEstimator()} call, an NA-filled vector is returned with a warning.
 #'
-#' @note Requires the \pkg{ks} package for the \code{vech()} function used inside
-#'   \code{CbCEstimator()}. Attach \pkg{ks} before calling this function.
+#' @param long_data Data frame with one fit's worth of long-format data (for the
+#'   MI path, the stacked imputations from \code{impute_data()}).
+#' @param fit_args  List of fit arguments as returned by \code{set_fit_args()}.
 #'
-#' @param long_data Long-format multiply-imputed data frame as returned
-#'   by \code{impute_mi_by_sim_scenario()}.
-#' @param id_cols       Character. Grouping identifier column names.
-#'   Default: \code{c("scenario_id", "sim_id")}.
-#' @param row_id_col    Character. Row-ID column (kept for API consistency).
-#'   Default: \code{".id"}.
-#' @param subject_col   Character. Level-2 cluster column. Default: \code{"subject_id"}.
-#' @param time_col      Character. Time variable column. Default: \code{"time_value"}.
-#' @param treatment_col Character. Treatment indicator column. Default: \code{"treatment"}.
-#' @param outcome_col   Character. Outcome variable column. Default: \code{"y"}.
-#'
-#' @return Data frame with one row per \code{(id_cols, .imp)} group and columns:
-#'   \code{id_cols}, \code{.imp}, \code{status}, \code{beta0}, \code{beta1},
-#'   \code{beta2}, \code{beta3}, \code{sigma2_hat}, \code{elapsed_seconds},
-#'   \code{error_message}.
+#' @return Named numeric vector with elements \code{estimate_beta0..estimate_beta3},
+#'   \code{sigma2_hat}, \code{se_beta0..se_beta3}, \code{var_b0}, \code{cov_b0b1},
+#'   \code{var_b1}.
 
 fit_closed_form <- function(
     long_data,
@@ -800,6 +805,11 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
   warning_messages <- character(0)
   error_message    <- NULL
   start_time <- proc.time()[["elapsed"]]
+  # Stacking the m imputations into one long-format fit (clustered by subject_id)
+  # is intentional; see stacked_variance_inflation in set_fit_args() to correct
+  # the resulting fixed-effect SEs for the stacking.
+  # impute_data() draws from the current global RNG; fit_mi_closed_form() takes no seed of its
+  # own (see analyze_mi_closed_form()'s rng_state argument for reproducible direct calls).
   fit <- withCallingHandlers(
     tryCatch(
       {
@@ -816,16 +826,20 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
       invokeRestart("muffleWarning")
     }
   )
+  if (!is.null(fit) && isTRUE(fit_args$stacked_variance_inflation)) {
+    se_names <- c("se_beta0", "se_beta1", "se_beta2", "se_beta3")
+    fit[se_names] <- fit[se_names] * sqrt(impute_args$m)
+  }
   elapsed_seconds <- proc.time()[["elapsed"]] - start_time
-  
+
   list(
     fit = fit,
     elapsed_seconds = as.numeric(elapsed_seconds),
     warnings = unique(warning_messages),
     error_message = error_message
   )
-  
-  
+
+
 }
 
 ## Fit closed form + reweighting---------------------------------------------------------------------

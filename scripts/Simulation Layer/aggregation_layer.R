@@ -5,7 +5,7 @@
 # Consumes the scenario-wise combined convenience analysis artifact and returns per-scenario x per-method
 # summary statistics:
 #   - Mean convergence and status proportions
-#   - Absolute bias and relative bias for beta0..beta3
+#   - Signed bias and relative bias for beta0..beta3
 #   - MSE for beta0..beta3 when a method estimates those parameters
 #   - Mean and median computation time
 #   - 95% Wald CI coverage for beta3 when a method supplies a standard error
@@ -28,7 +28,7 @@
 # Constants --------------------------------------------------------------------------------------------------------
 
 # Increment this string whenever the aggregation output schema changes.
-aggregation_schema_version <- "v2"
+aggregation_schema_version <- "v3"
 
 # All convergence_status levels recognised by the results layer (v1).
 convergence_status_levels <- c(
@@ -182,10 +182,13 @@ compute_convergence_summary <- function(results_df, group_cols) {
 
 ## Bias summary ----------------------------------------------------------------------------------------------------
 
-#' Compute per-group absolute and relative bias for beta0..beta3.
+#' Compute per-group signed and relative bias for beta0..beta3.
 #'
-#' Absolute bias per replicate: abs(estimate - true).
-#' Relative bias per replicate: (estimate - true) / true; NA when true == 0.
+#' Signed bias per group: mean(estimate - true) over eligible replicates.
+#' Relative bias per group: mean(estimate - true) / true over eligible
+#' replicates, additionally excluding rows where true == 0. Within a
+#' (scenario_id, method) group the true value is constant, so this equals
+#' mean((estimate - true) / true) over those rows.
 #'
 #' @param results_df Data frame of simulation results (validated, with beta
 #'   truth columns present).
@@ -193,7 +196,7 @@ compute_convergence_summary <- function(results_df, group_cols) {
 #'
 #' @return Data frame with one row per group and columns:
 #'   group columns, then for each k in {0,1,2,3}:
-#'   mean_abs_bias_beta{k}, mean_rel_bias_beta{k},
+#'   bias_beta{k}, rel_bias_beta{k},
 #'   n_bias_beta{k}, n_rel_bias_beta{k}.
 
 compute_bias_summary <- function(results_df, group_cols) {
@@ -209,24 +212,24 @@ compute_bias_summary <- function(results_df, group_cols) {
       est  <- grp[[est_col]]
       true <- grp[[true_col]]
 
-      # Absolute bias: eligible when both estimate and true are non-missing.
+      # Signed bias: eligible when both estimate and true are non-missing.
       eligible_abs <- !is.na(est) & !is.na(true)
-      abs_bias_vec <- abs(est[eligible_abs] - true[eligible_abs])
+      bias_vec     <- est[eligible_abs] - true[eligible_abs]
 
-      n_bias           <- sum(eligible_abs)
-      mean_abs_bias    <- if (n_bias > 0L) mean(abs_bias_vec) else NA_real_
+      n_bias <- sum(eligible_abs)
+      bias   <- if (n_bias > 0L) mean(bias_vec) else NA_real_
 
       # Relative bias: additionally exclude rows where true value is zero.
       eligible_rel <- eligible_abs & (true != 0)
       rel_bias_vec <- (est[eligible_rel] - true[eligible_rel]) / true[eligible_rel]
 
-      n_rel_bias       <- sum(eligible_rel)
-      mean_rel_bias    <- if (n_rel_bias > 0L) mean(rel_bias_vec) else NA_real_
+      n_rel_bias <- sum(eligible_rel)
+      rel_bias   <- if (n_rel_bias > 0L) mean(rel_bias_vec) else NA_real_
 
-      bias_parts[[paste0("mean_abs_bias_beta", k)]] <- mean_abs_bias
-      bias_parts[[paste0("mean_rel_bias_beta", k)]] <- mean_rel_bias
-      bias_parts[[paste0("n_bias_beta", k)]]        <- n_bias
-      bias_parts[[paste0("n_rel_bias_beta", k)]]    <- n_rel_bias
+      bias_parts[[paste0("bias_beta", k)]]        <- bias
+      bias_parts[[paste0("rel_bias_beta", k)]]     <- rel_bias
+      bias_parts[[paste0("n_bias_beta", k)]]       <- n_bias
+      bias_parts[[paste0("n_rel_bias_beta", k)]]   <- n_rel_bias
     }
 
     c(as.list(grp[1L, group_cols, drop = FALSE]), bias_parts)
