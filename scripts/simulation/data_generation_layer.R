@@ -763,7 +763,7 @@ ensure_results_artifact_helpers <- function() {
     stop(
       paste0(
         "Results artifact helpers are not available. ",
-        "Source 'scripts/results_layer.R' before using ",
+        "Source 'scripts/simulation/results_layer.R' before using ",
         "data-generation artifact persistence helpers."
       )
     )

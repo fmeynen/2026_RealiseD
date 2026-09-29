@@ -8,7 +8,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 - [ ] **[reproducibility] Derive RNG streams from scenario parameters, not grid position.**
   The stream index is `2 * (scenario_id - 1) + purpose`
-  ([data_generation_layer.R](scripts/Simulation%20Layer/data_generation_layer.R), `scenario_rng_stream()`),
+  ([data_generation_layer.R](scripts/simulation/data_generation_layer.R), `scenario_rng_stream()`),
   and `scenario_id` is the row number produced by `expand.grid()`. Adding a value to any grid
   factor renumbers the scenarios, so an unchanged scenario gets different random draws and
   cannot be compared replicate-by-replicate across grid versions. Caching stays correct because
@@ -25,21 +25,21 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 - [ ] **[efficiency] Parallelism is disabled on Windows.**
   `run_analysis_over_groups()` only parallelises with `mclapply`, which falls back to
-  `lapply` on Windows ([orchestration.R:388](scripts/Simulation%20Layer/orchestration.R#L388)).
+  `lapply` on Windows ([orchestration.R:388](scripts/simulation/orchestration.R#L388)).
   Replace with `mirai::mirai_map()` or a PSOCK cluster (`parallel::parLapply`), parallelising
   over `(scenario_id, sim_id)`. The L'Ecuyer RNG streams introduced in the correctness pass
   already give each replicate an independent stream, so results stay reproducible.
 
 - [ ] **[efficiency] CbC D-matrix step costs O(N²).**
   `calculate_stage2_Dmatrix()` loops over every pair i≠j with three `kronecker()` calls per
-  pair ([analysis_layer.R:625-634](scripts/Simulation%20Layer/analysis_layer.R#L625-L634)).
+  pair ([analysis_layer.R:625-634](scripts/simulation/analysis_layer.R#L625-L634)).
   By the Kronecker mixed-product rule each term equals
   `kron(W_j K_i HH_j, K_i HH_j t(W_j))` (two q×q factors). Since `K_i` only takes one value
   per treatment arm, the double sum can be collapsed to per-arm counts, making the step O(N).
 
 - [ ] **[efficiency] Smaller CbC savings.**
   - `expm::sqrtm()` is applied to diagonal weight matrices
-    ([analysis_layer.R:604](scripts/Simulation%20Layer/analysis_layer.R#L604)); use `sqrt()` on the diagonal.
+    ([analysis_layer.R:604](scripts/simulation/analysis_layer.R#L604)); use `sqrt()` on the diagonal.
   - `solve(crossprod(Z))` and `calculate_inv_sum_KWK()` are recomputed several times per fit.
   - `ks` is only used for `vec()`, `vech()`, `invvec()`, `invvech()`; replace with base-R one-liners
     and drop the dependency.
@@ -47,16 +47,16 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 - [ ] **[efficiency] Vectorise data generation.**
   `simulate_one_dataset()` builds each replicate with two `merge()` calls and an `order()`, then
   `simulate_scenario()` row-binds B data frames
-  ([data_generation_layer.R:420-488](scripts/Simulation%20Layer/data_generation_layer.R#L420-L488)).
+  ([data_generation_layer.R:420-488](scripts/simulation/data_generation_layer.R#L420-L488)).
   Use index vectors instead of `merge()`, or generate all replicates of a scenario at once.
 
 - [ ] **[efficiency] Multiple imputation calls `mice()` twice per replicate.**
   `impute_data()` runs `mice(maxit = 0)` only to obtain the method vector and predictor matrix
-  ([analysis_layer.R:536-544](scripts/Simulation%20Layer/analysis_layer.R#L536-L544)). Build these once.
+  ([analysis_layer.R:536-544](scripts/simulation/analysis_layer.R#L536-L544)). Build these once.
 
 - [ ] **[efficiency] Hashes change whenever R is upgraded.**
   `compute_results_hash()` hashes a `saveRDS()` file, whose header records the R version
-  ([results_layer.R:313](scripts/Simulation%20Layer/results_layer.R#L313)). An R upgrade
+  ([results_layer.R:313](scripts/simulation/results_layer.R#L313)). An R upgrade
   therefore invalidates every cache. Use `rlang::hash()` or `digest::digest()`.
 
 - [ ] **[efficiency] Generated scenario files are read twice.**
@@ -82,7 +82,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 - [ ] **[clarity] CbC error messages are lost.**
   `apply_cbc()` swallows the error, `extract_cbc_result()` returns NAs, and `is_singular()` then
   fails on the NA matrix, so the stored `error_message` is an `eigen()` error instead of the real
-  cause ([analysis_layer.R:448-491](scripts/Simulation%20Layer/analysis_layer.R#L448-L491)).
+  cause ([analysis_layer.R:448-491](scripts/simulation/analysis_layer.R#L448-L491)).
   Keep one error boundary per method.
 
 - [ ] **[clarity] Name the magic numbers.**

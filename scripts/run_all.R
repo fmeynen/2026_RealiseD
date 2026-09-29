@@ -2,7 +2,7 @@
 rm(list = ls())
 # Source functions -------------------------------------------------------------------------------------------------
 lapply(
-  list.files("scripts/Simulation Layer/", pattern = "\\.R$", full.names = TRUE),
+  list.files("scripts/simulation/", pattern = "\\.R$", full.names = TRUE),
   source
 )
 library(miceadds)

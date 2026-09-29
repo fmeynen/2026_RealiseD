@@ -1,7 +1,7 @@
 remove(list = ls())
-source("scripts/Code Alvaro/CBCEstimator.R")
+source("scripts/reference/alvaro_cbc/CbCEstimator.R")
 
-# stitch("scripts/Code Alvaro/CBCEstimator.R")
+# stitch("scripts/reference/alvaro_cbc/CbCEstimator.R")
 
 # Data ------------------------------------------------------------------------------------------------------------
 # same data as CbCEstimator from Alvaro

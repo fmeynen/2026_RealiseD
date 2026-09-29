@@ -1,9 +1,9 @@
-source("scripts/Simulation Layer/data_generation_layer.R")
-source("scripts/Simulation Layer/validation.R")
-source("scripts/Simulation Layer/analysis_layer.R")
-source("scripts/Simulation Layer/orchestration.R")
-source("scripts/Simulation Layer/results_layer.R")
-source("scripts/Simulation Layer/aggregation_layer.R")
+source("scripts/simulation/data_generation_layer.R")
+source("scripts/simulation/input_checks.R")
+source("scripts/simulation/analysis_layer.R")
+source("scripts/simulation/orchestration.R")
+source("scripts/simulation/results_layer.R")
+source("scripts/simulation/aggregation_layer.R")
 
 expect_true_msg <- function(condition, msg) {
   if (!isTRUE(condition)) stop("Assertion failed: ", msg)

@@ -29,7 +29,7 @@ Ground rules:
   timestamps and paths. Also add a small script that regenerates the fixture, for intentional
   changes.
 
-- [ ] **1. Renames.**
+- [x] **1. Renames.**
   - `scripts/Simulation Layer/` → `scripts/simulation/`
   - `scripts/simulation/validation.R` → `scripts/simulation/input_checks.R`
   - `scripts/Code Alvaro/` → `scripts/reference/alvaro_cbc/` (update its internal `source()` path)

@@ -7,12 +7,12 @@
 # and aggregation summary. It is used both to regenerate the golden fixture
 # (fixtures/make_golden_pipeline.R) and, unmodified, by the regression test
 # itself, so the only thing that can differ between a fixture run and a test
-# run is the pipeline code in scripts/Simulation Layer/.
+# run is the pipeline code in scripts/simulation/.
 #
 # It intentionally calls only pipeline functions sourced by helper-source.R
 # (build_scenario_grid(), the generation-manifest functions,
 # run_requested_analyses()) and never hard-codes a script path, so it stays
-# valid across file renames/splits in scripts/Simulation Layer/.
+# valid across file renames/splits in scripts/simulation/.
 
 normalise_golden <- function(x) {
   if (is.null(x) || !is.data.frame(x) || nrow(x) == 0L) {
