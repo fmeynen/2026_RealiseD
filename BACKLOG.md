@@ -25,8 +25,9 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   the causes.
 
 - [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
-  Coverage uses a normal quantile (`aggregate_results(ci_level)`, currently
-  `z = qnorm(1 - (1 - ci_level) / 2)` in `compute_beta3_coverage_summary()`); with N = 10
+  Coverage uses a normal quantile at level 1 - alpha (alpha is the shared
+  `interaction_alpha`, `compute_coverage_summary()` in
+  [aggregation_layer.R](scripts/simulation/aggregation_layer.R)); with N = 10
   subjects a t-quantile (df based on N, e.g. N − p) may be more appropriate. Would change
   coverage results.
 
@@ -34,8 +35,9 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   The parametric methods decide the interaction test with a Wald z test on beta3
   (`wald_interaction_decision()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)). For
   classical_ml a t-test with Satterthwaite degrees of freedom (`lmerTest`) might be more accurate
-  at small n, where the z test can be anti-conservative. Would change type I error and power for
-  classical_ml at small N.
+  at small n, where the z test can be anti-conservative. Supporting evidence: in the slow Monte Carlo check
+  (`test-power-type1-mc.R`, n = 100) the empirical SD of the classical_ml beta3 estimate is about
+  5% larger than the mean SE. Would change type I error and power for classical_ml at small N.
 
 ## Efficiency
 
@@ -99,8 +101,8 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
   `artifact_store.R`), and unused variables and `set_impute_args()` fields.
 - [x] **[clarity] CbC error messages are lost**: errors are now caught once per method, and
   failure rows keep the original message, timing and warnings.
-- [x] **[clarity] Name the magic numbers**: `set_fit_args(damping)`, `aggregate_results(ci_level)`,
-  and a comment explaining the `>= 3` observations filter. The t-quantile idea is a separate item
+- [x] **[clarity] Name the magic numbers**: `set_fit_args(damping)`, `aggregate_results(ci_level)`
+  (later removed: coverage now follows the shared alpha), and a comment explaining the `>= 3` observations filter. The t-quantile idea is a separate item
   above.
 - [x] **[clarity] Update the README.**
 - [x] **[clarity] Rename confusing files and folders**: `scripts/simulation/`,

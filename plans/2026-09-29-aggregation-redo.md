@@ -79,7 +79,7 @@ exist, because those replicates are `skipped_by_config`.
 
 ## Items
 
-- [ ] **1. Shared alpha.**
+- [x] **1. Shared alpha.**
   - Add an `alpha` argument to `run_requested_analyses()` and pass it to every method's analyzer.
     Validate it as a single number in (0, 1) and include it in the analysis hash.
   - Remove the LSPIM-specific alpha from the registry `default_config` and from `scripts/run_all.R`.
@@ -87,7 +87,7 @@ exist, because those replicates are `skipped_by_config`.
     `test-lspim-config.R` and `test-analysis-hash.R`.
   - Golden unchanged, apart from hash columns, which are already excluded.
 
-- [ ] **2. Wald z decision for the parametric methods.**
+- [x] **2. Wald z decision for the parametric methods.**
   - Write one helper (e.g. `wald_interaction_decision(estimate, se, alpha)`) that returns the
     four `interaction_*` fields. Call it from `extract_classical_ml_results()` and
     `extract_closed_form_results()` for non-failure rows. When est or se is NA/non-finite, set
@@ -99,7 +99,7 @@ exist, because those replicates are `skipped_by_config`.
     a check that each parametric method fills the columns.
   - Golden: allowlist the four `interaction_*` columns for the parametric rows, then regenerate.
 
-- [ ] **3. Rewrite the aggregation layer.**
+- [x] **3. Rewrite the aggregation layer.**
   - Implement the output table above. Rewrite `compute_convergence_summary()`, replace
     `compute_bias_summary()` and `compute_mse_summary()` with one accuracy summary, and replace the
     coverage and interaction summaries with `compute_coverage_summary()` and
@@ -119,7 +119,7 @@ exist, because those replicates are `skipped_by_config`.
     - The exact set of output columns.
   - Golden: allowlist the aggregation summary, then regenerate.
 
-- [ ] **4. Double-check the power calculation.**
+- [x] **4. Double-check the power calculation.**
   - Analytical check for the Wald methods: on a moderate grid (e.g. n = 100, B large enough),
     compare the empirical `power` with the value the Wald z test predicts from the mean SE,
     `pnorm(beta3/se - z) + pnorm(-beta3/se - z)`, and compare `type1_error` with alpha. The
@@ -133,7 +133,7 @@ exist, because those replicates are `skipped_by_config`.
   - Put the fast parts in `test-aggregation.R` and the Monte Carlo part in a slow test
     (`RUN_SLOW_TESTS=true`). Report any mismatch to the user before continuing.
 
-- [ ] **5. Docs and close-out.**
+- [x] **5. Docs and close-out.**
   - README: describe the new summary columns, the beta3 gate, the shared alpha and the
     eligibility rule. Update the `aggregate_results()` example.
   - Update BACKLOG.md.

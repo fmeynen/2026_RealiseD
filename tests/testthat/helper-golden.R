@@ -22,8 +22,7 @@ normalise_golden <- function(x) {
   volatile_exact <- c(
     "elapsed_seconds",
     "time_mean_seconds",
-    "time_median_seconds",
-    "n_time"
+    "time_median_seconds"
   )
   volatile_pattern <- grepl(
     "path|created|timestamp",
