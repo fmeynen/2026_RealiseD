@@ -79,6 +79,7 @@ scripts/
     data_generation_layer.R  Scenario grid, data-generating model, dropout, RNG streams, generation manifest
     analysis_layer.R         Data preparation, lme4 fit, imputation, CbC estimator, result extraction
     analysis_methods.R       Per-dataset analyzers, method registry, method defaults
+    config.R                 Default paths (default_paths) and schema-version constants
     lspim.R                  LSPIM fit (fit_lspim())
     pipeline.R               run_generation(), run_requested_analyses(), per-replicate loop
     artifact_store.R         Hashes, output paths, manifests, cache checks, convergence_status
@@ -147,6 +148,12 @@ schema versions. The analysis hash covers the generation hash, the requested met
 convergence-status, aggregation and analysis-RNG schema versions. If a hash is unchanged and
 `overwrite = FALSE`, existing valid files are reused. Hashes are computed from `saveRDS()` output,
 so upgrading R also changes them (see backlog).
+
+Default output paths (`data/processed/generated`, `results/data`) and all six schema-version
+constants live in one place, [scripts/simulation/config.R](scripts/simulation/config.R)
+(`default_paths` and the `*_schema_version` constants) — edit them there rather than at each call
+site. Bumping a schema version changes the corresponding hash, so cached artifacts keyed on the
+old hash are no longer reused.
 
 **Statuses.** Each scenario × method in `analysis_manifest.rds` has a `status`:
 

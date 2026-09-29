@@ -111,10 +111,10 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
   local variables (`K_mi`, `W_i1`, `D_tilde`, ...) are left as is; extending the allowed
   pattern for statistical notation is tracked separately.
 
-- [ ] **[consistency] Centralise paths and schema versions.**
-  `"results/data"` and `"data/processed/generated"` are repeated as defaults in ~15 functions;
-  schema-version globals are spread across files, and `run_all.R` depends on alphabetical
-  `source()` order (hence `ensure_results_artifact_helpers()`).
+- [x] **[consistency] Centralise paths and schema versions.**
+  Default paths and all six schema-version constants now live in
+  `scripts/simulation/config.R` (`default_paths`, `*_schema_version`); `ensure_results_artifact_helpers()`
+  was removed as it only guarded against a source-order issue that no longer applies.
 
 - [ ] **[consistency] One failure-row builder.**
   The four `analyze_*()` wrappers duplicate failure-row construction; a generic

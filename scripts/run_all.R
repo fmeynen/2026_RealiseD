@@ -23,8 +23,8 @@ scenarios <- build_scenario_grid(
   seed_base = 260925
 )
 n_simulations <- 5000L
-generated_output_dir <- "data/processed/generated"
-analysis_output_dir <- "results/data"
+generated_output_dir <- default_paths$generated
+analysis_output_dir <- default_paths$results
 analysis_configs <- list(
   multiple_imputation = list(
     impute_args = set_impute_args(method_y = "2l.pmm"),

@@ -27,9 +27,6 @@
 
 # Constants --------------------------------------------------------------------------------------------------------
 
-# Increment this string whenever the aggregation output schema changes.
-aggregation_schema_version <- "v4"
-
 # All convergence_status levels recognised by the results layer (v1).
 convergence_status_levels <- c(
   "converged_ok",

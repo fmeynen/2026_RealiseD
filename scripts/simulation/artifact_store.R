@@ -7,7 +7,6 @@
 # and the aggregation summary.
 #
 # Function hierarchy:
-#   convergence_status_version / results_schema_version
 #   add_convergence_status()
 #   canonicalize_results_scenarios_for_hash() / compute_results_hash()
 #   sanitize_filename_token() / canonicalize_nested_list()
@@ -18,15 +17,6 @@
 #   find_valid_analysis_scenario_method_artifact() / save_analysis_scenario_method_artifact()
 #   save_combined_convenience_artifact()
 #   build_analysis_source_signature() / save_aggregation_summary()
-
-
-# Schema versions ----------------------------------------------------------------------------------------------------
-
-# Increment this string whenever the convergence_status mapping rules change.
-convergence_status_version <- "v1"
-
-# Increment this string whenever the final results schema changes.
-results_schema_version <- "v2"
 
 
 # Convergence status ---------------------------------------------------------------------------------------------
@@ -189,7 +179,7 @@ build_analysis_run_hash <- function(
 }
 
 
-build_analysis_run_root <- function(analysis_run_hash, dir = "results/data") {
+build_analysis_run_root <- function(analysis_run_hash, dir = default_paths$results) {
   file.path(dir, analysis_run_hash)
 }
 
@@ -198,7 +188,7 @@ build_analysis_scenario_method_path <- function(
   analysis_run_hash,
   scenario_id,
   method,
-  dir = "results/data"
+  dir = default_paths$results
 ) {
   method_hash <- compute_results_hash(list(method = method))
   file.path(
@@ -215,7 +205,7 @@ build_analysis_scenario_method_path <- function(
 
 build_analysis_manifest_path <- function(
   analysis_run_hash,
-  dir = "results/data"
+  dir = default_paths$results
 ) {
   file.path(
     build_analysis_run_root(analysis_run_hash, dir = dir),
@@ -226,7 +216,7 @@ build_analysis_manifest_path <- function(
 
 build_analysis_combined_convenience_path <- function(
   analysis_run_hash,
-  dir = "results/data"
+  dir = default_paths$results
 ) {
   file.path(
     build_analysis_run_root(analysis_run_hash, dir = dir),
@@ -237,7 +227,7 @@ build_analysis_combined_convenience_path <- function(
 
 build_aggregation_output_path <- function(
   analysis_run_hash,
-  dir = "results/data",
+  dir = default_paths$results,
   include_engine = FALSE
 ) {
   suffix <- if (isTRUE(include_engine)) "include_engine" else "default"
@@ -252,7 +242,7 @@ find_valid_analysis_scenario_method_artifact <- function(
   analysis_run_hash,
   scenario_entry,
   method,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE
 ) {
   output_path <- build_analysis_scenario_method_path(
@@ -328,7 +318,7 @@ save_analysis_scenario_method_artifact <- function(
   generation_manifest,
   scenario_entry,
   method,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE
 ) {
   existing_path <- find_valid_analysis_scenario_method_artifact(
@@ -378,7 +368,7 @@ save_combined_convenience_artifact <- function(
   artifact_records,
   analysis_run_hash,
   generation_manifest,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE
 ) {
   successful <- artifact_records[
@@ -481,7 +471,7 @@ build_analysis_source_signature <- function(artifact_records) {
 save_aggregation_summary <- function(
   combined_artifact,
   analysis_run_hash,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE,
   include_engine = FALSE,
   source_signature = NULL,

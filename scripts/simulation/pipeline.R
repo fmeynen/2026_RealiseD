@@ -35,7 +35,7 @@
 run_generation <- function(
   scenarios,
   n_simulations,
-  output_dir = "data/processed/generated",
+  output_dir = default_paths$generated,
   overwrite = FALSE
 ) {
   validate_scenario_grid(scenarios)
@@ -324,7 +324,7 @@ run_requested_analyses <- function(
   n_simulations = NULL,
   analysis_configs = list(),
   aggregation_include_engine = FALSE,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE
 ) {
   analysis_registry <- build_analysis_registry()

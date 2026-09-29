@@ -74,7 +74,7 @@ Ground rules:
     list(from = "half-missing", to = "half_missing")))` passes. Hash and path columns are
     already excluded.
 
-- [ ] **5. `config.R`.**
+- [x] **5. `config.R`.**
   - New `scripts/simulation/config.R` holds `default_paths <- list(generated =
     "data/processed/generated", results = "results/data")` and all schema-version constants:
     `data_generation_schema_version`, `generation_manifest_schema_version`,

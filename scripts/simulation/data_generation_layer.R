@@ -29,15 +29,6 @@
 #   save_generated_scenario() / load_generated_scenario_by_id() / iterate_generated_scenarios()
 
 
-# Constants --------------------------------------------------------------------------------------------------------
-
-data_generation_schema_version <- "v3"
-
-# Increment this string whenever the per-replicate analysis RNG stream scheme changes.
-analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
-
-
-
 # Scenario Setup --------------------------------------------------------------------------------------------------
 
 ## Build Scenario Grid ---------------------------------------------------------------------------------------------
@@ -772,34 +763,11 @@ summarize_generated_data <- function(data) {
 
 # Artifact persistence ---------------------------------------------------------------------------------------------
 
-generation_manifest_schema_version <- "v2"
 generated_data_required_columns <- c("sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed")
 generated_data_forbidden_columns <- c("time_index", "time_label", "y_complete", "eta_ij", "epsilon_ij", "dropout_time")
 
-ensure_results_artifact_helpers <- function() {
-  required_helpers <- c(
-    "canonicalize_results_scenarios_for_hash",
-    "compute_results_hash"
-  )
-  missing_helpers <- required_helpers[!vapply(required_helpers, exists, logical(1L), mode = "function")]
-
-  if (length(missing_helpers) > 0L) {
-    stop(
-      paste0(
-        "Results artifact helpers are not available. ",
-        "Source 'scripts/simulation/artifact_store.R' before using ",
-        "data-generation artifact persistence helpers."
-      )
-    )
-  }
-
-  invisible(TRUE)
-}
-
 
 build_data_generation_canonical_meta <- function(scenarios, n_simulations) {
-  ensure_results_artifact_helpers()
-
   list(
     scenario_grid = canonicalize_results_scenarios_for_hash(scenarios),
     n_simulations = as.integer(n_simulations),
@@ -818,12 +786,12 @@ compute_data_generation_hash_from_spec <- function(scenarios, n_simulations) {
 }
 
 
-build_generated_run_root <- function(run_hash, dir = "data/processed/generated") {
+build_generated_run_root <- function(run_hash, dir = default_paths$generated) {
   file.path(dir, run_hash)
 }
 
 
-build_generated_scenario_path <- function(run_hash, scenario_id, dir = "data/processed/generated") {
+build_generated_scenario_path <- function(run_hash, scenario_id, dir = default_paths$generated) {
   file.path(
     build_generated_run_root(run_hash, dir = dir),
     sprintf("generated_scenario_%06d.rds", as.integer(scenario_id))
@@ -831,7 +799,7 @@ build_generated_scenario_path <- function(run_hash, scenario_id, dir = "data/pro
 }
 
 
-build_generation_manifest_path <- function(run_hash, dir = "data/processed/generated") {
+build_generation_manifest_path <- function(run_hash, dir = default_paths$generated) {
   file.path(build_generated_run_root(run_hash, dir = dir), "generation_manifest.rds")
 }
 
@@ -870,7 +838,7 @@ validate_generated_scenario_data <- function(data, scenario_id, n_simulations) {
 }
 
 
-initialize_generation_manifest <- function(run_hash, scenarios, n_simulations, dir = "data/processed/generated") {
+initialize_generation_manifest <- function(run_hash, scenarios, n_simulations, dir = default_paths$generated) {
   scenarios_ordered <- scenarios[order(scenarios$scenario_id), , drop = FALSE]
   rownames(scenarios_ordered) <- NULL
 
@@ -906,7 +874,7 @@ initialize_generation_manifest <- function(run_hash, scenarios, n_simulations, d
 }
 
 
-save_generation_manifest <- function(manifest, dir = "data/processed/generated") {
+save_generation_manifest <- function(manifest, dir = default_paths$generated) {
   run_root <- build_generated_run_root(manifest$run_hash, dir = dir)
   if (!dir.exists(run_root)) {
     dir.create(run_root, recursive = TRUE)
@@ -917,7 +885,7 @@ save_generation_manifest <- function(manifest, dir = "data/processed/generated")
 }
 
 
-load_generation_manifest <- function(run_hash, dir = "data/processed/generated") {
+load_generation_manifest <- function(run_hash, dir = default_paths$generated) {
   manifest_path <- build_generation_manifest_path(run_hash = run_hash, dir = dir)
   if (!file.exists(manifest_path)) {
     stop("Generation manifest not found at: ", manifest_path)
@@ -981,7 +949,7 @@ save_generated_scenario <- function(data,
                                     scenario_id,
                                     run_hash,
                                     n_simulations,
-                                    dir = "data/processed/generated",
+                                    dir = default_paths$generated,
                                     overwrite = FALSE) {
   validate_generated_scenario_data(data = data, scenario_id = scenario_id, n_simulations = n_simulations)
 
