@@ -52,7 +52,7 @@ Ground rules:
   The legacy MI functions at the top of `orchestration.R` go to `analysis_methods.R` for now;
   item 4 removes them. Delete `orchestration.R`.
 
-- [ ] **3. Remove the old flat results flow.**
+- [x] **3. Remove the old flat results flow.**
   - Delete from `results_layer.R`: `build_and_save_results()` and its helpers
     (`validate_results_layer_inputs`, `join_scenario_metadata`, `validate_results_layer_output`,
     `order_results_columns`, `build_canonical_meta`, `build_results_metadata`,
@@ -67,7 +67,7 @@ Ground rules:
     `validate_artifact_persistence.R` and `validate_orchestration_parity.R` to testthat, against
     `run_requested_analyses()` and its artifacts. Delete those three scripts.
 
-- [ ] **4. Remove other dead code.**
+- [x] **4. Remove other dead code.**
   - The legacy MI path: `impute_mi_by_sim_scenario()`, `impute_mi_one_group()`,
     `validate_mi_imputation_input()`, `check_mi_group_integrity()`, `check_mi_col_missingness()`,
     after checking for callers.

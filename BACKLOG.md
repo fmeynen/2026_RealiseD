@@ -56,7 +56,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 - [ ] **[efficiency] Hashes change whenever R is upgraded.**
   `compute_results_hash()` hashes a `saveRDS()` file, whose header records the R version
-  ([results_layer.R:313](scripts/simulation/results_layer.R#L313)). An R upgrade
+  ([artifact_store.R:106](scripts/simulation/artifact_store.R#L106)). An R upgrade
   therefore invalidates every cache. Use `rlang::hash()` or `digest::digest()`.
 
 - [ ] **[efficiency] Generated scenario files are read twice.**
@@ -74,8 +74,10 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 - [ ] **[clarity] Remove dead and legacy code.**
   - `impute_mi_by_sim_scenario()`, `validate_mi_imputation_input()`, `check_mi_*()` are not used by the pipeline.
-  - The flat `build_and_save_results()` / `sim_results_latest.rds` flow and
-    `find/load_results_artifact_exact()` are only used by validation scripts.
+  - [x] The flat `build_and_save_results()` / `sim_results_latest.rds` flow and
+    `find/load_results_artifact_exact()` were only used by validation scripts; removed, with the
+    still-used pieces (`add_convergence_status()`, hashing/canonicalization helpers, schema
+    version constants) folded into `artifact_store.R`.
   - Unused: `identity` in `calculate_stage2_Dmatrix()`, `n_c` argument, `mats$clusterID`,
     `return_mids` / `strict_checks` in `set_impute_args()`.
 

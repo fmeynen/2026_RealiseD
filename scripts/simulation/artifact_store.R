@@ -1,11 +1,15 @@
 # artifact_store.R
-# Where analysis results live and how their cache keys are built: filename and
-# hash canonicalization helpers, run/scenario/method/manifest/aggregation path
-# builders, cache-hit validation for existing per-scenario-method artifacts,
-# and the savers for scenario-method artifacts, the combined convenience
-# artifact, and the aggregation summary.
+# Where analysis results live and how their cache keys are built: schema
+# versions, the convergence-status mapping, hashing helpers, filename
+# canonicalization, run/scenario/method/manifest/aggregation path builders,
+# cache-hit validation for existing per-scenario-method artifacts, and the
+# savers for scenario-method artifacts, the combined convenience artifact,
+# and the aggregation summary.
 #
 # Function hierarchy:
+#   convergence_status_version / results_schema_version
+#   add_convergence_status()
+#   canonicalize_results_scenarios_for_hash() / compute_results_hash()
 #   sanitize_filename_token() / canonicalize_nested_list()
 #   build_analysis_run_hash()
 #   build_analysis_run_root() / build_analysis_scenario_method_path() /
@@ -14,6 +18,101 @@
 #   find_valid_analysis_scenario_method_artifact() / save_analysis_scenario_method_artifact()
 #   save_combined_convenience_artifact()
 #   build_analysis_source_signature() / save_aggregation_summary()
+
+
+# Schema versions ----------------------------------------------------------------------------------------------------
+
+# Increment this string whenever the convergence_status mapping rules change.
+convergence_status_version <- "v1"
+
+# Increment this string whenever the final results schema changes.
+results_schema_version <- "v2"
+
+
+# Convergence status ---------------------------------------------------------------------------------------------
+
+#' Map raw fit diagnostics to a standardized convergence_status label.
+#'
+#' Applies a deterministic precedence hierarchy (v1):
+#'   "error"              if status != "success" OR error_message is not NA
+#'   "not_converged"      if success but converged == FALSE
+#'   "converged_singular" if success, converged, and singular == TRUE
+#'   "converged_warning"  if success, converged, non-singular, warning present
+#'   "converged_ok"       if success, converged, non-singular, no warning
+#'
+#' @param data Data frame with columns status, converged, singular,
+#'   warning_message, and error_message.
+#'
+#' @return data with a new convergence_status character column appended.
+
+add_convergence_status <- function(data) {
+  is_failure    <- !is.na(data$status) & data$status == "failure"
+  has_error_msg <- !is.na(data$error_message)
+  is_converged  <- !is.na(data$converged) & as.logical(data$converged)
+  is_singular   <- !is.na(data$singular) & as.logical(data$singular)
+  has_warning   <- !is.na(data$warning_message)
+
+  data$convergence_status <- ifelse(
+    is_failure | has_error_msg,
+    "error",
+    ifelse(
+      !is_converged,
+      "not_converged",
+      ifelse(
+        is_singular,
+        "converged_singular",
+        ifelse(
+          has_warning,
+          "converged_warning",
+          "converged_ok"
+        )
+      )
+    )
+  )
+
+  data
+}
+
+
+# Hashing --------------------------------------------------------------------------------------------------------
+
+canonicalize_results_scenarios_for_hash <- function(scenarios) {
+  scenario_grid_sorted <- scenarios[
+    order(scenarios$scenario_id),
+    sort(names(scenarios)),
+    drop = FALSE
+  ]
+  rownames(scenario_grid_sorted) <- NULL
+
+  # Coerce seed_base to integer so type differences do not affect the hash.
+  if ("seed_base" %in% names(scenario_grid_sorted)) {
+    scenario_grid_sorted$seed_base <- as.integer(scenario_grid_sorted$seed_base)
+  }
+
+  scenario_grid_sorted
+}
+
+
+#' Compute a deterministic 16-character hex hash of the canonical metadata.
+#'
+#' Serializes the canonical_meta list to a temporary file and returns the first
+#' 16 characters of the file's MD5 checksum via tools::md5sum().
+#'
+#' @param canonical_meta Named list of identity inputs to hash (e.g. the list
+#'   built in build_analysis_run_hash() or build_data_generation_canonical_meta()).
+#'
+#' @return 16-character lowercase hex string.
+
+compute_results_hash <- function(canonical_meta) {
+  tmp <- tempfile(fileext = ".rds")
+  on.exit(unlink(tmp), add = TRUE)
+  saveRDS(canonical_meta, file = tmp)
+  hash_full <- unname(tools::md5sum(tmp))
+  substr(hash_full, 1L, 16L)
+}
+
+
+# Filename and path helpers ---------------------------------------------------------------------------------------
 
 sanitize_filename_token <- function(value) {
   gsub("[^A-Za-z0-9_-]", "-", value)
