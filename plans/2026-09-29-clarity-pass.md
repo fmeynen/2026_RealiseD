@@ -95,7 +95,7 @@ Ground rules:
   - Add a test that `run_generation()` writes a completed manifest to a temp dir and that a second
     call reports `skipped_existing`.
 
-- [ ] **7. CbC errors: one catch per method.**
+- [x] **7. CbC errors: one catch per method.**
   - Remove the `tryCatch` in `apply_cbc()` and in `extract_cbc_result()`. The CbC result is
     extracted only on success.
   - Errors reach `fit_mi_closed_form()` / `fit_closed_form_reweighting()`, which set

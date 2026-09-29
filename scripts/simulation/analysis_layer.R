@@ -349,8 +349,10 @@ build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
   )
 }
 
-# Call CbCEstimator for one group data frame; return a structured result list.
-# Errors from CbCEstimator are caught and stored in error_message.
+# Call CbCEstimator for one group data frame; return its result list unchanged.
+# Errors from CbCEstimator are not caught here: they propagate to the caller
+# (fit_mi_closed_form() / fit_closed_form_reweighting()), which is where errors
+# are caught once per method and recorded in error_message.
 
 apply_cbc <- function(data, fit_args = set_fit_args()) {
   subject_col   <- fit_args$subject_col
@@ -367,26 +369,13 @@ apply_cbc <- function(data, fit_args = set_fit_args()) {
     )
   }
   mats <- build_cbc_matrices(data, subject_col, formula)
-  error_msg <- NA_character_
-  cbc_result <- tryCatch(
-    CbCEstimator(mats, fit_args),
-    error = function(e) {
-      error_msg <<- conditionMessage(e)
-      NULL
-    }
-  )
-  if (is.null(cbc_result)) {
-    return(list(status = "failure", fit = NULL, error_message = error_msg))
-  }
-  list(
-    status = "success",
-    fit = cbc_result,
-    error_message = NA_character_
-  )
+  CbCEstimator(mats, fit_args)
 }
 
-# Convert a CbCEstimator result for one group into a one-row data frame.
+# Convert a CbCEstimator result for one group into a named vector.
 # beta0..beta3 correspond to intercept, treatment, time_value, treatment:time_value.
+# cbc_result is expected to be a successful CbCEstimator() fit; errors from
+# apply_cbc() are not caught here and propagate to the caller.
 
 extract_cbc_result <- function(cbc_result) {
   param_names <- c("estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
@@ -394,24 +383,12 @@ extract_cbc_result <- function(cbc_result) {
                    "se_beta0", "se_beta1", "se_beta2", "se_beta3",
                    "var_b0", "cov_b0b1", "var_b1"
   )
-  res <- setNames(rep(NA_real_, length(param_names)), param_names)
-  
-  tryCatch({
-    if (identical(cbc_result$status, "success") && !is.null(cbc_result$fit)) {
-      res <- c(t(cbc_result$fit$beta_tilde),
-               cbc_result$fit$Sigma_tilde,
-               sqrt(diag(cbc_result$fit$variance_beta_tilde)),
-               cbc_result$fit$D_tilde[upper.tri(cbc_result$fit$D_tilde, diag = TRUE)])
-      names(res) <- param_names
-    } else {
-      warning("cbc_result status is not 'success' or fit is NULL")
-    }
-    res
-  }, 
-  error = function(e) {
-    warning("Error extracting CbC results: ", e$message)
-    res
-  })
+  res <- c(t(cbc_result$beta_tilde),
+           cbc_result$Sigma_tilde,
+           sqrt(diag(cbc_result$variance_beta_tilde)),
+           cbc_result$D_tilde[upper.tri(cbc_result$D_tilde, diag = TRUE)])
+  names(res) <- param_names
+  res
 }
 
 # Model fitting ----------------------------------------------------------------------------------------------------
@@ -684,7 +661,9 @@ CbCEstimator <- function(mats, fit_args){
 #' \code{long_data} is the long-format stack of all \code{m} imputations produced
 #' by \code{impute_data()}, so each subject contributes \code{m * n_visits} rows
 #' to the single fit clustered by \code{subject_id}. On failure of the underlying
-#' \code{CbCEstimator()} call, an NA-filled vector is returned with a warning.
+#' \code{CbCEstimator()} call, the error propagates to the caller
+#' (\code{fit_mi_closed_form()} / \code{fit_closed_form_reweighting()}), which
+#' catches it and records it in \code{error_message}.
 #'
 #' @param long_data Data frame with one fit's worth of long-format data (for the
 #'   MI path, the stacked imputations from \code{impute_data()}).
