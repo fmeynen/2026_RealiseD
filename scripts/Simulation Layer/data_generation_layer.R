@@ -33,6 +33,9 @@
 
 data_generation_schema_version <- "v2"
 
+# Increment this string whenever the per-replicate analysis RNG stream scheme changes.
+analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
+
 
 
 # Scenario Setup --------------------------------------------------------------------------------------------------

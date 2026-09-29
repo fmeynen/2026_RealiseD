@@ -601,7 +601,8 @@ build_analysis_run_hash <- function(
   generation_manifest,
   analyses,
   analysis_configs = list(),
-  aggregation_include_engine = FALSE
+  aggregation_include_engine = FALSE,
+  analysis_registry = build_analysis_registry()
 ) {
   config_names <- names(analysis_configs)
   if (
@@ -613,26 +614,38 @@ build_analysis_run_hash <- function(
       "analysis_configs contains unnamed entries; all entries must be named by analysis method."
     )
   }
-  canonical_configs <- if (is.null(config_names)) {
-    analysis_configs
-  } else if (length(config_names) == 0L) {
-    list()
-  } else {
-    analysis_configs[sort(config_names)]
+
+  requested_analyses <- sort(unique(analyses))
+  unknown_analyses <- setdiff(requested_analyses, names(analysis_registry))
+  if (length(unknown_analyses) > 0L) {
+    stop(
+      "Unknown analyses requested: ",
+      paste(unknown_analyses, collapse = ", ")
+    )
   }
-  canonical_configs <- canonicalize_nested_list(canonical_configs)
+
+  resolved_configs <- stats::setNames(
+    lapply(requested_analyses, function(analysis_name) {
+      resolve_analysis_config(
+        analysis_registry[[analysis_name]],
+        analysis_configs[[analysis_name]]
+      )
+    }),
+    requested_analyses
+  )
+  canonical_configs <- canonicalize_nested_list(resolved_configs)
 
   identity <- list(
     generation_run_hash = generation_manifest$run_hash,
     generation_manifest_schema_version = generation_manifest$schema_version,
     data_generation_schema_version = generation_manifest$data_generation_schema_version,
-    analyses = sort(unique(analyses)),
+    analyses = requested_analyses,
     analysis_configs = canonical_configs,
     aggregation_include_engine = isTRUE(aggregation_include_engine),
     results_schema_version = results_schema_version,
     convergence_status_version = convergence_status_version,
     aggregation_schema_version = aggregation_schema_version,
-    analysis_rng_scheme = "lecuyer_analysis_substream_v1"
+    analysis_rng_scheme = analysis_rng_scheme_version
   )
   compute_results_hash(identity)
 }
@@ -1148,7 +1161,8 @@ run_requested_analyses <- function(
     generation_manifest = generation_manifest,
     analyses = analyses,
     analysis_configs = analysis_configs,
-    aggregation_include_engine = aggregation_include_engine
+    aggregation_include_engine = aggregation_include_engine,
+    analysis_registry = analysis_registry
   )
   run_root <- build_analysis_run_root(
     analysis_run_hash = analysis_run_hash,
