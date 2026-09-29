@@ -110,7 +110,7 @@ Ground rules:
     counter); corrupted file → not skipped; old manifest without md5 → read and validated.
   - Golden unchanged.
 
-- [ ] **8. Close-out.**
+- [x] **8. Close-out.**
   - README: the `parallel` / `n_cores` options and how workers are set up; that results do not
     depend on cores; hashing via digest (caches recompute once after this pass); the MI change;
     the md5 skip.
