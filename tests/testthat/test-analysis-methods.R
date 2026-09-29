@@ -55,7 +55,7 @@ test_that("prepare_analysis_data() keeps all rows (including unobserved) for imp
   scenario <- fast_classical_ml_scenario()
   dat <- simulate_scenario(scenario[1, , drop = FALSE], B = 1)
 
-  prepared <- prepare_analysis_data(dat, type = "imputation")
+  prepared <- prepare_analysis_data(dat, type = "multiple_imputation")
 
   expect_identical(nrow(prepared), nrow(dat))
   expect_true(is.integer(prepared$subject_id))

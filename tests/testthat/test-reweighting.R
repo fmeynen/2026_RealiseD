@@ -11,7 +11,7 @@ build_reweighting_mats <- function() {
     seed_base = 42
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)
-  ad <- suppressWarnings(prepare_analysis_data(dat, type = "weighting"))
+  ad <- suppressWarnings(prepare_analysis_data(dat, type = "reweighting"))
   build_cbc_matrices(ad, "subject_id", build_formula())
 }
 

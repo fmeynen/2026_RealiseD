@@ -55,7 +55,7 @@ Ground rules:
     globalenv), the README and BACKLOG.md.
   - Golden unchanged.
 
-- [ ] **3. One name per method internally.**
+- [x] **3. One name per method internally.**
   - `prepare_analysis_data(type = )`, `classify_fit_status(type = )` and
     `extract_closed_form_results(fit_type = )` use the registry keys (`classical_ml`,
     `multiple_imputation`, `reweighting`, `LSPIM`) instead of `imputation` / `weighting`.

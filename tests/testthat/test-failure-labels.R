@@ -34,8 +34,8 @@ test_that("analyze_mi_closed_form failure row matches success labels", {
   expect_equal(result$engine, "mice_cbc")
 })
 
-test_that("analyze_closed_form_reweighting failure row matches success labels", {
-  result <- analyze_closed_form_reweighting(single_subject_data())
+test_that("analyze_reweighting failure row matches success labels", {
+  result <- analyze_reweighting(single_subject_data())
 
   expect_equal(result$status, "failure")
   expect_equal(result$method, "reweighting")

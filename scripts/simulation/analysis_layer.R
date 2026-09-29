@@ -46,22 +46,22 @@ collect_analysis_metadata <- function(data) {
 #'
 #' @return Data frame ready for `lme4::lmer()`.
 
-prepare_analysis_data <- function(data, type = c("imputation", "weighting", "classical_ml", "LSPIM")) {
+prepare_analysis_data <- function(data, type = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")) {
   if (missing(type)) {
-    stop("type must be specified: choose one of \"classical_ml\", \"imputation\", \"weighting\" or \"LSPIM\"")
+    stop("type must be specified: choose one of \"classical_ml\", \"multiple_imputation\", \"reweighting\" or \"LSPIM\"")
   }
   type <- match.arg(type)
   analysis_data <- data[
-    if (type == "imputation") TRUE else !is.na(data$observed) & as.logical(data$observed) & !is.na(data$y), ,
+    if (type == "multiple_imputation") TRUE else !is.na(data$observed) & as.logical(data$observed) & !is.na(data$y), ,
     drop = FALSE
   ]
-  if (type == "imputation") {
+  if (type == "multiple_imputation") {
     analysis_data$subject_id <- as.integer(analysis_data$subject_id)
   } else {
     analysis_data$subject_id <- factor(analysis_data$subject_id)
   }
 
-  if (type == "weighting") {
+  if (type == "reweighting") {
     # The closed-form estimator fits a random intercept and a random slope per
     # subject, which needs at least three observations per subject to identify
     # both; the threshold itself depends on the data at hand.
@@ -881,13 +881,14 @@ is_singular <- function(cov_matrix, tol) {
 #'
 #' @param fit_result   List returned by fit_classical_ml_model().
 #' @param singular_tol Numeric tolerance passed to `lme4::isSingular()`.
+#' @param method       Analysis registry key identifying the fit's method.
 #'
 #' @return One of `"success"`, `"singular_fit"`, or `"failure"`.
 
 classify_fit_status <- function(fit_result, singular_tol = 1e-06,
-                                type = c("classical_ml", "imputation", "reweighting", "LSPIM")) {
+                                method = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")) {
   # TODO fix implementaiton
-  if (type == "LSPIM") {
+  if (method == "LSPIM") {
     return("success")
   }
 
@@ -895,12 +896,12 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
     return("failure")
   }
 
-  if (type == "classical_ml") {
+  if (method == "classical_ml") {
     if (lme4::isSingular(fit_result$fit, tol = singular_tol)) {
       return("singular_fit")
     }
   }
-  if (type == "imputation" | type == "reweighting") { # only works ad hoc #TODO generalize for any RE covariance matrix
+  if (method == "multiple_imputation" | method == "reweighting") { # only works ad hoc #TODO generalize for any RE covariance matrix
     if (is_singular(matrix(fit_result$fit[c("var_b0", "cov_b0b1", "cov_b0b1", "var_b1")], nrow = 2),
       tol = singular_tol
     )) {
@@ -932,7 +933,7 @@ extract_classical_ml_results <- function(
   engine = "lme4"
 ) {
   metadata <- collect_analysis_metadata(original_data)
-  status <- classify_fit_status(fit_result, type = method)
+  status <- classify_fit_status(fit_result, method = method)
   warning_message <- if (length(fit_result$warnings) > 0L) {
     paste(fit_result$warnings, collapse = " | ")
   } else {
@@ -979,13 +980,11 @@ extract_closed_form_results <- function(
   original_data,
   analysis_data,
   method = c("multiple_imputation", "reweighting"),
-  engine = "mice_cbc",
-  fit_type = c("imputation", "reweighting")
+  engine = "mice_cbc"
 ) {
-  fit_type <- match.arg(fit_type)
   metadata <- collect_analysis_metadata(original_data)
 
-  status <- classify_fit_status(fit_result, type = fit_type)
+  status <- classify_fit_status(fit_result, method = method)
   warning_message <- if (length(fit_result$warnings) > 0L) {
     paste(fit_result$warnings, collapse = " | ")
   } else {

@@ -40,7 +40,7 @@ test_that("closed-form reweighting records the real cbc_estimator error, not a d
   dat <- build_cbc_error_data()
 
   result <- suppressWarnings(
-    analyze_closed_form_reweighting(dat, set_fit_args(reweighting = TRUE))
+    analyze_reweighting(dat, set_fit_args(reweighting = TRUE))
   )
 
   expect_identical(result$status, "failure")
@@ -77,7 +77,7 @@ test_that("extract_cbc_result() returns a fully named 12-element vector on a suc
     seed_base = 1
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)
-  ad <- suppressWarnings(prepare_analysis_data(dat, type = "weighting"))
+  ad <- suppressWarnings(prepare_analysis_data(dat, type = "reweighting"))
 
   res <- extract_cbc_result(apply_cbc(ad, set_fit_args()))
 

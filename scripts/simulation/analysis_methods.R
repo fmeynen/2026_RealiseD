@@ -6,9 +6,9 @@
 #
 # Function hierarchy:
 #   analyze_classical_ml() / analyze_mi_closed_form() /
-#     analyze_closed_form_reweighting() / analyze_lspim()
+#     analyze_reweighting() / analyze_lspim()
 #   analyze_generated_data_classical_ml() / analyze_generated_data_mi_closed_form() /
-#     analyze_generated_data_closed_form_weights() / analyze_generated_data_lspim()
+#     analyze_generated_data_reweighting() / analyze_generated_data_lspim()
 #   build_analysis_registry() / resolve_analysis_config() / run_single_analysis_method()
 
 # Analyze Single Dataset ---------------------------------------------------------------------------------------
@@ -98,15 +98,14 @@ analyze_mi_closed_form <- function(
   tryCatch(
     {
       validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "imputation")
+      analysis_data <- prepare_analysis_data(data, type = "multiple_imputation")
       fit_result <- fit_mi_closed_form(analysis_data, impute_args, fit_args)
       extract_closed_form_results(
         fit_result = fit_result,
         original_data = data,
         analysis_data = analysis_data,
         method = "multiple_imputation",
-        engine = "mice_cbc",
-        fit_type = "imputation"
+        engine = "mice_cbc"
       )
     },
     error = function(error) {
@@ -125,20 +124,19 @@ analyze_mi_closed_form <- function(
   )
 }
 
-analyze_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
+analyze_reweighting <- function(data, fit_args = set_fit_args()) {
   metadata <- collect_analysis_metadata(data)
   tryCatch(
     {
       validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "weighting")
+      analysis_data <- prepare_analysis_data(data, type = "reweighting")
       fit_result <- fit_closed_form_reweighting(analysis_data, fit_args)
       extract_closed_form_results(
         fit_result = fit_result,
         original_data = data,
         analysis_data = analysis_data,
         method = "reweighting",
-        engine = "cbc",
-        fit_type = "reweighting"
+        engine = "cbc"
       )
     },
     error = function(error) {
@@ -255,7 +253,7 @@ analyze_generated_data_mi_closed_form <- function(
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_closed_form_weights <- function(
+analyze_generated_data_reweighting <- function(
   data,
   scenarios = NULL,
   fit_args = set_fit_args()
@@ -263,7 +261,7 @@ analyze_generated_data_closed_form_weights <- function(
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
-    analyzer_fn = analyze_closed_form_reweighting,
+    analyzer_fn = analyze_reweighting,
     parallel = .Platform$OS.type != "windows",
     fit_args = fit_args
   )
@@ -311,7 +309,7 @@ build_analysis_registry <- function() {
         fit_args = set_fit_args(reweighting = TRUE)
       ),
       runner = function(scenario_data, scenarios, config) {
-        analyze_generated_data_closed_form_weights(
+        analyze_generated_data_reweighting(
           data = scenario_data,
           scenarios = scenarios,
           fit_args = config$fit_args
