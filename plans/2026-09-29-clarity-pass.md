@@ -114,7 +114,7 @@ Ground rules:
     `qnorm(1 - (1 - ci_level) / 2)`. Thread it through `save_aggregation_summary()`.
   - Add a backlog item: consider a t-quantile for small N.
 
-- [ ] **9. README.** A full guide for collaborators:
+- [x] **9. README.** A full guide for collaborators:
   - the research question and the 4 methods;
   - the pipeline stages (generation → analysis → combine → aggregation);
   - the folder layout;
