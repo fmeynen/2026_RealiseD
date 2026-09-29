@@ -353,6 +353,21 @@ set_impute_args <- function(
 
 ## Model Fit Argument ------------------------------------------------------------------------------------------------
 
+#' Build the argument list for the closed-form CbC fits.
+#'
+#' @param subject_col Character. Name of the subject identifier column.
+#' @param time_col Character. Name of the time variable column.
+#' @param treatment_col Character. Name of the treatment variable column.
+#' @param outcome_col Character. Name of the outcome variable column.
+#' @param formula Model formula for lme4::lmer(); see build_formula().
+#' @param epsilon_D Numeric. Eigenvalue floor used to make D_tilde positive definite.
+#' @param reweighting Logical. When TRUE, run iterative reweighting instead of standard closed-form.
+#' @param epsilon_B Numeric. Convergence tolerance on beta for reweighting.
+#' @param max_iterations Integer. Maximum number of reweighting iterations.
+#' @param stacked_variance_inflation Logical. Multiple-imputation method only: when TRUE, multiply the fixed-effect standard errors by sqrt(m) to account for fitting the m stacked imputations at once. Ignored by the reweighting method.
+#'
+#' @return Named list of fit settings.
+
 set_fit_args <- function(
     subject_col    = "subject_id", time_col = "time_value", treatment_col = "treatment", outcome_col = "y",
     formula        = build_formula(),
