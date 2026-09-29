@@ -1,6 +1,6 @@
 # test-cbc-errors.R
 # Covers the "one catch per method" behavior for the closed-form CbC fit:
-# when CbCEstimator() errors, fit_mi_closed_form() / fit_closed_form_reweighting()
+# when cbc_estimator() errors, fit_mi_closed_form() / fit_closed_form_reweighting()
 # (not apply_cbc() / extract_cbc_result()) are the ones that catch it, so the
 # real error message, a non-NA elapsed_seconds, and any collected warnings
 # survive into the result row instead of being replaced by a downstream
@@ -23,19 +23,19 @@ stub_cbc_estimator_error <- function(message) {
   # This repo is a set of sourced scripts, not a package, so
   # testthat::local_mocked_bindings() cannot be used here: it requires
   # .package %||% dev_package(), which errors with "No packages loaded with
-  # pkgload" outside of a package dev context. Stub CbCEstimator directly in
+  # pkgload" outside of a package dev context. Stub cbc_estimator directly in
   # the global environment (where helper-source.R sourced it) instead,
   # restoring the original binding when the test exits.
-  original_CbCEstimator <- CbCEstimator
-  withr::defer(assign("CbCEstimator", original_CbCEstimator, envir = globalenv()), envir = parent.frame())
+  original_CbCEstimator <- cbc_estimator
+  withr::defer(assign("cbc_estimator", original_CbCEstimator, envir = globalenv()), envir = parent.frame())
   assign(
-    "CbCEstimator",
+    "cbc_estimator",
     function(mats, fit_args) stop(message),
     envir = globalenv()
   )
 }
 
-test_that("closed-form reweighting records the real CbCEstimator error, not a downstream one", {
+test_that("closed-form reweighting records the real cbc_estimator error, not a downstream one", {
   stub_cbc_estimator_error("Lapack routine dgesv: system is exactly singular")
   dat <- build_cbc_error_data()
 
@@ -50,7 +50,7 @@ test_that("closed-form reweighting records the real CbCEstimator error, not a do
   expect_identical(result$engine, "cbc")
 })
 
-test_that("MI closed-form records the real CbCEstimator error, not a downstream one", {
+test_that("MI closed-form records the real cbc_estimator error, not a downstream one", {
   stub_cbc_estimator_error("Lapack routine dgesv: system is exactly singular")
   dat <- build_cbc_error_data()
 

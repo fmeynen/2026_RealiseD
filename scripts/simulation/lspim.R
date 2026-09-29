@@ -7,7 +7,7 @@ pseudo_score <- function(y_left, y_right, higher_is_better = TRUE) {
     ifelse(y_right < y_left, 1, ifelse(y_right > y_left, 0, 0.5))
   }
 }
-make_deviation_from_mean_L <- function(beta_names, treatment_terms) {
+make_deviation_from_mean_l <- function(beta_names, treatment_terms) {
   # Holm procedure used in the simulations and manuscript:
   # H0t: beta_At - mean_t(beta_At) = 0 for each visit t.
   K <- length(treatment_terms)
@@ -30,7 +30,7 @@ nearest_psd <- function(V, eps = 1e-8) {
   out
 }
 
-fit_LSPIM <- function(dat, alpha = 0.05) {
+fit_lspim <- function(dat, alpha = 0.05) {
   if (!requireNamespace("geessbin", quietly = TRUE)) {
     stop("Package 'geessbin' is required for LSPIM.")
   }
@@ -136,7 +136,7 @@ fit_LSPIM <- function(dat, alpha = 0.05) {
         mod_use <- mod1
         mod_use$coefficients <- beta
         mod_use$covb <- V_for_inference
-        L_const <- make_deviation_from_mean_L(names(beta), treatment_terms)
+        L_const <- make_deviation_from_mean_l(names(beta), treatment_terms)
         holm_p <- summary(
           multcomp::glht(mod_use, linfct = L_const),
           test = multcomp::adjusted("holm")

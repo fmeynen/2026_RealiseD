@@ -15,11 +15,11 @@ build_reweighting_mats <- function() {
   build_cbc_matrices(ad, "subject_id", build_formula())
 }
 
-test_that("CbCEstimator stops after one pass when epsilon_B is very loose", {
+test_that("cbc_estimator stops after one pass when epsilon_B is very loose", {
   mats <- build_reweighting_mats()
   args <- set_fit_args(reweighting = TRUE, epsilon_B = 1e6)
 
-  fit <- suppressWarnings(CbCEstimator(mats, args))
+  fit <- suppressWarnings(cbc_estimator(mats, args))
 
   expect_identical(fit$iterations, 1)
 })
@@ -33,7 +33,7 @@ test_that("the reweighting loop is controlled by epsilon_B, not epsilon_D", {
     max_iterations = 30
   )
 
-  fit <- suppressWarnings(CbCEstimator(mats, args))
+  fit <- suppressWarnings(cbc_estimator(mats, args))
 
   expect_gt(fit$iterations, 1)
 })
@@ -42,7 +42,7 @@ test_that("iterations is 0 when reweighting is disabled", {
   mats <- build_reweighting_mats()
   args <- set_fit_args(reweighting = FALSE)
 
-  fit <- suppressWarnings(CbCEstimator(mats, args))
+  fit <- suppressWarnings(cbc_estimator(mats, args))
 
   expect_identical(fit$iterations, 0)
 })
@@ -65,8 +65,8 @@ test_that("damping changes the reweighted beta on a small dataset", {
   args_default <- set_fit_args(reweighting = TRUE, damping = 0.7, max_iterations = 1)
   args_full <- set_fit_args(reweighting = TRUE, damping = 1, max_iterations = 1)
 
-  fit_default <- suppressWarnings(CbCEstimator(mats, args_default))
-  fit_full <- suppressWarnings(CbCEstimator(mats, args_full))
+  fit_default <- suppressWarnings(cbc_estimator(mats, args_default))
+  fit_full <- suppressWarnings(cbc_estimator(mats, args_full))
 
   expect_false(isTRUE(all.equal(fit_default$beta_tilde, fit_full$beta_tilde)))
 })

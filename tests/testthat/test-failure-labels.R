@@ -42,8 +42,8 @@ test_that("analyze_closed_form_reweighting failure row matches success labels", 
   expect_equal(result$engine, "cbc")
 })
 
-test_that("analyze_LSPIM failure row matches success labels", {
-  result <- analyze_LSPIM(single_subject_data())
+test_that("analyze_lspim failure row matches success labels", {
+  result <- analyze_lspim(single_subject_data())
 
   expect_equal(result$status, "failure")
   expect_equal(result$method, "LSPIM")

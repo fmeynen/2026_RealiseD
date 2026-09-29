@@ -6,9 +6,9 @@
 #
 # Function hierarchy:
 #   analyze_classical_ml() / analyze_mi_closed_form() /
-#     analyze_closed_form_reweighting() / analyze_LSPIM()
+#     analyze_closed_form_reweighting() / analyze_lspim()
 #   analyze_generated_data_classical_ml() / analyze_generated_data_mi_closed_form() /
-#     analyze_generated_data_closed_form_weights() / analyze_generated_data_LSPIM()
+#     analyze_generated_data_closed_form_weights() / analyze_generated_data_lspim()
 #   build_analysis_registry() / resolve_analysis_config() / run_single_analysis_method()
 
 # Analyze Single Dataset ---------------------------------------------------------------------------------------
@@ -157,14 +157,14 @@ analyze_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
   )
 }
 
-analyze_LSPIM <- function(data, alpha = 0.05) {
+analyze_lspim <- function(data, alpha = 0.05) {
   metadata <- collect_analysis_metadata(data)
   tryCatch(
     {
       validate_analysis_data(data)
       analysis_data <- prepare_analysis_data(data, type = "LSPIM")
-      fit_result <- fit_LSPIM(analysis_data, alpha = alpha)
-      extract_LSPIM_results(
+      fit_result <- fit_lspim(analysis_data, alpha = alpha)
+      extract_lspim_results(
         fit_result = fit_result,
         original_data = data,
         analysis_data = analysis_data,
@@ -269,7 +269,7 @@ analyze_generated_data_closed_form_weights <- function(
   )
 }
 
-analyze_generated_data_LSPIM <- function(
+analyze_generated_data_lspim <- function(
   data,
   scenarios = NULL,
   alpha = 0.05
@@ -277,7 +277,7 @@ analyze_generated_data_LSPIM <- function(
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
-    analyzer_fn = analyze_LSPIM,
+    analyzer_fn = analyze_lspim,
     parallel = .Platform$OS.type != "windows",
     alpha = alpha
   )
@@ -335,7 +335,7 @@ build_analysis_registry <- function() {
         scenario_row$n <= config$lspim_max_n
       },
       runner = function(scenario_data, scenarios, config) {
-        analyze_generated_data_LSPIM(
+        analyze_generated_data_lspim(
           data = scenario_data,
           scenarios = scenarios,
           alpha = config$alpha

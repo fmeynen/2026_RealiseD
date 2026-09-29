@@ -2,7 +2,7 @@
 
 # Note: method_y = "2l.pmm" requires the 'miceadds' package to be attached (library(miceadds)) before calling
 #   impute_data(). method_y = "2l.norm" is available from mice without extra dependencies.
-# Note: CbCEstimator() uses vech() from the 'ks' package.
+# Note: cbc_estimator() uses vech() from the 'ks' package.
 #   Install and attach 'ks' before calling fit_closed_form().
 
 # Internal helpers -------------------------------------------------------------------------------------------------
@@ -310,7 +310,7 @@ set_fit_args <- function(
 
 ## Closed-form fit  --------------------------------------------------------------------------
 
-# Build the matrices and clusterID vector needed by CbCEstimator
+# Build the matrices and clusterID vector needed by cbc_estimator
 
 build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
   # helper function to split dataframe into lists
@@ -360,8 +360,8 @@ build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
   )
 }
 
-# Call CbCEstimator for one group data frame; return its result list unchanged.
-# Errors from CbCEstimator are not caught here: they propagate to the caller
+# Call cbc_estimator for one group data frame; return its result list unchanged.
+# Errors from cbc_estimator are not caught here: they propagate to the caller
 # (fit_mi_closed_form() / fit_closed_form_reweighting()), which is where errors
 # are caught once per method and recorded in error_message.
 
@@ -380,12 +380,12 @@ apply_cbc <- function(data, fit_args = set_fit_args()) {
     )
   }
   mats <- build_cbc_matrices(data, subject_col, formula)
-  CbCEstimator(mats, fit_args)
+  cbc_estimator(mats, fit_args)
 }
 
-# Convert a CbCEstimator result for one group into a named vector.
+# Convert a cbc_estimator result for one group into a named vector.
 # beta0..beta3 correspond to intercept, treatment, time_value, treatment:time_value.
-# cbc_result is expected to be a successful CbCEstimator() fit; errors from
+# cbc_result is expected to be a successful cbc_estimator() fit; errors from
 # apply_cbc() are not caught here and propagate to the caller.
 
 extract_cbc_result <- function(cbc_result) {
@@ -472,10 +472,10 @@ impute_data <- function(data, impute_args = set_impute_args()) {
   completed
 }
 
-## Closed-form estimator (CbCEstimator) -----------------------------------------------------------
+## Closed-form estimator (cbc_estimator) -----------------------------------------------------------
 
 # helper formula inv_sum_kwk
-calculate_inv_sum_KWK <- function(K_mi, weights) {
+calculate_inv_sum_kwk <- function(K_mi, weights) {
   KWK <- mapply(
     function(K, W) {
       crossprod(K, W) %*% K
@@ -505,7 +505,7 @@ calculate_stage1_results <- function(Z, Y, n, q) {
 
 # stage 2
 calculate_stage2_beta <- function(K_mi, weights, beta_hats) {
-  inv_sum_KWK <- calculate_inv_sum_KWK(K_mi, weights)
+  inv_sum_KWK <- calculate_inv_sum_kwk(K_mi, weights)
   KWB <- mapply(
     function(K, W, B) {
       crossprod(K, W) %*% B
@@ -517,12 +517,12 @@ calculate_stage2_beta <- function(K_mi, weights, beta_hats) {
   inv_sum_KWK %*% sum_KWB
 }
 
-calculate_stage2_Sigma <- function(Sigma_hats, weights) {
+calculate_stage2_sigma <- function(Sigma_hats, weights) {
   vech_Sigma_hat <- as.data.frame(do.call(rbind, lapply(Sigma_hats, ks::vech)))
   ks::invvech(apply(vech_Sigma_hat, 2, weighted.mean, w = weights))
 }
 
-calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i,
+calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
                                      beta_hats, beta_tilde, Sigma_tilde) {
   # square root of weights to use for matrix multiplication
   sqrt_W <- lapply(weights, expm::sqrtm)
@@ -545,7 +545,7 @@ calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i,
 
   # D: formula 9, c: formula 9b
   # Hii
-  inv_sum_KWK <- calculate_inv_sum_KWK(K_mi, weights)
+  inv_sum_KWK <- calculate_inv_sum_kwk(K_mi, weights)
   HH_i <- mapply(function(K, W) {
     inv_sum_KWK %*% crossprod(K, W)
   }, K_mi, weights, SIMPLIFY = F)
@@ -603,7 +603,7 @@ calculate_stage2_varbeta <- function(K_mi, weights, Z_i, D_tilde, Sigma_tilde) {
     Z_i,
     SIMPLIFY = F
   )
-  var_beta_part1 <- calculate_inv_sum_KWK(K_mi, weights)
+  var_beta_part1 <- calculate_inv_sum_kwk(K_mi, weights)
   var_beta_part2 <- Reduce("+", mapply(
     function(K, W, VB) {
       crossprod(K, W) %*% VB %*% crossprod(W, K)
@@ -616,7 +616,7 @@ calculate_stage2_varbeta <- function(K_mi, weights, Z_i, D_tilde, Sigma_tilde) {
 }
 
 # Cluster-by-cluster estimator
-CbCEstimator <- function(mats, fit_args) {
+cbc_estimator <- function(mats, fit_args) {
   Z_i <- mats$Z
   Y_i <- mats$Y
   X_i <- mats$X
@@ -660,10 +660,10 @@ CbCEstimator <- function(mats, fit_args) {
 
   # 2nd stage calculations
   beta_tilde <- calculate_stage2_beta(K_mi, W_i1, beta_hats)
-  Sigma_tilde <- calculate_stage2_Sigma(Sigma_hats, w_i2)
-  D_tilde <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
+  Sigma_tilde <- calculate_stage2_sigma(Sigma_hats, w_i2)
+  D_tilde <- calculate_stage2_dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
   # adjust D_tilde for positive definiteness
-  adjust_D_pd <- function(D_tilde, epsilon = 1e-6) {
+  adjust_d_pd <- function(D_tilde, epsilon = 1e-6) {
     eig <- eigen(D_tilde)
     eigenvalues <- eig$values
     eigenvalues[eigenvalues < 0] <- epsilon
@@ -675,7 +675,7 @@ CbCEstimator <- function(mats, fit_args) {
   }
   if (min(eigen(D_tilde, only.values = T)$values) < 0) {
     warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
-    D_tilde <- adjust_D_pd(D_tilde, epsilon_D)
+    D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
   }
   variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_i1, Z_i, D_tilde, Sigma_tilde)
   # Reweighting
@@ -693,12 +693,12 @@ CbCEstimator <- function(mats, fit_args) {
 
       beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt_1i, beta_hats)
       beta_tilde <- damping * beta_tilde_new + (1 - damping) * beta_tilde_ori
-      D_tilde <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
+      D_tilde <- calculate_stage2_dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
       # note: optimal weights are for beta's only, keep original weights for D_tilde
 
       if (min(eigen(D_tilde, only.values = T)$values) < 0) {
         warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
-        D_tilde <- adjust_D_pd(D_tilde, epsilon_D)
+        D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
       }
       variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_opt_1i, Z_i, D_tilde, Sigma_tilde)
 
@@ -730,7 +730,7 @@ CbCEstimator <- function(mats, fit_args) {
 #' \code{long_data} is the long-format stack of all \code{m} imputations produced
 #' by \code{impute_data()}, so each subject contributes \code{m * n_visits} rows
 #' to the single fit clustered by \code{subject_id}. On failure of the underlying
-#' \code{CbCEstimator()} call, the error propagates to the caller
+#' \code{cbc_estimator()} call, the error propagates to the caller
 #' (\code{fit_mi_closed_form()} / \code{fit_closed_form_reweighting()}), which
 #' catches it and records it in \code{error_message}.
 #'
@@ -1012,7 +1012,7 @@ extract_closed_form_results <- function(
   result_row
 }
 
-extract_LSPIM_results <- function(
+extract_lspim_results <- function(
   fit_result,
   original_data,
   analysis_data,

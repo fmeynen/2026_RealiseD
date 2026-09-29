@@ -37,7 +37,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   already give each replicate an independent stream, so results stay reproducible.
 
 - [ ] **[efficiency] CbC D-matrix step costs O(N²).**
-  `calculate_stage2_Dmatrix()` loops over every pair i≠j with three `kronecker()` calls per
+  `calculate_stage2_dmatrix()` loops over every pair i≠j with three `kronecker()` calls per
   pair ([analysis_layer.R:625-634](scripts/simulation/analysis_layer.R#L625-L634)).
   By the Kronecker mixed-product rule each term equals
   `kron(W_j K_i HH_j, K_i HH_j t(W_j))` (two q×q factors). Since `K_i` only takes one value
@@ -46,7 +46,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 - [ ] **[efficiency] Smaller CbC savings.**
   - `expm::sqrtm()` is applied to diagonal weight matrices
     ([analysis_layer.R:604](scripts/simulation/analysis_layer.R#L604)); use `sqrt()` on the diagonal.
-  - `solve(crossprod(Z))` and `calculate_inv_sum_KWK()` are recomputed several times per fit.
+  - `solve(crossprod(Z))` and `calculate_inv_sum_kwk()` are recomputed several times per fit.
   - `ks` is only used for `vec()`, `vech()`, `invvec()`, `invvech()`; replace with base-R one-liners
     and drop the dependency.
 
@@ -104,9 +104,11 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
   Mixed 2/4-space argument indentation, `if(` vs `if (`, `=` for assignment, `T`/`F`,
   `&` where `&&` is meant. Run `styler` and `lintr::lint_dir("scripts")`.
 
-- [ ] **[consistency] Names violate the project's own `.lintr` rule.**
-  `CbCEstimator`, `fit_LSPIM`, `K_mi`, `W_i1`, `D_tilde`, ... Either rename or extend the
-  allowed pattern for statistical notation.
+- [x] **[consistency] Function names violate the project's own `.lintr` rule.**
+  `CbCEstimator` → `cbc_estimator`, `fit_LSPIM` → `fit_lspim`, and other offending function
+  names renamed to snake_case (consistency pass, branch `refactor/consistency`). Matrix-notation
+  local variables (`K_mi`, `W_i1`, `D_tilde`, ...) are left as is; extending the allowed
+  pattern for statistical notation is tracked separately.
 
 - [ ] **[consistency] Centralise paths and schema versions.**
   `"results/data"` and `"data/processed/generated"` are repeated as defaults in ~15 functions;

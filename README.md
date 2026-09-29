@@ -36,7 +36,7 @@ The four methods (names as they appear in the `method` column of the results):
 | `reweighting` | `cbc` | CbC estimator on the observed data (subjects with fewer than 3 observations excluded), followed by iterative reweighting with optimal weights. Update is damped (`damping`, default 0.7) and stops when the max change in beta is below `epsilon_B` (1e-6) or after `max_iterations` (30). |
 | `LSPIM` | `LSPIM` | Pairwise pseudo-observations (win = 1, tie = 0.5) within subjects and between arms per visit, three GEE fits (`geessbin`), combined sandwich variance, and a Holm-adjusted test (`multcomp`) that the per-visit treatment effects differ. Reports only an interaction test decision, no beta estimates. Skipped for scenarios with `n > lspim_max_n` (default 50). |
 
-The CbC estimator (`CbCEstimator()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)) is
+The CbC estimator (`cbc_estimator()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)) is
 a two-stage closed-form estimator: per-subject OLS in stage 1, weighted combination in stage 2.
 If `D_tilde` has negative eigenvalues they are replaced by `epsilon_D` (with a warning).
 Method settings are built with `set_impute_args()` and `set_fit_args()`.
@@ -79,7 +79,7 @@ scripts/
     data_generation_layer.R  Scenario grid, data-generating model, dropout, RNG streams, generation manifest
     analysis_layer.R         Data preparation, lme4 fit, imputation, CbC estimator, result extraction
     analysis_methods.R       Per-dataset analyzers, method registry, method defaults
-    LSPIM_subversion.R       LSPIM fit (fit_LSPIM())
+    lspim.R                  LSPIM fit (fit_lspim())
     pipeline.R               run_generation(), run_requested_analyses(), per-replicate loop
     artifact_store.R         Hashes, output paths, manifests, cache checks, convergence_status
     aggregation_layer.R      Performance metrics (aggregate_results())
@@ -213,8 +213,9 @@ and say so in the commit message (e.g. "regenerate golden fixture: <reason>").
 - object names in `snake_case`, with the uppercase acronyms `CI`, `SE`, `MSE`, `RMSE`, `SD`,
   `GPC`, `NTB`, `BT`, `X`, `Y`, `Z` allowed as name parts.
 
-Run `lintr::lint_dir("scripts")`. Several existing names use statistical notation (`CbCEstimator`,
-`K_mi`, `D_tilde`) and do not yet pass the naming rule (backlog item).
+Run `lintr::lint_dir("scripts")`. Several remaining local variable names use statistical matrix
+notation (`K_mi`, `D_tilde`) and do not yet pass the naming rule (backlog item); function names
+were brought into compliance in the consistency pass.
 
 ## Dependencies
 

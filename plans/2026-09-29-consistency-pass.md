@@ -41,7 +41,7 @@ Ground rules:
   - Don't restyle `scripts/reference/` or the golden fixture scripts' logic.
   - Must be layout-only: the golden test and the full suite must pass unchanged.
 
-- [ ] **2. Function names to snake_case.**
+- [x] **2. Function names to snake_case.**
   - Rename every *function* that fails the `.lintr` naming rule, for example:
     `CbCEstimator` → `cbc_estimator`, `fit_LSPIM` → `fit_lspim`, `analyze_LSPIM` →
     `analyze_lspim`, `analyze_generated_data_LSPIM` → `analyze_generated_data_lspim`,
