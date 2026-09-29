@@ -98,8 +98,10 @@ parallel_map <- function(
 #'
 #' Validates the scenario grid, computes the data-generation run hash, initialises and
 #' persists a generation manifest, then generates (or reuses) each scenario's simulated
-#' data in turn: an existing, valid scenario file is skipped (status "skipped_existing"
-#' in the manifest); otherwise simulate_scenario() is run and the result saved via
+#' data in turn: an existing scenario file is skipped (status "skipped_existing" in the
+#' manifest) without being read when the manifest of the previous run recorded its md5 and the
+#' file still matches it (find_verified_manifest_entry()); without such a match the file is
+#' read and validated before being skipped. Otherwise simulate_scenario() is run and the result saved via
 #' save_generated_scenario(). The manifest is saved to disk after every scenario, then
 #' finalised (finalize_generation_manifest()) and saved once more. Stops if the
 #' finalised manifest status is not "completed".
@@ -130,6 +132,11 @@ run_generation <- function(
     n_simulations = n_simulations
   )
 
+  previous_manifest <- tryCatch(
+    load_generation_manifest(run_hash = data_hash, dir = output_dir),
+    error = function(e) NULL
+  )
+
   generation_manifest <- initialize_generation_manifest(
     run_hash = data_hash,
     scenarios = scenarios,
@@ -153,19 +160,33 @@ run_generation <- function(
     )
 
     if (file.exists(scenario_path) && !overwrite) {
-      existing_data <- readRDS(scenario_path)
-      validate_generated_scenario_data(
-        data = existing_data,
+      verified_entry <- find_verified_manifest_entry(
+        previous_manifest = previous_manifest,
         scenario_id = scenario_id,
-        n_simulations = n_simulations
+        scenario_path = scenario_path
       )
+      if (is.null(verified_entry)) {
+        existing_data <- readRDS(scenario_path)
+        validate_generated_scenario_data(
+          data = existing_data,
+          scenario_id = scenario_id,
+          n_simulations = n_simulations
+        )
+        existing_checksum <- compute_file_md5(scenario_path)
+        existing_n_rows <- nrow(existing_data)
+        existing_sim_count <- length(unique(existing_data$sim_id))
+      } else {
+        existing_checksum <- verified_entry$checksum
+        existing_n_rows <- verified_entry$n_rows
+        existing_sim_count <- verified_entry$sim_count
+      }
       generation_manifest <- update_generation_manifest_entry(
         manifest = generation_manifest,
         scenario_id = scenario_id,
         status = "skipped_existing",
-        checksum = compute_file_md5(scenario_path),
-        n_rows = nrow(existing_data),
-        sim_count = length(unique(existing_data$sim_id)),
+        checksum = existing_checksum,
+        n_rows = existing_n_rows,
+        sim_count = existing_sim_count,
         error = NA_character_,
         started_at = scenario_start_time,
         finished_at = Sys.time()

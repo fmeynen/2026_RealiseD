@@ -99,7 +99,7 @@ Ground rules:
   - Make sure `digest` is a direct dependency in `renv.lock`.
   - Golden unchanged (hash columns are excluded).
 
-- [ ] **7. Skip existing generated files without reading them.**
+- [x] **7. Skip existing generated files without reading them.**
   - When a scenario file is written, record its `tools::md5sum()` in the generation manifest
     entry. Bump `generation_manifest_schema_version`.
   - On a later run, an existing file whose md5 matches the manifest is `skipped_existing` without

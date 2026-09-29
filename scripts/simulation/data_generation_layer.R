@@ -878,6 +878,39 @@ compute_file_md5 <- function(path) {
 }
 
 
+#' Find the previous manifest entry that vouches for an existing scenario file.
+#'
+#' Reads the generation manifest left by an earlier run, if any, and returns the entry of
+#' `scenario_id` when it recorded a successful generation (status "success" or
+#' "skipped_existing") with a checksum, row count and simulation count, and the md5 of the file
+#' at `scenario_path` equals that checksum. Returns NULL otherwise (no or unreadable manifest,
+#' no checksum, or a changed file), in which case the caller must read and validate the file.
+#'
+#' @param previous_manifest Manifest from an earlier run, or NULL.
+#' @param scenario_id       Integer scenario id.
+#' @param scenario_path     Path of the existing scenario file.
+#'
+#' @return One-row data frame (the manifest entry) or NULL.
+
+find_verified_manifest_entry <- function(previous_manifest, scenario_id, scenario_path) {
+  if (is.null(previous_manifest$entries)) {
+    return(NULL)
+  }
+  entries <- previous_manifest$entries
+  idx <- match(as.integer(scenario_id), entries$scenario_id)
+  if (is.na(idx)) {
+    return(NULL)
+  }
+  entry <- entries[idx, , drop = FALSE]
+  vouched <- entry$status %in% c("success", "skipped_existing") &&
+    !is.na(entry$checksum) && !is.na(entry$n_rows) && !is.na(entry$sim_count)
+  if (!vouched || !identical(compute_file_md5(scenario_path), entry$checksum)) {
+    return(NULL)
+  }
+  entry
+}
+
+
 # Used from pipeline.R and tests; not renamed to stay under 30 characters.
 validate_generated_scenario_data <- function(data, scenario_id, n_simulations) { # nolint: object_length_linter.
   missing_cols <- setdiff(generated_data_required_columns, names(data))
