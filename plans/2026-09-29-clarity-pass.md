@@ -78,7 +78,7 @@ Ground rules:
     `build_combined_convenience_artifact_path()` if unused (the latter duplicates
     `build_analysis_combined_convenience_path()`).
 
-- [ ] **5. Port the remaining validation scripts** (`validate_data_generation.R`,
+- [x] **5. Port the remaining validation scripts** (`validate_data_generation.R`,
   `validate_data_analysis.R`, `validate_mi_closed_form_layer.R`) to testthat.
   - Fast checks always run.
   - Slow statistical checks (1e6 random-effects draws, the lmer fit in
