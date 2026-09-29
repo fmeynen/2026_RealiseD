@@ -24,7 +24,7 @@ Ground rules:
 
 ## Items
 
-- [ ] **0. Golden comparison script.** Add `tests/testthat/fixtures/compare_golden.R`, a function
+- [x] **0. Golden comparison script.** Add `tests/testthat/fixtures/compare_golden.R`, a function
   `compare_golden(allowed = list(<column> = list(from = , to = ), ...))`. It:
   - runs `run_golden_pipeline()` into a temp dir;
   - compares `results` and `aggregation` with the fixture, applying the same normalisation;
