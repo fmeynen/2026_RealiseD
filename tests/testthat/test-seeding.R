@@ -69,11 +69,11 @@ test_that("replicate_rng_states matches a per-sim_id restart from the scenario s
   states <- replicate_rng_states(42, scenario_id = 3, sim_ids = c(5, 2))
   stream <- scenario_rng_stream(42, scenario_id = 3)
 
-  expected_5 <- stream
-  for (i in 1:5) expected_5 <- parallel::nextRNGSubStream(expected_5)
+  expected5 <- stream
+  for (i in 1:5) expected5 <- parallel::nextRNGSubStream(expected5)
 
   expect_named(states, c("5", "2"))
-  expect_identical(states[["5"]], expected_5)
+  expect_identical(states[["5"]], expected5)
   expect_identical(states[["2"]], replicate_rng_states(42, 3, 1:2)[["2"]])
 })
 
@@ -141,7 +141,8 @@ test_that("with_rng_state restores state after an error and removes a previously
   expect_identical(.Random.seed, seed_before)
 
   saved <- .Random.seed
-  withr::defer(assign(".Random.seed", saved, envir = globalenv()))
+  # .Random.seed is R's mandated exact name for the RNG state global; it cannot be renamed.
+  withr::defer(assign(".Random.seed", saved, envir = globalenv())) # nolint: object_name_linter.
   rm(".Random.seed", envir = globalenv())
   with_rng_state(state, runif(1L))
   expect_false(exists(".Random.seed", envir = globalenv(), inherits = FALSE))

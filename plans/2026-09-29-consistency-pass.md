@@ -124,7 +124,7 @@ Ground rules:
     it passes, and list the changed rows in the commit message.
   - Add a backlog item: a mice convergence diagnostic (e.g. R-hat across chains) for MI.
 
-- [ ] **8. Lint to zero, plus a lint test.**
+- [x] **8. Lint to zero, plus a lint test.**
   - Tune `.lintr`:
     - extend the `object_name_linter` regex to allow matrix and statistical notation (capital
       letters in local variables such as `K_mi`, `W_i1`, `D_tilde`, `Sigma_tilde`);

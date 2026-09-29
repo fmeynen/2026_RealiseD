@@ -26,8 +26,8 @@ stub_cbc_estimator_error <- function(message) {
   # pkgload" outside of a package dev context. Stub cbc_estimator directly in
   # the global environment (where helper-source.R sourced it) instead,
   # restoring the original binding when the test exits.
-  original_CbCEstimator <- cbc_estimator
-  withr::defer(assign("cbc_estimator", original_CbCEstimator, envir = globalenv()), envir = parent.frame())
+  original_cbc_estimator <- cbc_estimator
+  withr::defer(assign("cbc_estimator", original_cbc_estimator, envir = globalenv()), envir = parent.frame())
   assign(
     "cbc_estimator",
     function(mats, fit_args) stop(message),

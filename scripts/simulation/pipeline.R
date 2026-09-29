@@ -7,10 +7,10 @@
 # aggregation output).
 #
 # Function hierarchy:
-#   run_generation()
-#   build_group_analysis_rng_states() / run_analysis_over_groups()
-#   sort_analysis_results_deterministically()
-#   run_requested_analyses()
+#   run_generation
+#   build_group_analysis_rng_states, run_analysis_over_groups
+#   sort_analysis_results_deterministically
+#   run_requested_analyses
 
 # Generate Data -----------------------------------------------------------------------------------------------
 
@@ -190,7 +190,9 @@ run_generation <- function(
 #'
 #' @return List aligned with split_data: an L'Ecuyer-CMRG .Random.seed or NULL per group.
 
-build_group_analysis_rng_states <- function(split_data, scenarios) {
+# Referenced by name in plans/2026-09-29-clarity-pass.md and used from tests;
+# not renamed to stay under 30 characters.
+build_group_analysis_rng_states <- function(split_data, scenarios) { # nolint: object_length_linter.
   group_states <- vector("list", length(split_data))
   if (
     is.null(scenarios) ||
@@ -300,7 +302,8 @@ run_analysis_over_groups <- function(
 }
 
 
-sort_analysis_results_deterministically <- function(results_df) {
+# Used from artifact_store.R and tests; not renamed to stay under 30 characters.
+sort_analysis_results_deterministically <- function(results_df) { # nolint: object_length_linter.
   sort_cols <- intersect(
     c("scenario_id", "sim_id", "method", "engine"),
     names(results_df)

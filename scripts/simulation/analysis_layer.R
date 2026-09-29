@@ -48,7 +48,9 @@ collect_analysis_metadata <- function(data) {
 
 prepare_analysis_data <- function(data, type = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")) {
   if (missing(type)) {
-    stop("type must be specified: choose one of \"classical_ml\", \"multiple_imputation\", \"reweighting\" or \"LSPIM\"")
+    stop(
+      "type must be specified: choose one of \"classical_ml\", \"multiple_imputation\", \"reweighting\" or \"LSPIM\""
+    )
   }
   type <- match.arg(type)
   analysis_data <- data[
@@ -276,8 +278,11 @@ set_impute_args <- function(
 #' @param reweighting Logical. When TRUE, run iterative reweighting instead of standard closed-form.
 #' @param epsilon_B Numeric. Convergence tolerance on beta for reweighting.
 #' @param max_iterations Integer. Maximum number of reweighting iterations.
-#' @param stacked_variance_inflation Logical. Multiple-imputation method only: when TRUE, multiply the fixed-effect standard errors by sqrt(m) to account for fitting the m stacked imputations at once. Ignored by the reweighting method.
-#' @param damping Numeric in (0, 1]. Dampening factor for the reweighting update: beta_new = damping * beta_reweighted + (1 - damping) * beta_previous.
+#' @param stacked_variance_inflation Logical. Multiple-imputation method only: when TRUE, multiply the
+#'   fixed-effect standard errors by sqrt(m) to account for fitting the m stacked imputations at once.
+#'   Ignored by the reweighting method.
+#' @param damping Numeric in (0, 1]. Dampening factor for the reweighting update:
+#'   beta_new = damping * beta_reweighted + (1 - damping) * beta_previous.
 #'
 #' @return Named list of fit settings.
 
@@ -290,7 +295,7 @@ set_fit_args <- function(
   damping = 0.7
 ) {
   if (!is.numeric(damping) || length(damping) != 1L || is.na(damping) ||
-    damping <= 0 || damping > 1) {
+        damping <= 0 || damping > 1) {
     stop("damping must be a single number in (0, 1].")
   }
   list(
@@ -310,40 +315,40 @@ set_fit_args <- function(
 
 ## Closed-form fit  --------------------------------------------------------------------------
 
-# Build the matrices and clusterID vector needed by cbc_estimator
+# Build the matrices and cluster_id vector needed by cbc_estimator
 
 build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
   # helper function to split dataframe into lists
-  split_data <- function(clusterID, X) {
-    data_list <- lapply(unique(clusterID), function(id) {
-      X[clusterID == id, , drop = FALSE]
+  split_data <- function(cluster_id, X) {
+    data_list <- lapply(unique(cluster_id), function(id) {
+      X[cluster_id == id, , drop = FALSE]
     })
-    names(data_list) <- unique(clusterID)
+    names(data_list) <- unique(cluster_id)
     data_list
   }
 
   # Cluster Information
-  clusterID <- data[[subject_col]]
-  n_c <- length(unique(clusterID))
+  cluster_id <- data[[subject_col]]
+  n_c <- length(unique(cluster_id))
 
   # Extract fixed effects design matrix
   fixed_formula <- reformulas::nobars(formula)
   X <- model.matrix(fixed_formula, data = data)
   p <- ncol(X)
-  X_list <- split_data(clusterID, X)
+  X_list <- split_data(cluster_id, X)
 
   # Extract outcome
   outcome_col <- all.vars(formula)[1]
   Y <- matrix(as.numeric(data[[outcome_col]]), ncol = 1L)
   m <- ncol(Y)
-  Y_list <- split_data(clusterID, Y)
+  Y_list <- split_data(cluster_id, Y)
 
   # Extract random effects
   re_bars <- reformulas::findbars(formula) # Returns list of bar notation expressions
   re_formula_char <- deparse(re_bars[[1]][[2]])
   Z <- model.matrix(as.formula(paste("~", re_formula_char)), data = data)
   q <- ncol(Z)
-  Z_list <- split_data(clusterID, Z)
+  Z_list <- split_data(cluster_id, Z)
 
   # observations per cluster
   n_i <- lapply(Y_list, nrow)
@@ -532,14 +537,14 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
       beta_hats - K_mi %*% beta_tilde
     },
     beta_hats, K_mi,
-    SIMPLIFY = F
+    SIMPLIFY = FALSE
   )
   vec_sb <- ks::vec(Reduce("+", mapply(
     function(b, W) {
       tcrossprod(W %*% b)
     },
     b_i_tilde, sqrt_W,
-    SIMPLIFY = F
+    SIMPLIFY = FALSE
   ))) ##
 
 
@@ -548,10 +553,10 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
   inv_sum_KWK <- calculate_inv_sum_kwk(K_mi, weights)
   HH_i <- mapply(function(K, W) {
     inv_sum_KWK %*% crossprod(K, W)
-  }, K_mi, weights, SIMPLIFY = F)
+  }, K_mi, weights, SIMPLIFY = FALSE)
   H_ii <- mapply(function(K, H) {
     K %*% H
-  }, K_mi, HH_i, SIMPLIFY = F)
+  }, K_mi, HH_i, SIMPLIFY = FALSE)
 
   # denom part 1
   I_min_Hii <- lapply(H_ii, function(H) {
@@ -562,11 +567,11 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
       kronecker(W %*% X, tcrossprod(X, W))
     },
     I_min_Hii, sqrt_W,
-    SIMPLIFY = F
+    SIMPLIFY = FALSE
   ))
 
   # denom part 2
-  idx_combinations <- expand.grid(i = 1:length(K_mi), j = 1:length(HH_i))
+  idx_combinations <- expand.grid(i = seq_along(K_mi), j = seq_along(HH_i))
   idx_combinations <- idx_combinations[idx_combinations$i != idx_combinations$j, ]
   denom_p2 <- Reduce(
     `+`,
@@ -575,7 +580,7 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
       K <- K_mi[[i]]
       HH <- HH_i[[j]]
       kronecker(W, K) %*% kronecker(K, HH) %*% kronecker(HH, t(W))
-    }, idx_combinations$i, idx_combinations$j, SIMPLIFY = F)
+    }, idx_combinations$i, idx_combinations$j, SIMPLIFY = FALSE)
   )
   denom <- denom_p1 + denom_p2
   # c
@@ -587,7 +592,7 @@ calculate_stage2_dmatrix <- function(K_mi, weights, Z_i,
       (kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% ks::vec(R)
     },
     sqrt_W, I_min_Hii, R_i,
-    SIMPLIFY = F
+    SIMPLIFY = FALSE
   ))
 
 
@@ -601,7 +606,7 @@ calculate_stage2_varbeta <- function(K_mi, weights, Z_i, D_tilde, Sigma_tilde) {
       D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))
     },
     Z_i,
-    SIMPLIFY = F
+    SIMPLIFY = FALSE
   )
   var_beta_part1 <- calculate_inv_sum_kwk(K_mi, weights)
   var_beta_part2 <- Reduce("+", mapply(
@@ -609,7 +614,7 @@ calculate_stage2_varbeta <- function(K_mi, weights, Z_i, D_tilde, Sigma_tilde) {
       crossprod(K, W) %*% VB %*% crossprod(W, K)
     },
     K_mi, weights, var_beta_i,
-    SIMPLIFY = F
+    SIMPLIFY = FALSE
   ))
 
   var_beta_part1 %*% var_beta_part2 %*% var_beta_part1
@@ -673,7 +678,7 @@ cbc_estimator <- function(mats, fit_args) {
 
     L %*% tcrossprod(E, L)
   }
-  if (min(eigen(D_tilde, only.values = T)$values) < 0) {
+  if (min(eigen(D_tilde, only.values = TRUE)$values) < 0) {
     warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
     D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
   }
@@ -685,22 +690,22 @@ cbc_estimator <- function(mats, fit_args) {
       beta_tilde_ori <- beta_tilde
       var_beta_i <- mapply(function(Z) {
         D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))
-      }, Z_i, SIMPLIFY = F)
+      }, Z_i, SIMPLIFY = FALSE)
       inv_Sum_V_i <- solve(Reduce("+", lapply(var_beta_i, solve)))
-      W_opt_1i <- lapply(var_beta_i, function(V) {
+      W_opt1i <- lapply(var_beta_i, function(V) {
         inv_Sum_V_i %*% solve(V)
       })
 
-      beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt_1i, beta_hats)
+      beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt1i, beta_hats)
       beta_tilde <- damping * beta_tilde_new + (1 - damping) * beta_tilde_ori
       D_tilde <- calculate_stage2_dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
       # note: optimal weights are for beta's only, keep original weights for D_tilde
 
-      if (min(eigen(D_tilde, only.values = T)$values) < 0) {
+      if (min(eigen(D_tilde, only.values = TRUE)$values) < 0) {
         warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
         D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
       }
-      variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_opt_1i, Z_i, D_tilde, Sigma_tilde)
+      variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_opt1i, Z_i, D_tilde, Sigma_tilde)
 
       convergence <- max(abs(beta_tilde_ori - beta_tilde))
       iterations <- iterations + 1
@@ -933,7 +938,8 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
       return("singular_fit")
     }
   }
-  if (method == "multiple_imputation" | method == "reweighting") { # only works ad hoc #TODO generalize for any RE covariance matrix
+  # only works ad hoc; TODO generalize for any RE covariance matrix
+  if (method == "multiple_imputation" || method == "reweighting") {
     if (is_singular(matrix(fit_result$fit[c("var_b0", "cov_b0b1", "cov_b0b1", "var_b1")], nrow = 2),
       tol = singular_tol
     )) {

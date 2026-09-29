@@ -2,7 +2,22 @@ linters:
   linters_with_defaults(
     line_length_linter = line_length_linter(120),
     assignment_linter = assignment_linter(c("<-", "->", "=")),
+    # Each underscore-separated part of a name must be either (a) a lowercase snake_case
+    # word, (b) one of a fixed set of statistical acronyms, or (c) CbC-paper matrix/vector
+    # notation: a run of capital letters optionally followed by lowercase letters and/or
+    # digits (e.g. K, W, D, Z, X, Y, V, Sigma, KWK, KWB, GEE, Hii, C1, C2). This lets
+    # variables mirror the estimator's mathematical notation (K_mi, W_i1, D_tilde,
+    # Sigma_tilde, inv_sum_KWK, vec_D_tilde, epsilon_D, ...) while still requiring
+    # function names and ordinary variables to be snake_case.
     object_name_linter = object_name_linter(
-      regex = "^(?:[a-z][a-z0-9]*|(CI|SE|MSE|RMSE|SD|GPC|NTB|BT|X|Y|Z))(?:_(?:[a-z][a-z0-9]*|(CI|SE|MSE|RMSE|SD|GPC|NTB|BT|X|Y|Z)))*$"
-    )
+      regex = paste0(
+        "^(?:[a-z][a-z0-9]*|(CI|SE|MSE|RMSE|SD|GPC|NTB|BT|X|Y|Z)|[A-Z]+[a-z0-9]*)",
+        "(?:_(?:[a-z][a-z0-9]*|(CI|SE|MSE|RMSE|SD|GPC|NTB|BT|X|Y|Z)|[A-Z]+[a-z0-9]*))*$"
+      )
+    ),
+    # Disabled: this codebase sources scripts directly rather than using a package, so
+    # object_usage_linter cannot see functions/globals defined in other sourced files
+    # (e.g. default_paths from config.R, helpers from other scripts/simulation/*.R files)
+    # and reports many false-positive "no visible global function/binding" findings.
+    object_usage_linter = NULL
   )

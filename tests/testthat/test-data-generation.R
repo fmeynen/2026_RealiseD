@@ -45,7 +45,7 @@ test_that("generate_random_effects() returns one row per subject with the expect
   expect_equal(nrow(re), 20L)
 })
 
-test_that("half_missing dropout leaves everyone observed at the first visit and exactly half of subjects fully observed", {
+test_that("half_missing dropout leaves everyone observed at the first visit and half of subjects fully observed", {
   scenario <- build_scenario_grid(
     n_values = 40,
     n_measures = 6,
@@ -77,7 +77,7 @@ test_that("allocate_treatment() balances subjects exactly across arms for even n
   expect_identical(as.integer(unname(treatment_balance)), c(20L, 20L))
 })
 
-test_that("summarize_generated_data() runs on canonical simulate_scenario() output and returns the documented elements", {
+test_that("summarize_generated_data() runs on simulate_scenario() output and returns the documented elements", {
   scenario <- build_scenario_grid(
     n_values = 10,
     n_measures = 4,
@@ -107,7 +107,7 @@ test_that("summarize_generated_data() runs on canonical simulate_scenario() outp
   expect_identical(nrow(summary_out$obs_rate_by_time), n_scenarios * n_distinct_times)
 })
 
-test_that("summarize_generated_data() recovers the true fixed effects and random-effect covariance from a single large replicate", {
+test_that("summarize_generated_data() recovers fixed effects and random-effect covariance from one large replicate", {
   skip_if_not(identical(Sys.getenv("RUN_SLOW_TESTS"), "true"), "slow test: set RUN_SLOW_TESTS=true")
 
   true_beta0 <- 2.4562

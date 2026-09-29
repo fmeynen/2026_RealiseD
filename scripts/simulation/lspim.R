@@ -91,10 +91,10 @@ fit_lspim <- function(dat, alpha = 0.05) {
 
         all_pairs <- list()
         for (tt in times) {
-          id.fac <- which(dat$treatment == 0 & dat$time_value == tt)
-          id.nonfac <- which(dat$treatment == 1 & dat$time_value == tt)
-          if (length(id.fac) > 0L && length(id.nonfac) > 0L) {
-            tmp <- expand.grid(Var1 = id.fac, Var2 = id.nonfac)
+          id_fac <- which(dat$treatment == 0 & dat$time_value == tt)
+          id_nonfac <- which(dat$treatment == 1 & dat$time_value == tt)
+          if (length(id_fac) > 0L && length(id_nonfac) > 0L) {
+            tmp <- expand.grid(Var1 = id_fac, Var2 = id_nonfac)
             tmp$pair_type <- "between"
             all_pairs[[length(all_pairs) + 1L]] <- tmp
           }
@@ -147,8 +147,11 @@ fit_lspim <- function(dat, alpha = 0.05) {
         V_for_inference <- V_raw
         V_eig_check <- (V_raw + t(V_raw)) / 2
         if (min(eigen(V_eig_check, symmetric = TRUE, only.values = TRUE)$values) < -1e-8 ||
-          any(diag(V_raw) <= 0)) {
-          warning("Combined V has negative eigenvalues or non-positive variances; using nearest PSD matrix for numerical inference.")
+              any(diag(V_raw) <= 0)) {
+          warning(
+            "Combined V has negative eigenvalues or non-positive variances; ",
+            "using nearest PSD matrix for numerical inference."
+          )
           V_for_inference <- nearest_psd(V_raw)
         }
 

@@ -1,6 +1,6 @@
 # aggregation_layer.R
 # Aggregation layer for the simulation experiment described in
-# research_question/meeting_notes/programming_planning.qmd.
+# "research_question/meeting_notes/programming_planning.qmd".
 #
 # Consumes the scenario-wise combined convenience analysis artifact and returns per-scenario x per-method
 # summary statistics:
@@ -16,13 +16,13 @@
 # Relative bias returns NA when the true parameter value is zero.
 #
 # Function hierarchy:
-#   aggregate_results()
-#     validate_aggregation_inputs()
-#     compute_convergence_summary()
-#     compute_bias_summary()
-#     compute_time_summary()
-#     compute_beta3_coverage_summary()
-#     merge_aggregation_summaries()
+#   aggregate_results
+#     validate_aggregation_inputs
+#     compute_convergence_summary
+#     compute_bias_summary
+#     compute_time_summary
+#     compute_beta3_coverage_summary
+#     merge_aggregation_summaries
 
 
 # Constants --------------------------------------------------------------------------------------------------------
@@ -342,7 +342,7 @@ compute_time_summary <- function(results_df, group_cols) {
 
 compute_beta3_coverage_summary <- function(results_df, group_cols, ci_level = 0.95) {
   if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
-    ci_level <= 0 || ci_level >= 1) {
+        ci_level <= 0 || ci_level >= 1) {
     stop("ci_level must be a single number in (0, 1).")
   }
   z <- stats::qnorm(1 - (1 - ci_level) / 2)
@@ -396,7 +396,7 @@ compute_beta3_coverage_summary <- function(results_df, group_cols, ci_level = 0.
 #' @return Data frame with one row per group and interaction-test rates plus
 #'   their eligible denominators.
 
-compute_interaction_test_summary <- function(results_df, group_cols) {
+compute_interaction_summary <- function(results_df, group_cols) {
   required_cols <- c(
     "status", "interaction_tested", "interaction_rejected", "beta3"
   )
@@ -522,7 +522,7 @@ merge_aggregation_summaries <- function(
 #' # agg2 <- aggregate_results(list(results = results_no_betas, scenarios = combined$scenarios))
 aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.95) {
   if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
-    ci_level <= 0 || ci_level >= 1) {
+        ci_level <= 0 || ci_level >= 1) {
     stop("ci_level must be a single number in (0, 1).")
   }
 
@@ -542,7 +542,7 @@ aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.
   mse_df <- compute_mse_summary(results_df, group_cols)
   time_df <- compute_time_summary(results_df, group_cols)
   coverage_df <- compute_beta3_coverage_summary(results_df, group_cols, ci_level = ci_level)
-  interaction_test_df <- compute_interaction_test_summary(results_df, group_cols)
+  interaction_test_df <- compute_interaction_summary(results_df, group_cols)
 
   summary_df <- merge_aggregation_summaries(
     convergence_df,

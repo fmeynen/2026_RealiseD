@@ -5,12 +5,12 @@
 # resolves a method name to its runner and config.
 #
 # Function hierarchy:
-#   run_method()
-#   analyze_classical_ml() / analyze_mi_closed_form() /
-#     analyze_reweighting() / analyze_lspim()
-#   analyze_generated_data_classical_ml() / analyze_generated_data_mi_closed_form() /
-#     analyze_generated_data_reweighting() / analyze_generated_data_lspim()
-#   build_analysis_registry() / resolve_analysis_config() / run_single_analysis_method()
+#   run_method
+#   analyze_classical_ml, analyze_mi_closed_form,
+#     analyze_reweighting, analyze_lspim
+#   analyze_generated_data_classical_ml, analyze_generated_data_mi_closed_form,
+#     analyze_generated_data_reweighting, analyze_generated_data_lspim
+#   build_analysis_registry, resolve_analysis_config, run_single_analysis_method
 
 # Analyze Single Dataset ---------------------------------------------------------------------------------------
 
@@ -194,7 +194,9 @@ analyze_lspim <- function(data, alpha = 0.05) {
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
+# Name mirrors the registry's other analyze_generated_data_* wrappers and is used across
+# pipeline.R, analysis_methods.R and tests; not renamed to stay under 30 characters.
+analyze_generated_data_classical_ml <- function(data, scenarios = NULL) { # nolint: object_length_linter.
   run_analysis_over_groups(
     data,
     scenarios,
@@ -219,7 +221,9 @@ analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_mi_closed_form <- function(
+# Name mirrors the registry's other analyze_generated_data_* wrappers and is used across
+# pipeline.R, analysis_methods.R and tests; not renamed to stay under 30 characters.
+analyze_generated_data_mi_closed_form <- function( # nolint: object_length_linter.
   data,
   scenarios = NULL,
   impute_args = set_impute_args(),
@@ -248,7 +252,9 @@ analyze_generated_data_mi_closed_form <- function(
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_reweighting <- function(
+# Name mirrors the registry's other analyze_generated_data_* wrappers and is used across
+# pipeline.R, analysis_methods.R and tests; not renamed to stay under 30 characters.
+analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
   data,
   scenarios = NULL,
   fit_args = set_fit_args()
@@ -315,8 +321,8 @@ build_analysis_registry <- function() {
       default_config = list(alpha = 0.05, lspim_max_n = 50),
       applies_to = function(scenario_row, config) {
         if (!is.numeric(config$lspim_max_n) ||
-          length(config$lspim_max_n) != 1L ||
-          is.na(config$lspim_max_n)) {
+              length(config$lspim_max_n) != 1L ||
+              is.na(config$lspim_max_n)) {
           stop(
             "LSPIM config 'lspim_max_n' must be a single number; ",
             "set it in analysis_configs$LSPIM"

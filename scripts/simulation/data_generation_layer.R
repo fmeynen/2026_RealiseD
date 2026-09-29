@@ -1,32 +1,32 @@
 # data_generation_layer.R
 # Data generation layer for the simulation experiment described in
-# research_question/meeting_notes/programming_planning.qmd.
+# "research_question/meeting_notes/programming_planning.qmd".
 #
 # Mixed model:
-#   y_ij = beta0 + beta1*T_i + beta2*t_ij + beta3*T_i*t_ij + b0_i + b1_i*t_ij + epsilon_ij
+#   y_ij is beta0 + beta1*T_i + beta2*t_ij + beta3*T_i*t_ij + b0_i + b1_i*t_ij + epsilon_ij
 #
 # Canonical output format (long):
 #   sim_id, scenario_id, subject_id, treatment, time_value, y, observed
 #   (optional diagnostics: y_complete, eta_ij, epsilon_ij, dropout_time)
 #
 # Function hierarchy:
-#   build_scenario_grid() / validate_scenario_grid()
-#   scenario_rng_stream() / replicate_rng_states() / with_rng_state()
-#   simulate_scenario()
-#     simulate_one_dataset()
-#       make_time_grid()
-#       allocate_treatment()
-#       generate_random_effects()
-#       expand_subject_time_panel()
-#       compute_linear_predictor()
-#       generate_residual_errors()
-#       generate_outcomes()
-#       generate_dropout_process()
-#       apply_missingness()
-#   summarize_generated_data()
-#   compute_data_generation_hash_from_spec()
-#   initialize_generation_manifest() / save_generation_manifest() / finalize_generation_manifest()
-#   save_generated_scenario() / load_generated_scenario_by_id() / iterate_generated_scenarios()
+#   build_scenario_grid, validate_scenario_grid
+#   scenario_rng_stream, replicate_rng_states, with_rng_state
+#   simulate_scenario
+#     simulate_one_dataset
+#       make_time_grid
+#       allocate_treatment
+#       generate_random_effects
+#       expand_subject_time_panel
+#       compute_linear_predictor
+#       generate_residual_errors
+#       generate_outcomes
+#       generate_dropout_process
+#       apply_missingness
+#   summarize_generated_data
+#   compute_data_generation_hash_from_spec
+#   initialize_generation_manifest, save_generation_manifest, finalize_generation_manifest
+#   save_generated_scenario, load_generated_scenario_by_id, iterate_generated_scenarios
 
 
 # Scenario Setup --------------------------------------------------------------------------------------------------
@@ -282,10 +282,10 @@ compute_linear_predictor <- function(panel, beta0, beta1, beta2, beta3) {
   panel$eta_ij <- (
     beta0
     + beta1 * panel$treatment
-      + beta2 * panel$time_value
-      + beta3 * panel$treatment * panel$time_value
-      + panel$b0_i
-      + panel$b1_i * panel$time_value
+    + beta2 * panel$time_value
+    + beta3 * panel$treatment * panel$time_value
+    + panel$b0_i
+    + panel$b1_i * panel$time_value
   )
   panel
 }
@@ -345,7 +345,7 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
     # Each number of visits has the same probability of occurring.
     # Dropout is monotone: once dropped, always dropped.
     dropout_time <- vapply(subject_ids, function(id) {
-      return(sample.int(n = n_measures, size = 1))
+      sample.int(n = n_measures, size = 1)
     }, integer(1L))
   } else if (mechanism == "half_missing") {
     # Randomly split subjects in two groups.
@@ -466,7 +466,8 @@ restore_rng_state <- function(saved) {
       rm(".Random.seed", envir = globalenv())
     }
   } else {
-    assign(".Random.seed", saved$seed, envir = globalenv())
+    # .Random.seed is R's mandated exact name for the RNG state global; it cannot be renamed.
+    assign(".Random.seed", saved$seed, envir = globalenv()) # nolint: object_name_linter.
   }
   invisible(NULL)
 }
@@ -493,7 +494,8 @@ with_rng_state <- function(state, expr) {
   saved <- save_rng_state()
   on.exit(restore_rng_state(saved), add = TRUE)
   RNGkind(kind = "L'Ecuyer-CMRG", normal.kind = "Inversion", sample.kind = "Rejection")
-  assign(".Random.seed", state, envir = globalenv())
+  # .Random.seed is R's mandated exact name for the RNG state global; it cannot be renamed.
+  assign(".Random.seed", state, envir = globalenv()) # nolint: object_name_linter.
   expr
 }
 
@@ -732,9 +734,9 @@ summarize_generated_data <- function(data) {
 
   # model params
   res <- lme4::lmer(formula = y ~ treatment + time_value + treatment:time_value +
-    (1 + time_value | subject_id), data = data)
+                      (1 + time_value | subject_id), data = data)
   fixef <- lme4::fixef(res)
-  VarCorr <- lme4::VarCorr(res)
+  var_corr <- lme4::VarCorr(res)
 
 
   # mean # of obs per subject
@@ -754,7 +756,7 @@ summarize_generated_data <- function(data) {
     treatment_balance = treatment_balance,
     obs_rate_by_time = obs_rate_by_time,
     fixed_effects = fixef,
-    random_effect_cov = as.data.frame(VarCorr), # print(VarCorr, comp = c("Variance")),
+    random_effect_cov = as.data.frame(var_corr),
     mean_y_by_treatment_time = mean_y_by_treatment_time,
     n_obs_per_subject = n_obs_per_subject
   )
@@ -763,11 +765,18 @@ summarize_generated_data <- function(data) {
 
 # Artifact persistence ---------------------------------------------------------------------------------------------
 
-generated_data_required_columns <- c("sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed")
-generated_data_forbidden_columns <- c("time_index", "time_label", "y_complete", "eta_ij", "epsilon_ij", "dropout_time")
+# Paired constants kept under matching names for readability; used from data_generation_layer.R
+# and referenced by name in test comments, so not renamed to stay under 30 characters.
+generated_data_required_columns <- c( # nolint: object_length_linter.
+  "sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed"
+)
+generated_data_forbidden_columns <- c( # nolint: object_length_linter.
+  "time_index", "time_label", "y_complete", "eta_ij", "epsilon_ij", "dropout_time"
+)
 
 
-build_data_generation_canonical_meta <- function(scenarios, n_simulations) {
+# Used from artifact_store.R and tests; not renamed to stay under 30 characters.
+build_data_generation_canonical_meta <- function(scenarios, n_simulations) { # nolint: object_length_linter.
   list(
     scenario_grid = canonicalize_results_scenarios_for_hash(scenarios),
     n_simulations = as.integer(n_simulations),
@@ -777,7 +786,8 @@ build_data_generation_canonical_meta <- function(scenarios, n_simulations) {
 }
 
 
-compute_data_generation_hash_from_spec <- function(scenarios, n_simulations) {
+# Used from pipeline.R, artifact_store.R and tests; not renamed to stay under 30 characters.
+compute_data_generation_hash_from_spec <- function(scenarios, n_simulations) { # nolint: object_length_linter.
   canonical_meta <- build_data_generation_canonical_meta(
     scenarios = scenarios,
     n_simulations = n_simulations
@@ -809,7 +819,8 @@ compute_file_md5 <- function(path) {
 }
 
 
-validate_generated_scenario_data <- function(data, scenario_id, n_simulations) {
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+validate_generated_scenario_data <- function(data, scenario_id, n_simulations) { # nolint: object_length_linter.
   missing_cols <- setdiff(generated_data_required_columns, names(data))
   if (length(missing_cols) > 0L) {
     stop("Generated scenario data is missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -821,7 +832,8 @@ validate_generated_scenario_data <- function(data, scenario_id, n_simulations) {
   }
 
   scenario_values <- unique(data$scenario_id)
-  if (length(scenario_values) != 1L || is.na(scenario_values[[1L]]) || as.integer(scenario_values[[1L]]) != as.integer(scenario_id)) {
+  if (length(scenario_values) != 1L || is.na(scenario_values[[1L]]) ||
+        as.integer(scenario_values[[1L]]) != as.integer(scenario_id)) {
     stop("Generated scenario data must contain exactly one scenario_id matching the save target.")
   }
 
@@ -894,7 +906,8 @@ load_generation_manifest <- function(run_hash, dir = default_paths$generated) {
 }
 
 
-update_generation_manifest_entry <- function(manifest,
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+update_generation_manifest_entry <- function(manifest, # nolint: object_length_linter.
                                              scenario_id,
                                              status,
                                              checksum = NA_character_,
@@ -933,7 +946,13 @@ finalize_generation_manifest <- function(manifest) {
   n_failure <- sum(manifest$entries$status == "failure", na.rm = TRUE)
   n_pending <- sum(manifest$entries$status == "pending", na.rm = TRUE)
 
-  manifest$status <- if (n_pending > 0L) "incomplete" else if (n_failure > 0L) "completed_with_failures" else "completed"
+  manifest$status <- if (n_pending > 0L) {
+    "incomplete"
+  } else if (n_failure > 0L) {
+    "completed_with_failures"
+  } else {
+    "completed"
+  }
   manifest$finalized_at <- Sys.time()
   manifest$summary <- list(
     n_success = n_success,
@@ -959,7 +978,10 @@ save_generated_scenario <- function(data,
     dir.create(scenario_dir, recursive = TRUE)
   }
 
-  sorted_data <- data[order(data$scenario_id, data$sim_id, data$subject_id, data$treatment, data$time_value), , drop = FALSE]
+  sorted_data <- data[
+    order(data$scenario_id, data$sim_id, data$subject_id, data$treatment, data$time_value), ,
+    drop = FALSE
+  ]
   rownames(sorted_data) <- NULL
 
   if (file.exists(scenario_path) && !overwrite) {

@@ -7,16 +7,16 @@
 # and the aggregation summary.
 #
 # Function hierarchy:
-#   add_convergence_status()
-#   canonicalize_results_scenarios_for_hash() / compute_results_hash()
-#   sanitize_filename_token() / canonicalize_nested_list()
-#   build_analysis_run_hash()
-#   build_analysis_run_root() / build_analysis_scenario_method_path() /
-#     build_analysis_manifest_path() / build_analysis_combined_convenience_path() /
-#     build_aggregation_output_path()
-#   find_valid_analysis_scenario_method_artifact() / save_analysis_scenario_method_artifact()
-#   save_combined_convenience_artifact()
-#   build_analysis_source_signature() / save_aggregation_summary()
+#   add_convergence_status
+#   canonicalize_results_scenarios_for_hash, compute_results_hash
+#   sanitize_filename_token, canonicalize_nested_list
+#   build_analysis_run_hash
+#   build_analysis_run_root, build_analysis_scenario_method_path,
+#     build_analysis_manifest_path, build_analysis_combined_convenience_path,
+#     build_aggregation_output_path
+#   find_valid_analysis_scenario_method_artifact, save_analysis_scenario_method_artifact
+#   save_combined_convenience_artifact
+#   build_analysis_source_signature, save_aggregation_summary
 
 
 # Convergence status ---------------------------------------------------------------------------------------------
@@ -68,7 +68,8 @@ add_convergence_status <- function(data) {
 
 # Hashing --------------------------------------------------------------------------------------------------------
 
-canonicalize_results_scenarios_for_hash <- function(scenarios) {
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+canonicalize_results_scenarios_for_hash <- function(scenarios) { # nolint: object_length_linter.
   scenario_grid_sorted <- scenarios[
     order(scenarios$scenario_id),
     sort(names(scenarios)),
@@ -186,7 +187,8 @@ build_analysis_run_root <- function(analysis_run_hash, dir = default_paths$resul
 }
 
 
-build_analysis_scenario_method_path <- function(
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+build_analysis_scenario_method_path <- function( # nolint: object_length_linter.
   analysis_run_hash,
   scenario_id,
   method,
@@ -216,7 +218,8 @@ build_analysis_manifest_path <- function(
 }
 
 
-build_analysis_combined_convenience_path <- function(
+# Used from pipeline.R, aggregation_layer.R and tests; not renamed to stay under 30 characters.
+build_analysis_combined_convenience_path <- function( # nolint: object_length_linter.
   analysis_run_hash,
   dir = default_paths$results
 ) {
@@ -240,7 +243,8 @@ build_aggregation_output_path <- function(
 }
 
 
-find_valid_analysis_scenario_method_artifact <- function(
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+find_valid_analysis_scenario_method_artifact <- function( # nolint: object_length_linter.
   analysis_run_hash,
   scenario_entry,
   method,
@@ -314,7 +318,8 @@ find_valid_analysis_scenario_method_artifact <- function(
 }
 
 
-save_analysis_scenario_method_artifact <- function(
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+save_analysis_scenario_method_artifact <- function( # nolint: object_length_linter.
   analysis_results,
   analysis_run_hash,
   generation_manifest,
@@ -366,7 +371,8 @@ save_analysis_scenario_method_artifact <- function(
 }
 
 
-save_combined_convenience_artifact <- function(
+# Used from pipeline.R, aggregation_layer.R and tests; not renamed to stay under 30 characters.
+save_combined_convenience_artifact <- function( # nolint: object_length_linter.
   artifact_records,
   analysis_run_hash,
   generation_manifest,
@@ -456,7 +462,8 @@ save_combined_convenience_artifact <- function(
 }
 
 
-build_analysis_source_signature <- function(artifact_records) {
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+build_analysis_source_signature <- function(artifact_records) { # nolint: object_length_linter.
   successful <- artifact_records[
     artifact_records$status %in% c("success", "skipped_existing"), ,
     drop = FALSE

@@ -11,7 +11,7 @@
 # ported from scripts/Validation/validate_aggregation_layer.R (removed as
 # dead code against the old flat results flow).
 
-build_synthetic_combined_artifact <- function() {
+build_synthetic_artifact <- function() {
   scenarios <- data.frame(
     scenario_id = c(1L, 2L),
     n = c(20L, 20L),
@@ -55,7 +55,7 @@ build_synthetic_combined_artifact <- function() {
 
 
 test_that("aggregate_results produces one row per (scenario_id, method) group with no duplicates", {
-  agg <- aggregate_results(build_synthetic_combined_artifact())
+  agg <- aggregate_results(build_synthetic_artifact())
 
   expect_identical(agg$meta$group_cols, c("scenario_id", "method"))
   expect_identical(nrow(agg$summary), 2L)
@@ -65,7 +65,7 @@ test_that("aggregate_results produces one row per (scenario_id, method) group wi
 
 
 test_that("aggregate_results output has the documented columns", {
-  agg <- aggregate_results(build_synthetic_combined_artifact())
+  agg <- aggregate_results(build_synthetic_artifact())
   summary_cols <- names(agg$summary)
 
   expected_cols <- c(
@@ -83,7 +83,7 @@ test_that("aggregate_results output has the documented columns", {
 
 
 test_that("true-beta columns absent from results_df are joined from scenarios_df", {
-  artifact <- build_synthetic_combined_artifact()
+  artifact <- build_synthetic_artifact()
   expect_false("beta3" %in% names(artifact$results))
 
   agg <- aggregate_results(artifact)
@@ -94,7 +94,7 @@ test_that("true-beta columns absent from results_df are joined from scenarios_df
 
 
 test_that("proportion/coverage columns stay in [0, 1] or NA and denominators stay non-negative", {
-  agg <- aggregate_results(build_synthetic_combined_artifact())
+  agg <- aggregate_results(build_synthetic_artifact())
 
   prop_cols <- c(
     "mean_convergence",
@@ -120,7 +120,7 @@ test_that("proportion/coverage columns stay in [0, 1] or NA and denominators sta
 
 
 test_that("relative bias is NA (with zero eligible rows) when the true beta is 0", {
-  agg <- aggregate_results(build_synthetic_combined_artifact())
+  agg <- aggregate_results(build_synthetic_artifact())
 
   scenario1 <- agg$summary[agg$summary$scenario_id == 1L, ]
   expect_identical(scenario1$beta3, 0)
@@ -146,11 +146,11 @@ test_that("compute_beta3_coverage_summary() at ci_level = 0.90 narrows the inter
     stringsAsFactors = FALSE
   )
 
-  cov_95 <- compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 0.95)
-  cov_90 <- compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 0.90)
+  cov95 <- compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 0.95)
+  cov90 <- compute_beta3_coverage_summary(results_df, c("scenario_id", "method"), ci_level = 0.90)
 
-  expect_equal(cov_95$coverage95_beta3, 1)
-  expect_equal(cov_90$coverage95_beta3, 0)
+  expect_equal(cov95$coverage95_beta3, 1)
+  expect_equal(cov90$coverage95_beta3, 0)
 })
 
 test_that("compute_beta3_coverage_summary() rejects an invalid ci_level", {
@@ -170,21 +170,21 @@ test_that("compute_beta3_coverage_summary() rejects an invalid ci_level", {
 })
 
 test_that("aggregate_results() records ci_level in meta and rejects an invalid ci_level", {
-  agg_default <- aggregate_results(build_synthetic_combined_artifact())
+  agg_default <- aggregate_results(build_synthetic_artifact())
   expect_identical(agg_default$meta$ci_level, 0.95)
 
-  agg_90 <- aggregate_results(build_synthetic_combined_artifact(), ci_level = 0.90)
-  expect_identical(agg_90$meta$ci_level, 0.90)
+  agg90 <- aggregate_results(build_synthetic_artifact(), ci_level = 0.90)
+  expect_identical(agg90$meta$ci_level, 0.90)
 
   expect_error(
-    aggregate_results(build_synthetic_combined_artifact(), ci_level = 1.5),
+    aggregate_results(build_synthetic_artifact(), ci_level = 1.5),
     "ci_level"
   )
 })
 
 
 test_that("bias, coverage, and convergence proportions match a hand-computed spot check for scenario 2", {
-  agg <- aggregate_results(build_synthetic_combined_artifact())
+  agg <- aggregate_results(build_synthetic_artifact())
   scenario2 <- agg$summary[agg$summary$scenario_id == 2L, ]
 
   # estimate_beta3 = c(NA, 0.6, 0.4, 0.5) vs true 0.5; NA row excluded.

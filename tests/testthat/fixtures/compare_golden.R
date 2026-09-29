@@ -12,11 +12,11 @@
 #   2. Run this with an explicit allowlist describing every difference you
 #      expect, e.g.:
 #
-#        source("tests/testthat/fixtures/compare_golden.R")
-#        compare_golden(allowed = list(
-#          estimate_beta2 = list(from = 0.2792, to = 0.2800),
-#          se_beta2       = list(to = NULL)  # any change allowed, value not pinned
-#        ))
+#        > source("tests/testthat/fixtures/compare_golden.R")
+#        > compare_golden(allowed = list(
+#        >   estimate_beta2 = list(from = 0.2792, to = 0.2800),
+#        >   se_beta2       = list(to = NULL)  # any change allowed, value not pinned
+#        > ))
 #
 #   3. If it reports ok = TRUE, every difference matched something in the
 #      allowlist (or there were none). Only THEN regenerate the fixture:
@@ -35,7 +35,8 @@
 #
 #   "/c/Program Files/R/R-4.6.1/bin/Rscript" tests/testthat/fixtures/compare_golden.R
 #
-# compare_golden(allowed = list(), fixture_path = "tests/testthat/fixtures/golden_pipeline.rds")
+# compare_golden() takes `allowed` (default an empty list) and `fixture_path`
+# (default "tests/testthat/fixtures/golden_pipeline.rds").
 #   `allowed` is a named list keyed by column name (of `results` or
 #   `aggregation`, they share a namespace here since column names don't
 #   collide in practice; if they ever do, both tables' differences in that
@@ -283,11 +284,11 @@ print_table_report <- function(table_name, table_result) {
     ))
     if (length(rows$added_keys) > 0L) {
       cat(sprintf("    added row keys (%d): %s\n", length(rows$added_keys),
-        paste(head(rows$added_keys, 5), collapse = "; ")))
+                  paste(head(rows$added_keys, 5), collapse = "; ")))
     }
     if (length(rows$removed_keys) > 0L) {
       cat(sprintf("    removed row keys (%d): %s\n", length(rows$removed_keys),
-        paste(head(rows$removed_keys, 5), collapse = "; ")))
+                  paste(head(rows$removed_keys, 5), collapse = "; ")))
     }
   }
 
@@ -363,7 +364,10 @@ compare_golden <- function(
   cat("compare_golden(): comparing fresh pipeline run against\n  ", resolved_fixture_path, "\n", sep = "")
   print_table_report("results", results_cmp)
   print_table_report("aggregation", aggregation_cmp)
-  cat(sprintf("\nOverall: %s\n", ifelse(ok, "OK (all differences allowed, or none)", "FAIL (unallowed differences present)")))
+  cat(sprintf(
+    "\nOverall: %s\n",
+    ifelse(ok, "OK (all differences allowed, or none)", "FAIL (unallowed differences present)")
+  ))
 
   invisible(list(
     ok = ok,

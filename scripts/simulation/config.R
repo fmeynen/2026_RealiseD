@@ -36,7 +36,8 @@ default_paths <- list(
 data_generation_schema_version <- "v3"
 
 # Increment this string whenever the generation manifest's structure changes.
-generation_manifest_schema_version <- "v2"
+# Used across config.R, data_generation_layer.R and tests; not renamed to stay under 30 characters.
+generation_manifest_schema_version <- "v2" # nolint: object_length_linter.
 
 # Increment this string whenever the per-replicate analysis RNG stream scheme changes.
 analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
