@@ -808,6 +808,8 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
   # Stacking the m imputations into one long-format fit (clustered by subject_id)
   # is intentional; see stacked_variance_inflation in set_fit_args() to correct
   # the resulting fixed-effect SEs for the stacking.
+  # impute_data() draws from the current global RNG; fit_mi_closed_form() takes no seed of its
+  # own (see analyze_mi_closed_form()'s rng_state argument for reproducible direct calls).
   fit <- withCallingHandlers(
     tryCatch(
       {

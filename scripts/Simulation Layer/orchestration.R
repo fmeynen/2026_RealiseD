@@ -247,11 +247,34 @@ analyze_classical_ml <- function(data) {
 }
 
 
+#' Run the multiple-imputation + closed-form analysis layer for one simulation replicate.
+#'
+#' Performs validation, preparation, MI + model fitting, and result extraction, and
+#' always returns a standardized one-row result even when fitting fails.
+#'
+#' @param data        Long-format data frame for one simulation replicate.
+#' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
+#' @param fit_args    Named list of fit arguments, as returned by \code{set_fit_args()}.
+#' @param rng_state   Optional L'Ecuyer-CMRG \code{.Random.seed} (e.g. from
+#'   \code{replicate_rng_states(..., purpose = "analysis")}). When NULL, imputation draws from
+#'   the current global RNG; call \code{set.seed()} first for reproducible direct calls. The
+#'   pipeline supplies the replicate's analysis substream via \code{run_analysis_over_groups()}.
+#'
+#' @return One-row data frame with standardized MI + closed-form analysis results.
+
 analyze_mi_closed_form <- function(
   data,
   impute_args = set_impute_args(),
-  fit_args = set_fit_args()
+  fit_args = set_fit_args(),
+  rng_state = NULL
 ) {
+  if (!is.null(rng_state)) {
+    return(with_rng_state(
+      rng_state,
+      analyze_mi_closed_form(data, impute_args, fit_args, rng_state = NULL)
+    ))
+  }
+
   method_y <- impute_args$method_y
   if (
     method_y == "2l.pmm" && !exists("mice.impute.2l.pmm", mode = "function")
