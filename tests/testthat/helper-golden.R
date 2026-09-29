@@ -97,10 +97,10 @@ run_golden_pipeline <- function(root_dir) {
           fit_args = set_fit_args(reweighting = TRUE)
         ),
         LSPIM = list(
-          alpha = 0.05,
           lspim_max_n = 50
         )
       ),
+      alpha = 0.05,
       output_dir = file.path(root_dir, "results")
     )
   ))

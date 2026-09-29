@@ -129,6 +129,7 @@ build_analysis_run_hash <- function(
   generation_manifest,
   analyses,
   analysis_configs = list(),
+  alpha = 0.05,
   aggregation_include_engine = FALSE,
   analysis_registry = build_analysis_registry()
 ) {
@@ -169,6 +170,7 @@ build_analysis_run_hash <- function(
     data_generation_schema_version = generation_manifest$data_generation_schema_version,
     analyses = requested_analyses,
     analysis_configs = canonical_configs,
+    alpha = alpha,
     aggregation_include_engine = isTRUE(aggregation_include_engine),
     results_schema_version = results_schema_version,
     convergence_status_version = convergence_status_version,
@@ -189,9 +191,10 @@ build_analysis_scenario_method_path <- function( # nolint: object_length_linter.
   analysis_run_hash,
   scenario_id,
   method,
-  dir = default_paths$results
+  dir = default_paths$results,
+  alpha = 0.05
 ) {
-  method_hash <- compute_results_hash(list(method = method))
+  method_hash <- compute_results_hash(list(method = method, alpha = alpha))
   file.path(
     build_analysis_run_root(analysis_run_hash, dir = dir),
     sprintf(
@@ -246,13 +249,15 @@ find_valid_analysis_scenario_method_artifact <- function( # nolint: object_lengt
   scenario_entry,
   method,
   output_dir = default_paths$results,
-  overwrite = FALSE
+  overwrite = FALSE,
+  alpha = 0.05
 ) {
   output_path <- build_analysis_scenario_method_path(
     analysis_run_hash = analysis_run_hash,
     scenario_id = scenario_entry$scenario_id,
     method = method,
-    dir = output_dir
+    dir = output_dir,
+    alpha = alpha
   )
 
   if (overwrite || !file.exists(output_path)) {
@@ -323,14 +328,16 @@ save_analysis_scenario_method_artifact <- function( # nolint: object_length_lint
   scenario_entry,
   method,
   output_dir = default_paths$results,
-  overwrite = FALSE
+  overwrite = FALSE,
+  alpha = 0.05
 ) {
   existing_path <- find_valid_analysis_scenario_method_artifact(
     analysis_run_hash = analysis_run_hash,
     scenario_entry = scenario_entry,
     method = method,
     output_dir = output_dir,
-    overwrite = overwrite
+    overwrite = overwrite,
+    alpha = alpha
   )
   if (!is.null(existing_path)) {
     return(list(path = existing_path, status = "skipped_existing"))
@@ -340,7 +347,8 @@ save_analysis_scenario_method_artifact <- function( # nolint: object_length_lint
     analysis_run_hash = analysis_run_hash,
     scenario_id = scenario_entry$scenario_id,
     method = method,
-    dir = output_dir
+    dir = output_dir,
+    alpha = alpha
   )
   output_dirname <- dirname(output_path)
   if (!dir.exists(output_dirname)) {

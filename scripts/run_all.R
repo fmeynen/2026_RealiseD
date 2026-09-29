@@ -36,7 +36,6 @@ analysis_configs <- list(
     fit_args = set_fit_args(reweighting = TRUE)
   ),
   LSPIM = list(
-    alpha = 0.05,
     lspim_max_n = 50
   )
 )
@@ -58,6 +57,7 @@ analysis_outputs <- run_requested_analyses(
   analyses = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM"),
   n_simulations = n_simulations,
   analysis_configs = analysis_configs,
+  alpha = 0.05,
   output_dir = analysis_output_dir,
   overwrite = FALSE,
   parallel = use_parallel,

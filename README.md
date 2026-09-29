@@ -170,6 +170,9 @@ supplementary_material/      CbC derivation (CBCEstimator.tex/.pdf) and papers
    - `n_simulations`: B, the number of replicates per scenario.
    - `analysis_configs`: per-method overrides of the defaults in `build_analysis_registry()`,
      e.g. `set_fit_args(reweighting = TRUE, damping = 0.5)` or `lspim_max_n`.
+   - `alpha` in the `run_requested_analyses()` call: the one significance level shared by all
+     methods (default 0.05). It is part of the analysis hash, so changing it reruns every method.
+     A per-method `analysis_configs$LSPIM$alpha` is an error.
    - `analyses` in the `run_requested_analyses()` call: which methods to run.
 4. Run the whole script (`source("scripts/run_all.R")`). Progress is printed per scenario and
    method; the return value `analysis_outputs` holds the paths and the aggregation summary.
