@@ -734,6 +734,17 @@ build_analysis_registry <- function() {
     LSPIM = list(
       default_config = list(alpha = 0.05, lspim_max_n = 50),
       applies_to = function(scenario_row, config) {
+        if (!is.numeric(config$lspim_max_n) ||
+              length(config$lspim_max_n) != 1L ||
+              is.na(config$lspim_max_n)) {
+          stop(
+            "LSPIM config 'lspim_max_n' must be a single number; ",
+            "set it in analysis_configs$LSPIM"
+          )
+        }
+        if (is.null(scenario_row$n) || is.na(scenario_row$n)) {
+          stop("scenario metadata has no 'n' column")
+        }
         scenario_row$n <= config$lspim_max_n
       },
       runner = function(scenario_data, scenarios, config) {
@@ -1233,7 +1244,14 @@ run_requested_analyses <- function(
           applies <- if (is.null(analysis_entry$applies_to)) {
             TRUE
           } else {
-            isTRUE(analysis_entry$applies_to(scenario_metadata, final_config))
+            analysis_entry$applies_to(scenario_metadata, final_config)
+          }
+          if (!is.logical(applies) || length(applies) != 1L || is.na(applies)) {
+            stop(
+              "applies_to() for analysis '", analysis_name,
+              "' must return a single TRUE or FALSE; got: ",
+              paste(deparse(applies), collapse = "")
+            )
           }
           if (!applies) {
             list(
