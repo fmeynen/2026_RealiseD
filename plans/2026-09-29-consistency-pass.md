@@ -107,16 +107,16 @@ Ground rules:
     `iterations`). A `D_tilde` positive-definite adjustment stays a warning only.
   - `multiple_imputation`: TRUE whenever the fit succeeds (closed form; mice has no convergence
     criterion). A `D_tilde` adjustment stays a warning only.
-  - `LSPIM`: FALSE if any of the three `geessbin` fits reports `convergence != "converged"`,
-    OR the combined covariance `V` was replaced by `nearest_psd()` (non-PSD or non-positive
-    variances).
+  - `LSPIM`: FALSE if any of the three `geessbin` fits reports `convergence != "converged"`.
+    Replacing the combined covariance `V` with `nearest_psd()` stays a warning only, handled the
+    same way as a CbC `D_tilde` repair.
   - Replace the always-`"success"` LSPIM shortcut in `classify_fit_status()` with the normal
     failure check (fit missing or error → failure).
   - Not converged takes precedence over singular in `add_convergence_status()` (unchanged). Bump
     `convergence_status_version`.
   - Tests per method: stub or construct cases for lme4 non-convergence, reweighting at
     `max_iterations = 1` with a tiny `epsilon_B`, MI success, LSPIM with a stubbed non-converged
-    GEE and a non-PSD `V`.
+    GEE, and an LSPIM fit whose `V` repair only produces a warning (`converged` stays TRUE).
   - Golden: run `compare_golden(allowed = list(converged = list(to = NULL), convergence_status
     = list(to = NULL), prop_converged_ok = list(to = NULL), prop_converged_warning = list(to =
     NULL), prop_converged_singular = list(to = NULL), prop_not_converged = list(to = NULL),
@@ -154,8 +154,8 @@ Ground rules:
     - `run_method()`;
     - renv setup (`renv::restore()`);
     - a dedicated section **"What *converged* means"**, stressed clearly: a per-method table of
-      exactly what sets `converged = FALSE` and what stays only a warning (including that a
-      CbC `D_tilde` repair is a warning while an LSPIM `V` repair counts as not converged), and
+      exactly what sets `converged = FALSE` and what stays only a warning (including that
+      positive-definiteness repairs, CbC `D_tilde` and LSPIM `V`, are warnings for every method), and
       how `convergence_status` is derived (error > not_converged > converged_singular >
       converged_warning > converged_ok).
   - Tick the Consistency items in `BACKLOG.md`.
