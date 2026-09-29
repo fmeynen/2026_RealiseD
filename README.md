@@ -317,8 +317,6 @@ testthat 3.3.2, lintr 3.4.0, renv 1.2.4).
 | mice | imputation |
 | miceadds | `2l.pmm` imputation method (attached with `library()`) |
 | reformulas | formula parsing |
-| ks | matrix vec/vech |
-| expm | matrix square root |
 | geessbin | LSPIM GEE |
 | multcomp | Holm test |
 | dplyr | row binding |
