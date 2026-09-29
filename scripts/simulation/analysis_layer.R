@@ -1,7 +1,7 @@
 #' The analysis layer contains all functions to analyze a single dataset
 
 # Note: method_y = "2l.pmm" requires the 'miceadds' package to be attached (library(miceadds)) before calling
-#   impute_mi_by_sim_scenario(). method_y = "2l.norm" is available from mice without extra dependencies.
+#   impute_data(). method_y = "2l.norm" is available from mice without extra dependencies.
 # Note: CbCEstimator() uses vech() from the 'ks' package.
 #   Install and attach 'ks' before calling fit_closed_form().
 
@@ -224,61 +224,6 @@ extract_varcorr_value <- function(varcorr_df, grp, var1 = NA_character_, var2 = 
 
 ## Multiple Imputation ---------------------------------------------------------------------------------------------
 
-check_mi_col_missingness <- function(data, impute_cols, target_col, strict_checks) {
-  non_target_cols <- setdiff(impute_cols, target_col)
-  for (col in non_target_cols) {
-    if (anyNA(data[[col]])) {
-      msg <- paste0(
-        "Column '", col, "' in impute_cols contains missing values; ",
-        "only '", target_col, "' may be missing."
-      )
-      if (isTRUE(strict_checks)) stop(msg) else warning(msg)
-    }
-  }
-  
-  if (!anyNA(data[[target_col]])) {
-    warning("'", target_col, "' has no missing values; imputation may not be needed.")
-  }
-}
-
-check_mi_group_integrity <- function(group_df, group_label, cluster_col, strict_checks) {
-  if (nrow(group_df) == 0L) {
-    msg <- paste0("Group '", group_label, "' has no rows.")
-    if (isTRUE(strict_checks)) stop(msg) else warning(msg)
-    return(invisible(NULL))
-  }
-  
-  if (anyNA(group_df[[cluster_col]])) {
-    msg <- paste0("Group '", group_label, "': '", cluster_col, "' contains missing values.")
-    if (isTRUE(strict_checks)) stop(msg) else warning(msg)
-  }
-  
-  n_clusters <- length(unique(stats::na.omit(group_df[[cluster_col]])))
-  if (n_clusters < 2L) {
-    msg <- paste0(
-      "Group '", group_label, "': only ", n_clusters, " cluster(s) in '", cluster_col,
-      "'; multilevel imputation requires at least 2."
-    )
-    if (isTRUE(strict_checks)) stop(msg) else warning(msg)
-  }
-  
-  if ("time_value" %in% names(group_df)) {
-    has_variation <- tapply(
-      group_df[["time_value"]],
-      group_df[[cluster_col]],
-      function(x) length(unique(stats::na.omit(x))) > 1L
-    )
-    if (!any(has_variation, na.rm = TRUE)) {
-      warning(
-        "Group '", group_label, "': 'time_value' does not vary within any cluster; ",
-        "the random-slope imputation model may be misspecified."
-      )
-    }
-  }
-  
-  invisible(NULL)
-}
-
 build_mi_predictor_row <- function(impute_cols, cluster_col, target_col) {
   row_vals <- stats::setNames(rep(1L, length(impute_cols)), impute_cols)
   row_vals[[cluster_col]] <- -2L
@@ -289,38 +234,6 @@ build_mi_predictor_row <- function(impute_cols, cluster_col, target_col) {
   row_vals
 }
 
-impute_mi_one_group <- function(
-    group_df, group_label, group_idx,
-    impute_cols, cluster_col, target_col,
-    method_y, m, maxit, seed, include_original
-) {
-  sub_df <- group_df[, impute_cols, drop = FALSE]
-  
-  ini <- mice::mice(sub_df, maxit = 0, print = FALSE)
-  meth <- ini$method
-  pred <- ini$predictorMatrix
-  
-  meth[] <- ""
-  meth[[target_col]] <- method_y
-  
-  pred_row <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
-  pred[target_col, names(pred_row)] <- pred_row
-  
-  group_seed <- seed + group_idx
-  imp <- mice::mice(
-    sub_df,
-    method = meth,
-    predictorMatrix = pred,
-    m = m,
-    maxit = maxit,
-    seed = group_seed,
-    print = FALSE
-  )
-  
-  completed <- mice::complete(imp, action = "long", include = include_original)
-  list(completed = completed, mids = imp)
-}
-
 set_impute_args <- function(
     impute_cols      = c("subject_id", "treatment", "time_value", "y"),
     cluster_col      = "subject_id",
@@ -328,16 +241,14 @@ set_impute_args <- function(
     method_y         = c("2l.pmm", "2l.norm"),
     m                = 3,
     maxit            = 10,
-    include_original = FALSE,
-    strict_checks    = TRUE,
-    return_mids      = FALSE
+    include_original = FALSE
 ) {
-  
+
   if (missing(method_y)) {
     stop("method_y must be specified: choose one of \"2l.pmm\" or \"2l.norm\"")
   }
   method_y <- match.arg(method_y)
-  
+
   list(
     impute_cols = impute_cols,
     cluster_col = cluster_col,
@@ -345,9 +256,7 @@ set_impute_args <- function(
     method_y = method_y,
     m = m,
     maxit = maxit,
-    include_original = include_original,
-    strict_checks = strict_checks,
-    return_mids = return_mids
+    include_original = include_original
   )
 }
 
@@ -429,9 +338,8 @@ build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
   n_i <- lapply(Y_list, nrow)
   
   list(
-    clusterID = clusterID, 
-    Y = Y_list, 
-    X = X_list, 
+    Y = Y_list,
+    X = X_list,
     Z = Z_list,
     p = p,
     q = q,
@@ -614,7 +522,7 @@ calculate_stage2_Sigma <- function(Sigma_hats, weights) {
   ks::invvech(apply(vech_Sigma_hat,2,weighted.mean,w=weights))
 }
 
-calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i, N_clusters,
+calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i,
                                      beta_hats,beta_tilde, Sigma_tilde) {
   #square root of weights to use for matrix multiplication
   sqrt_W <- lapply(weights, expm::sqrtm)
@@ -632,7 +540,6 @@ calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i, N_clusters,
   H_ii        <- mapply(function(K, H) {K %*% H}, K_mi, HH_i, SIMPLIFY = F)
 
   # denom part 1
-  identity  <- lapply(H_ii, function(H){diag(1, dim(H))})
   I_min_Hii <- lapply(H_ii, function(H){diag(1, dim(H)) - H})
   denom_p1  <- Reduce('+', mapply(function(X, W){kronecker(W %*% X, tcrossprod(X, W))},
                                   I_min_Hii, sqrt_W, SIMPLIFY = F))
@@ -679,7 +586,6 @@ CbCEstimator <- function(mats, fit_args){
   p   <- mats$p
   m   <- mats$m
   n_i <- mats$n_i
-  n_c <- mats$n_c
   epsilon_D   <- fit_args$epsilon_D
   reweighting <- fit_args$reweighting
   if(reweighting) {
@@ -711,7 +617,7 @@ CbCEstimator <- function(mats, fit_args){
   #2nd stage calculations
   beta_tilde  <- calculate_stage2_beta(K_mi, W_i1, beta_hats)
   Sigma_tilde <- calculate_stage2_Sigma(Sigma_hats, w_i2)
-  D_tilde     <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, n_c, beta_hats, beta_tilde, Sigma_tilde)
+  D_tilde     <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
     #adjust D_tilde for positive definiteness
   adjust_D_pd <- function(D_tilde, epsilon = 1e-6){
     eig         <- eigen(D_tilde)
@@ -742,7 +648,7 @@ CbCEstimator <- function(mats, fit_args){
       
       beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt_1i, beta_hats)
       beta_tilde     <- lambda * beta_tilde_new + (1 - lambda) * beta_tilde_ori
-      D_tilde        <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, n_c, beta_hats, beta_tilde, Sigma_tilde)
+      D_tilde        <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
           #note: optimal weights are for beta's only, keep original weights for D_tilde
       
       if(min(eigen(D_tilde,only.values = T)$values) < 0 ){
