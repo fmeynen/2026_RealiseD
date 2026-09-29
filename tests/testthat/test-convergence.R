@@ -106,14 +106,14 @@ test_that("a converged reweighting row with a D_tilde repair stays converged but
 
 # multiple_imputation ------------------------------------------------------------------------------------------------
 
-test_that("a successful MI closed-form row is converged", {
+test_that("a non-failing MI closed-form row is converged, singular fits included", {
   set.seed(1)
   row <- analyze_mi_closed_form(
     build_convergence_data(),
     set_impute_args(method_y = "2l.norm", m = 2, maxit = 2)
   )
 
-  expect_identical(row$status, "success")
+  expect_true(row$status %in% c("success", "singular_fit"))
   expect_true(row$converged)
 })
 

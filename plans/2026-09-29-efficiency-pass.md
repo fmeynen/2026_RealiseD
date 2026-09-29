@@ -68,7 +68,7 @@ Ground rules:
     within 1e-8 on random inputs: two arms, several distinct `K_i`, unequal cluster sizes.
   - Golden unchanged (within tolerance).
 
-- [ ] **4. Multiple imputation without the dry run.**
+- [x] **4. Multiple imputation without the dry run.**
   - `impute_data()` builds `meth` (`""` everywhere, `method_y` for the target) and the predictor
     matrix directly (the target row from `build_mi_predictor_row()`, other rows irrelevant because
     they are not imputed) instead of calling `mice::mice(maxit = 0)`.

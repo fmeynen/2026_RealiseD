@@ -450,12 +450,14 @@ impute_data <- function(data, impute_args = set_impute_args()) {
 
   sub_df <- data[, impute_cols, drop = FALSE]
 
-  ini <- mice::mice(sub_df, maxit = 0, print = FALSE)
-  meth <- ini$method
-  pred <- ini$predictorMatrix
-
-  meth[] <- ""
+  meth <- stats::setNames(rep("", length(impute_cols)), impute_cols)
   meth[[target_col]] <- impute_args$method_y
+
+  pred <- matrix(
+    1, length(impute_cols), length(impute_cols),
+    dimnames = list(impute_cols, impute_cols)
+  )
+  diag(pred) <- 0
 
   pred_row <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
   pred[target_col, names(pred_row)] <- pred_row
