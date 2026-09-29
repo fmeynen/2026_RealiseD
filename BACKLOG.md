@@ -25,7 +25,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 - [ ] **[efficiency] Parallelism is disabled on Windows.**
   `run_analysis_over_groups()` only parallelises with `mclapply`, which falls back to
-  `lapply` on Windows ([orchestration.R:388](scripts/simulation/orchestration.R#L388)).
+  `lapply` on Windows ([pipeline.R:55](scripts/simulation/pipeline.R#L55)).
   Replace with `mirai::mirai_map()` or a PSOCK cluster (`parallel::parLapply`), parallelising
   over `(scenario_id, sim_id)`. The L'Ecuyer RNG streams introduced in the correctness pass
   already give each replicate an independent stream, so results stay reproducible.
@@ -64,9 +64,9 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 
 ## Clarity
 
-- [ ] **[clarity] Split `orchestration.R` (1,350 lines).**
-  It mixes per-dataset analysers, pipeline wrappers, path builders, artifact persistence and
-  the run loop. Suggested split: `methods.R`, `artifact_store.R`, `pipeline.R`.
+- [x] **[clarity] Split `orchestration.R` (1,350 lines).**
+  Done: split into `analysis_methods.R`, `artifact_store.R`, `pipeline.R`; `orchestration.R`
+  deleted.
 
 - [ ] **[clarity] Move the generation loop out of `run_all.R`.**
   Generation is a ~120-line inline loop while analysis is one `run_requested_analyses()` call.

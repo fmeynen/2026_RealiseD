@@ -1,7 +1,9 @@
 source("scripts/simulation/data_generation_layer.R")
 source("scripts/simulation/input_checks.R")
 source("scripts/simulation/analysis_layer.R")
-source("scripts/simulation/orchestration.R")
+source("scripts/simulation/analysis_methods.R")
+source("scripts/simulation/artifact_store.R")
+source("scripts/simulation/pipeline.R")
 source("scripts/simulation/results_layer.R")
 source("scripts/simulation/aggregation_layer.R")
 

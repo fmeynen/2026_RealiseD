@@ -40,7 +40,7 @@ Ground rules:
   - Update every path reference: `run_all.R`, `tests/testthat/helper-source.R`,
     `scripts/Validation/*.R`, `BACKLOG.md` links, the plan files, and comments in code.
 
-- [ ] **2. Split `orchestration.R`** (pure move, no code edits) into:
+- [x] **2. Split `orchestration.R`** (pure move, no code edits) into:
   - `analysis_methods.R`: per-dataset `analyze_*`, the `analyze_generated_data_*` wrappers,
     `build_analysis_registry()`, `resolve_analysis_config()`, `run_single_analysis_method()`.
   - `artifact_store.R`: path builders, `sanitize_filename_token()`, `canonicalize_nested_list()`,
