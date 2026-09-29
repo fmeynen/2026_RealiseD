@@ -7,19 +7,19 @@ build_reweighting_mats <- function() {
     beta0_values = 1,
     beta2_values = 0.3,
     beta3_values = 0.1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 42
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)
-  ad <- suppressWarnings(prepare_analysis_data(dat, type = "weighting"))
+  ad <- suppressWarnings(prepare_analysis_data(dat, type = "reweighting"))
   build_cbc_matrices(ad, "subject_id", build_formula())
 }
 
-test_that("CbCEstimator stops after one pass when epsilon_B is very loose", {
+test_that("cbc_estimator stops after one pass when epsilon_B is very loose", {
   mats <- build_reweighting_mats()
   args <- set_fit_args(reweighting = TRUE, epsilon_B = 1e6)
 
-  fit <- suppressWarnings(CbCEstimator(mats, args))
+  fit <- suppressWarnings(cbc_estimator(mats, args))
 
   expect_identical(fit$iterations, 1)
 })
@@ -33,7 +33,7 @@ test_that("the reweighting loop is controlled by epsilon_B, not epsilon_D", {
     max_iterations = 30
   )
 
-  fit <- suppressWarnings(CbCEstimator(mats, args))
+  fit <- suppressWarnings(cbc_estimator(mats, args))
 
   expect_gt(fit$iterations, 1)
 })
@@ -42,7 +42,7 @@ test_that("iterations is 0 when reweighting is disabled", {
   mats <- build_reweighting_mats()
   args <- set_fit_args(reweighting = FALSE)
 
-  fit <- suppressWarnings(CbCEstimator(mats, args))
+  fit <- suppressWarnings(cbc_estimator(mats, args))
 
   expect_identical(fit$iterations, 0)
 })
@@ -63,10 +63,10 @@ test_that("set_fit_args() rejects an invalid damping", {
 test_that("damping changes the reweighted beta on a small dataset", {
   mats <- build_reweighting_mats()
   args_default <- set_fit_args(reweighting = TRUE, damping = 0.7, max_iterations = 1)
-  args_full    <- set_fit_args(reweighting = TRUE, damping = 1,   max_iterations = 1)
+  args_full <- set_fit_args(reweighting = TRUE, damping = 1, max_iterations = 1)
 
-  fit_default <- suppressWarnings(CbCEstimator(mats, args_default))
-  fit_full    <- suppressWarnings(CbCEstimator(mats, args_full))
+  fit_default <- suppressWarnings(cbc_estimator(mats, args_default))
+  fit_full <- suppressWarnings(cbc_estimator(mats, args_full))
 
   expect_false(isTRUE(all.equal(fit_default$beta_tilde, fit_full$beta_tilde)))
 })

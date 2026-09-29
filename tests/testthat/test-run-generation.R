@@ -13,7 +13,7 @@ test_that("run_generation generates a fresh grid and writes a completed manifest
     n_values = c(6, 8),
     n_measures = 4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   n_simulations <- 2L
@@ -44,7 +44,7 @@ test_that("run_generation reuses existing valid scenario files on a second call"
     n_values = c(6, 8),
     n_measures = 4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   n_simulations <- 2L
@@ -82,7 +82,7 @@ test_that("run_generation errors on a corrupted scenario grid via validation", {
     n_values = c(6, 8),
     n_measures = 4,
     sigma2_values = -1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
 

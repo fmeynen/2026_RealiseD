@@ -1,6 +1,6 @@
 # aggregation_layer.R
 # Aggregation layer for the simulation experiment described in
-# research_question/meeting_notes/programming_planning.qmd.
+# "research_question/meeting_notes/programming_planning.qmd".
 #
 # Consumes the scenario-wise combined convenience analysis artifact and returns per-scenario x per-method
 # summary statistics:
@@ -16,19 +16,16 @@
 # Relative bias returns NA when the true parameter value is zero.
 #
 # Function hierarchy:
-#   aggregate_results()
-#     validate_aggregation_inputs()
-#     compute_convergence_summary()
-#     compute_bias_summary()
-#     compute_time_summary()
-#     compute_beta3_coverage_summary()
-#     merge_aggregation_summaries()
+#   aggregate_results
+#     validate_aggregation_inputs
+#     compute_convergence_summary
+#     compute_bias_summary
+#     compute_time_summary
+#     compute_beta3_coverage_summary
+#     merge_aggregation_summaries
 
 
 # Constants --------------------------------------------------------------------------------------------------------
-
-# Increment this string whenever the aggregation output schema changes.
-aggregation_schema_version <- "v4"
 
 # All convergence_status levels recognised by the results layer (v1).
 convergence_status_levels <- c(
@@ -98,7 +95,8 @@ validate_aggregation_inputs <- function(results_df, scenarios_df = NULL, include
     }
     join_cols <- c("scenario_id", intersect(missing_betas, names(scenarios_df)))
     results_df <- merge(results_df, scenarios_df[, join_cols, drop = FALSE],
-      by = "scenario_id", all.x = TRUE, sort = FALSE)
+      by = "scenario_id", all.x = TRUE, sort = FALSE
+    )
   }
 
   # Key uniqueness check.
@@ -153,23 +151,23 @@ compute_convergence_summary <- function(results_df, group_cols) {
     n_total <- nrow(grp)
     status <- grp$convergence_status
 
-    n_converged_ok       <- sum(status == "converged_ok",       na.rm = TRUE)
-    n_converged_warning  <- sum(status == "converged_warning",  na.rm = TRUE)
+    n_converged_ok <- sum(status == "converged_ok", na.rm = TRUE)
+    n_converged_warning <- sum(status == "converged_warning", na.rm = TRUE)
     n_converged_singular <- sum(status == "converged_singular", na.rm = TRUE)
-    n_not_converged      <- sum(status == "not_converged",      na.rm = TRUE)
-    n_error              <- sum(status == "error",              na.rm = TRUE)
+    n_not_converged <- sum(status == "not_converged", na.rm = TRUE)
+    n_error <- sum(status == "error", na.rm = TRUE)
 
     c(
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
-        n_total              = n_total,
-        n_converged_ok       = n_converged_ok,
-        mean_convergence     = safe_proportion(n_converged_ok, n_total),
-        prop_converged_ok    = safe_proportion(n_converged_ok,       n_total),
-        prop_converged_warning  = safe_proportion(n_converged_warning,  n_total),
+        n_total = n_total,
+        n_converged_ok = n_converged_ok,
+        mean_convergence = safe_proportion(n_converged_ok, n_total),
+        prop_converged_ok = safe_proportion(n_converged_ok, n_total),
+        prop_converged_warning = safe_proportion(n_converged_warning, n_total),
         prop_converged_singular = safe_proportion(n_converged_singular, n_total),
-        prop_not_converged   = safe_proportion(n_not_converged,      n_total),
-        prop_error           = safe_proportion(n_error,              n_total)
+        prop_not_converged = safe_proportion(n_not_converged, n_total),
+        prop_error = safe_proportion(n_error, n_total)
       )
     )
   })
@@ -206,30 +204,30 @@ compute_bias_summary <- function(results_df, group_cols) {
     bias_parts <- list()
 
     for (k in 0:3) {
-      est_col  <- paste0("estimate_beta", k)
+      est_col <- paste0("estimate_beta", k)
       true_col <- paste0("beta", k)
 
-      est  <- grp[[est_col]]
+      est <- grp[[est_col]]
       true <- grp[[true_col]]
 
       # Signed bias: eligible when both estimate and true are non-missing.
       eligible_abs <- !is.na(est) & !is.na(true)
-      bias_vec     <- est[eligible_abs] - true[eligible_abs]
+      bias_vec <- est[eligible_abs] - true[eligible_abs]
 
       n_bias <- sum(eligible_abs)
-      bias   <- if (n_bias > 0L) mean(bias_vec) else NA_real_
+      bias <- if (n_bias > 0L) mean(bias_vec) else NA_real_
 
       # Relative bias: additionally exclude rows where true value is zero.
       eligible_rel <- eligible_abs & (true != 0)
       rel_bias_vec <- (est[eligible_rel] - true[eligible_rel]) / true[eligible_rel]
 
       n_rel_bias <- sum(eligible_rel)
-      rel_bias   <- if (n_rel_bias > 0L) mean(rel_bias_vec) else NA_real_
+      rel_bias <- if (n_rel_bias > 0L) mean(rel_bias_vec) else NA_real_
 
-      bias_parts[[paste0("bias_beta", k)]]        <- bias
-      bias_parts[[paste0("rel_bias_beta", k)]]     <- rel_bias
-      bias_parts[[paste0("n_bias_beta", k)]]       <- n_bias
-      bias_parts[[paste0("n_rel_bias_beta", k)]]   <- n_rel_bias
+      bias_parts[[paste0("bias_beta", k)]] <- bias
+      bias_parts[[paste0("rel_bias_beta", k)]] <- rel_bias
+      bias_parts[[paste0("n_bias_beta", k)]] <- n_bias
+      bias_parts[[paste0("n_rel_bias_beta", k)]] <- n_rel_bias
     }
 
     c(as.list(grp[1L, group_cols, drop = FALSE]), bias_parts)
@@ -257,31 +255,31 @@ compute_bias_summary <- function(results_df, group_cols) {
 
 compute_mse_summary <- function(results_df, group_cols) {
   groups <- split(results_df, results_df[, group_cols, drop = FALSE])
-  
+
   rows <- lapply(groups, function(grp) {
     mse_parts <- list()
-    
+
     for (k in 0:3) {
-      est_col  <- paste0("estimate_beta", k)
+      est_col <- paste0("estimate_beta", k)
       true_col <- paste0("beta", k)
-      
-      est  <- grp[[est_col]]
+
+      est <- grp[[est_col]]
       true <- grp[[true_col]]
-      
+
       # MSE: eligible when both estimate and true are non-missing.
       eligible <- !is.na(est) & !is.na(true)
-      mse_vec  <- (est[eligible] - true[eligible])^2
-      n_mse    <- sum(eligible)
-      mse      <- if (n_mse > 0L) mean(mse_vec) else NA_real_
-      
-      
-      mse_parts[[paste0("mse_beta", k)]]   <- mse
+      mse_vec <- (est[eligible] - true[eligible])^2
+      n_mse <- sum(eligible)
+      mse <- if (n_mse > 0L) mean(mse_vec) else NA_real_
+
+
+      mse_parts[[paste0("mse_beta", k)]] <- mse
       mse_parts[[paste0("n_mse_beta", k)]] <- n_mse
     }
-    
+
     c(as.list(grp[1L, group_cols, drop = FALSE]), mse_parts)
   })
-  
+
   out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
   rownames(out) <- NULL
   out
@@ -308,7 +306,7 @@ compute_time_summary <- function(results_df, group_cols) {
     c(
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
-        time_mean_seconds   = if (n_time > 0L) mean(t)   else NA_real_,
+        time_mean_seconds   = if (n_time > 0L) mean(t) else NA_real_,
         time_median_seconds = if (n_time > 0L) stats::median(t) else NA_real_,
         n_time              = n_time
       )
@@ -344,7 +342,7 @@ compute_time_summary <- function(results_df, group_cols) {
 
 compute_beta3_coverage_summary <- function(results_df, group_cols, ci_level = 0.95) {
   if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
-      ci_level <= 0 || ci_level >= 1) {
+        ci_level <= 0 || ci_level >= 1) {
     stop("ci_level must be a single number in (0, 1).")
   }
   z <- stats::qnorm(1 - (1 - ci_level) / 2)
@@ -352,25 +350,25 @@ compute_beta3_coverage_summary <- function(results_df, group_cols, ci_level = 0.
   groups <- split(results_df, results_df[, group_cols, drop = FALSE])
 
   rows <- lapply(groups, function(grp) {
-    est  <- grp$estimate_beta3
-    se   <- grp$se_beta3
+    est <- grp$estimate_beta3
+    se <- grp$se_beta3
     true <- grp$beta3
 
     eligible <- !is.na(est) & !is.na(se) & !is.na(true)
 
     lower <- est[eligible] - z * se[eligible]
     upper <- est[eligible] + z * se[eligible]
-    
-    covered  <- (true[eligible] >= lower) & (true[eligible] <= upper)
-    excludes_zero <- (lower > 0) | (upper < 0)  # CI does not contain 0 -> "significant"
-    
+
+    covered <- (true[eligible] >= lower) & (true[eligible] <= upper)
+    excludes_zero <- (lower > 0) | (upper < 0) # CI does not contain 0 -> "significant"
+
     n_coverage <- sum(eligible)
 
     c(
       as.list(grp[1L, group_cols, drop = FALSE]),
       list(
-        coverage95_beta3  = if (n_coverage > 0L) mean(covered) else NA_real_,
-        n_coverage_beta3  = n_coverage,
+        coverage95_beta3 = if (n_coverage > 0L) mean(covered) else NA_real_,
+        n_coverage_beta3 = n_coverage,
         wald_rejection_rate_beta3 = if (n_coverage > 0L) mean(excludes_zero) else NA_real_,
         n_wald_rejection_beta3 = n_coverage
       )
@@ -398,7 +396,7 @@ compute_beta3_coverage_summary <- function(results_df, group_cols, ci_level = 0.
 #' @return Data frame with one row per group and interaction-test rates plus
 #'   their eligible denominators.
 
-compute_interaction_test_summary <- function(results_df, group_cols) {
+compute_interaction_summary <- function(results_df, group_cols) {
   required_cols <- c(
     "status", "interaction_tested", "interaction_rejected", "beta3"
   )
@@ -461,13 +459,13 @@ compute_interaction_test_summary <- function(results_df, group_cols) {
 #' @return Single merged data frame with one row per group.
 
 merge_aggregation_summaries <- function(
-    convergence_df, bias_df, mse_df, time_df, coverage_df, interaction_test_df, group_cols
+  convergence_df, bias_df, mse_df, time_df, coverage_df, interaction_test_df, group_cols
 ) {
-  out <- merge(convergence_df, bias_df,   by = group_cols, all = TRUE, sort = FALSE)
-  out <- merge(out,            mse_df,   by = group_cols, all = TRUE, sort = FALSE)
-  out <- merge(out,            time_df,   by = group_cols, all = TRUE, sort = FALSE)
-  out <- merge(out,            coverage_df, by = group_cols, all = TRUE, sort = FALSE)
-  out <- merge(out,            interaction_test_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(convergence_df, bias_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out, mse_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out, time_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out, coverage_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out, interaction_test_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- out[do.call(order, unname(out[group_cols])), , drop = FALSE]
   rownames(out) <- NULL
   out
@@ -522,14 +520,13 @@ merge_aggregation_summaries <- function(
 #' # -- True-beta fallback join from scenarios --
 #' # results_no_betas <- combined$results[, setdiff(names(combined$results), c("beta0","beta1","beta2","beta3"))]
 #' # agg2 <- aggregate_results(list(results = results_no_betas, scenarios = combined$scenarios))
-
 aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.95) {
   if (!is.numeric(ci_level) || length(ci_level) != 1L || is.na(ci_level) ||
-      ci_level <= 0 || ci_level >= 1) {
+        ci_level <= 0 || ci_level >= 1) {
     stop("ci_level must be a single number in (0, 1).")
   }
 
-  results_df  <- results_obj$results
+  results_df <- results_obj$results
   scenarios_df <- results_obj$scenarios
 
   results_df <- validate_aggregation_inputs(results_df, scenarios_df, include_engine = include_engine)
@@ -541,11 +538,11 @@ aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.
   }
 
   convergence_df <- compute_convergence_summary(results_df, group_cols)
-  bias_df        <- compute_bias_summary(results_df, group_cols)
-  mse_df         <- compute_mse_summary(results_df, group_cols)
-  time_df        <- compute_time_summary(results_df, group_cols)
-  coverage_df    <- compute_beta3_coverage_summary(results_df, group_cols, ci_level = ci_level)
-  interaction_test_df <- compute_interaction_test_summary(results_df, group_cols)
+  bias_df <- compute_bias_summary(results_df, group_cols)
+  mse_df <- compute_mse_summary(results_df, group_cols)
+  time_df <- compute_time_summary(results_df, group_cols)
+  coverage_df <- compute_beta3_coverage_summary(results_df, group_cols, ci_level = ci_level)
+  interaction_test_df <- compute_interaction_summary(results_df, group_cols)
 
   summary_df <- merge_aggregation_summaries(
     convergence_df,
@@ -560,9 +557,9 @@ aggregate_results <- function(results_obj, include_engine = FALSE, ci_level = 0.
 
   meta <- list(
     aggregation_schema_version = aggregation_schema_version,
-    timestamp  = Sys.time(),
+    timestamp = Sys.time(),
     group_cols = group_cols,
-    ci_level   = ci_level
+    ci_level = ci_level
   )
 
   list(summary = summary_df, meta = meta)

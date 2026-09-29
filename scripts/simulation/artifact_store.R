@@ -7,38 +7,30 @@
 # and the aggregation summary.
 #
 # Function hierarchy:
-#   convergence_status_version / results_schema_version
-#   add_convergence_status()
-#   canonicalize_results_scenarios_for_hash() / compute_results_hash()
-#   sanitize_filename_token() / canonicalize_nested_list()
-#   build_analysis_run_hash()
-#   build_analysis_run_root() / build_analysis_scenario_method_path() /
-#     build_analysis_manifest_path() / build_analysis_combined_convenience_path() /
-#     build_aggregation_output_path()
-#   find_valid_analysis_scenario_method_artifact() / save_analysis_scenario_method_artifact()
-#   save_combined_convenience_artifact()
-#   build_analysis_source_signature() / save_aggregation_summary()
-
-
-# Schema versions ----------------------------------------------------------------------------------------------------
-
-# Increment this string whenever the convergence_status mapping rules change.
-convergence_status_version <- "v1"
-
-# Increment this string whenever the final results schema changes.
-results_schema_version <- "v2"
+#   add_convergence_status
+#   canonicalize_results_scenarios_for_hash, compute_results_hash
+#   sanitize_filename_token, canonicalize_nested_list
+#   build_analysis_run_hash
+#   build_analysis_run_root, build_analysis_scenario_method_path,
+#     build_analysis_manifest_path, build_analysis_combined_convenience_path,
+#     build_aggregation_output_path
+#   find_valid_analysis_scenario_method_artifact, save_analysis_scenario_method_artifact
+#   save_combined_convenience_artifact
+#   build_analysis_source_signature, save_aggregation_summary
 
 
 # Convergence status ---------------------------------------------------------------------------------------------
 
 #' Map raw fit diagnostics to a standardized convergence_status label.
 #'
-#' Applies a deterministic precedence hierarchy (v1):
+#' Applies a deterministic precedence hierarchy (v2):
 #'   "error"              if status != "success" OR error_message is not NA
 #'   "not_converged"      if success but converged == FALSE
 #'   "converged_singular" if success, converged, and singular == TRUE
 #'   "converged_warning"  if success, converged, non-singular, warning present
 #'   "converged_ok"       if success, converged, non-singular, no warning
+#' converged is the method's real convergence (v2): lme4 optimizer code/convergence
+#' checks; reweighting loop stopped by epsilon_B; MI always; LSPIM all three GEEs converged.
 #'
 #' @param data Data frame with columns status, converged, singular,
 #'   warning_message, and error_message.
@@ -46,11 +38,11 @@ results_schema_version <- "v2"
 #' @return data with a new convergence_status character column appended.
 
 add_convergence_status <- function(data) {
-  is_failure    <- !is.na(data$status) & data$status == "failure"
+  is_failure <- !is.na(data$status) & data$status == "failure"
   has_error_msg <- !is.na(data$error_message)
-  is_converged  <- !is.na(data$converged) & as.logical(data$converged)
-  is_singular   <- !is.na(data$singular) & as.logical(data$singular)
-  has_warning   <- !is.na(data$warning_message)
+  is_converged <- !is.na(data$converged) & as.logical(data$converged)
+  is_singular <- !is.na(data$singular) & as.logical(data$singular)
+  has_warning <- !is.na(data$warning_message)
 
   data$convergence_status <- ifelse(
     is_failure | has_error_msg,
@@ -76,7 +68,8 @@ add_convergence_status <- function(data) {
 
 # Hashing --------------------------------------------------------------------------------------------------------
 
-canonicalize_results_scenarios_for_hash <- function(scenarios) {
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+canonicalize_results_scenarios_for_hash <- function(scenarios) { # nolint: object_length_linter.
   scenario_grid_sorted <- scenarios[
     order(scenarios$scenario_id),
     sort(names(scenarios)),
@@ -189,16 +182,17 @@ build_analysis_run_hash <- function(
 }
 
 
-build_analysis_run_root <- function(analysis_run_hash, dir = "results/data") {
+build_analysis_run_root <- function(analysis_run_hash, dir = default_paths$results) {
   file.path(dir, analysis_run_hash)
 }
 
 
-build_analysis_scenario_method_path <- function(
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+build_analysis_scenario_method_path <- function( # nolint: object_length_linter.
   analysis_run_hash,
   scenario_id,
   method,
-  dir = "results/data"
+  dir = default_paths$results
 ) {
   method_hash <- compute_results_hash(list(method = method))
   file.path(
@@ -215,7 +209,7 @@ build_analysis_scenario_method_path <- function(
 
 build_analysis_manifest_path <- function(
   analysis_run_hash,
-  dir = "results/data"
+  dir = default_paths$results
 ) {
   file.path(
     build_analysis_run_root(analysis_run_hash, dir = dir),
@@ -224,9 +218,10 @@ build_analysis_manifest_path <- function(
 }
 
 
-build_analysis_combined_convenience_path <- function(
+# Used from pipeline.R, aggregation_layer.R and tests; not renamed to stay under 30 characters.
+build_analysis_combined_convenience_path <- function( # nolint: object_length_linter.
   analysis_run_hash,
-  dir = "results/data"
+  dir = default_paths$results
 ) {
   file.path(
     build_analysis_run_root(analysis_run_hash, dir = dir),
@@ -237,7 +232,7 @@ build_analysis_combined_convenience_path <- function(
 
 build_aggregation_output_path <- function(
   analysis_run_hash,
-  dir = "results/data",
+  dir = default_paths$results,
   include_engine = FALSE
 ) {
   suffix <- if (isTRUE(include_engine)) "include_engine" else "default"
@@ -248,11 +243,12 @@ build_aggregation_output_path <- function(
 }
 
 
-find_valid_analysis_scenario_method_artifact <- function(
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+find_valid_analysis_scenario_method_artifact <- function( # nolint: object_length_linter.
   analysis_run_hash,
   scenario_entry,
   method,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE
 ) {
   output_path <- build_analysis_scenario_method_path(
@@ -322,13 +318,14 @@ find_valid_analysis_scenario_method_artifact <- function(
 }
 
 
-save_analysis_scenario_method_artifact <- function(
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+save_analysis_scenario_method_artifact <- function( # nolint: object_length_linter.
   analysis_results,
   analysis_run_hash,
   generation_manifest,
   scenario_entry,
   method,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE
 ) {
   existing_path <- find_valid_analysis_scenario_method_artifact(
@@ -374,26 +371,24 @@ save_analysis_scenario_method_artifact <- function(
 }
 
 
-save_combined_convenience_artifact <- function(
+# Used from pipeline.R, aggregation_layer.R and tests; not renamed to stay under 30 characters.
+save_combined_convenience_artifact <- function( # nolint: object_length_linter.
   artifact_records,
   analysis_run_hash,
   generation_manifest,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE
 ) {
   successful <- artifact_records[
-    artifact_records$status %in% c("success", "skipped_existing"),
-    ,
+    artifact_records$status %in% c("success", "skipped_existing"), ,
     drop = FALSE
   ]
   failed_records <- artifact_records[
-    artifact_records$status == "failure",
-    ,
+    artifact_records$status == "failure", ,
     drop = FALSE
   ]
   skipped_by_config_records <- artifact_records[
-    artifact_records$status == "skipped_by_config",
-    ,
+    artifact_records$status == "skipped_by_config", ,
     drop = FALSE
   ]
   successful_has_path <- !is.na(successful$path)
@@ -467,10 +462,10 @@ save_combined_convenience_artifact <- function(
 }
 
 
-build_analysis_source_signature <- function(artifact_records) {
+# Used from pipeline.R and tests; not renamed to stay under 30 characters.
+build_analysis_source_signature <- function(artifact_records) { # nolint: object_length_linter.
   successful <- artifact_records[
-    artifact_records$status %in% c("success", "skipped_existing"),
-    ,
+    artifact_records$status %in% c("success", "skipped_existing"), ,
     drop = FALSE
   ]
   if (nrow(successful) == 0L) {
@@ -485,7 +480,7 @@ build_analysis_source_signature <- function(artifact_records) {
 save_aggregation_summary <- function(
   combined_artifact,
   analysis_run_hash,
-  output_dir = "results/data",
+  output_dir = default_paths$results,
   overwrite = FALSE,
   include_engine = FALSE,
   source_signature = NULL,

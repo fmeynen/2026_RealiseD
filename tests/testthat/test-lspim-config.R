@@ -45,7 +45,7 @@ test_that("run_requested_analyses skips oversized scenarios as skipped_by_config
     n_values = c(6, 8),
     n_measures = 4,
     beta2_values = 0.3,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   n_simulations <- 2L
@@ -63,13 +63,13 @@ test_that("run_requested_analyses skips oversized scenarios as skipped_by_config
   # This repo is a set of sourced scripts, not a package, so
   # testthat::local_mocked_bindings() cannot be used here: it requires
   # .package %||% dev_package(), which errors with "No packages loaded with
-  # pkgload" outside of a package dev context. Stub fit_LSPIM directly in the
+  # pkgload" outside of a package dev context. Stub fit_lspim directly in the
   # global environment (where helper-source.R sourced it) instead, restoring
   # the original binding when the test exits.
-  original_fit_LSPIM <- fit_LSPIM
-  withr::defer(assign("fit_LSPIM", original_fit_LSPIM, envir = globalenv()))
+  original_fit_LSPIM <- fit_lspim
+  withr::defer(assign("fit_lspim", original_fit_LSPIM, envir = globalenv()))
   assign(
-    "fit_LSPIM",
+    "fit_lspim",
     function(dat, alpha = 0.05) {
       list(
         fit = list(
@@ -117,7 +117,7 @@ test_that("run_requested_analyses fails loudly when lspim_max_n is malformed", {
     n_values = c(6, 8),
     n_measures = 4,
     beta2_values = 0.3,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
   n_simulations <- 2L
@@ -132,12 +132,12 @@ test_that("run_requested_analyses fails loudly when lspim_max_n is malformed", {
   )
   expect_identical(generation_manifest$status, "completed")
 
-  # See the comment above on why fit_LSPIM is stubbed by direct assignment
+  # See the comment above on why fit_lspim is stubbed by direct assignment
   # rather than testthat::local_mocked_bindings().
-  original_fit_LSPIM <- fit_LSPIM
-  withr::defer(assign("fit_LSPIM", original_fit_LSPIM, envir = globalenv()))
+  original_fit_LSPIM <- fit_lspim
+  withr::defer(assign("fit_lspim", original_fit_LSPIM, envir = globalenv()))
   assign(
-    "fit_LSPIM",
+    "fit_lspim",
     function(dat, alpha = 0.05) {
       list(
         fit = list(

@@ -44,3 +44,18 @@ test_that("validate_scenario_grid() errors on an unrecognized dropout_mechanism"
 
   expect_error(validate_scenario_grid(grid))
 })
+
+test_that("validate_scenario_grid() errors loudly on the old 'half-missing' spelling", {
+  grid <- build_scenario_grid(
+    n_values = 10,
+    n_measures = 6,
+    dropout_mechanism = "half-missing",
+    seed_base = 1
+  )
+
+  expect_error(
+    validate_scenario_grid(grid),
+    "dropout_mechanism 'half-missing' was renamed to 'half_missing'.",
+    fixed = TRUE
+  )
+})

@@ -5,13 +5,61 @@
 # resolves a method name to its runner and config.
 #
 # Function hierarchy:
-#   analyze_classical_ml() / analyze_mi_closed_form() /
-#     analyze_closed_form_reweighting() / analyze_LSPIM()
-#   analyze_generated_data_classical_ml() / analyze_generated_data_mi_closed_form() /
-#     analyze_generated_data_closed_form_weights() / analyze_generated_data_LSPIM()
-#   build_analysis_registry() / resolve_analysis_config() / run_single_analysis_method()
+#   run_method
+#   analyze_classical_ml, analyze_mi_closed_form,
+#     analyze_reweighting, analyze_lspim
+#   analyze_generated_data_classical_ml, analyze_generated_data_mi_closed_form,
+#     analyze_generated_data_reweighting, analyze_generated_data_lspim
+#   build_analysis_registry, resolve_analysis_config, run_single_analysis_method
 
 # Analyze Single Dataset ---------------------------------------------------------------------------------------
+
+#' Run one analysis method end to end for a single simulation replicate.
+#'
+#' Collects metadata, then in a single \code{tryCatch()} validates the data,
+#' prepares it, fits the model, and extracts the standardized result row.
+#' Any error raised along the way (validation, preparation, fitting, or
+#' extraction) is caught once and turned into a standardized failure row, so
+#' each per-dataset analyzer only needs to supply its \code{fit} and
+#' \code{extract} closures.
+#'
+#' @param data         Long-format data frame for one simulation replicate.
+#' @param method       Analysis registry key recorded in the result's \code{method} column.
+#' @param engine       Engine label recorded in the result's \code{engine} column.
+#' @param prepare_type \code{type} argument forwarded to \code{prepare_analysis_data()};
+#'   defaults to \code{method}.
+#' @param fit          Function of one argument, \code{analysis_data}, returning a fit_result.
+#' @param extract      Function of \code{(fit_result, original_data, analysis_data)} returning
+#'   the one-row standardized result.
+#'
+#' @return One-row data frame with standardized analysis results.
+
+run_method <- function(data, method, engine, prepare_type = method, fit, extract) {
+  metadata <- collect_analysis_metadata(data)
+
+  tryCatch(
+    {
+      validate_analysis_data(data)
+      analysis_data <- prepare_analysis_data(data, type = prepare_type)
+      fit_result <- fit(analysis_data)
+      extract(fit_result, data, analysis_data)
+    },
+    error = function(error) {
+      build_result_row(
+        metadata = metadata,
+        method = method,
+        engine = engine,
+        status = "failure",
+        converged = FALSE,
+        singular = FALSE,
+        elapsed_seconds = NA_real_,
+        warning_message = NA_character_,
+        error_message = conditionMessage(error)
+      )
+    }
+  )
+}
+
 
 #' Run the classical ML analysis layer for one simulation replicate.
 #'
@@ -23,32 +71,18 @@
 #' @return One-row data frame with standardized classical ML analysis results.
 
 analyze_classical_ml <- function(data) {
-  metadata <- collect_analysis_metadata(data)
-
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "classical_ml")
-      fit_result <- fit_classical_ml_model(analysis_data, build_formula())
+  run_method(
+    data,
+    method = "classical_ml",
+    engine = "lme4",
+    fit = function(analysis_data) fit_classical_ml_model(analysis_data, build_formula()),
+    extract = function(fit_result, original_data, analysis_data) {
       extract_classical_ml_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "classical_ml",
         engine = "lme4"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "classical_ml",
-        engine = "lme4",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
       )
     }
   )
@@ -94,95 +128,54 @@ analyze_mi_closed_form <- function(
     )
   }
 
-  metadata <- collect_analysis_metadata(data)
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "imputation")
-      fit_result <- fit_mi_closed_form(analysis_data, impute_args, fit_args)
+  run_method(
+    data,
+    method = "multiple_imputation",
+    engine = "mice_cbc",
+    fit = function(analysis_data) fit_mi_closed_form(analysis_data, impute_args, fit_args),
+    extract = function(fit_result, original_data, analysis_data) {
       extract_closed_form_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "multiple_imputation",
-        engine = "mice_cbc",
-        fit_type = "imputation"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "multiple_imputation",
-        engine = "mice_cbc",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
+        engine = "mice_cbc"
       )
     }
   )
 }
 
-analyze_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
-  metadata <- collect_analysis_metadata(data)
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "weighting")
-      fit_result <- fit_closed_form_reweighting(analysis_data, fit_args)
+analyze_reweighting <- function(data, fit_args = set_fit_args()) {
+  run_method(
+    data,
+    method = "reweighting",
+    engine = "cbc",
+    fit = function(analysis_data) fit_closed_form_reweighting(analysis_data, fit_args),
+    extract = function(fit_result, original_data, analysis_data) {
       extract_closed_form_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "reweighting",
-        engine = "cbc",
-        fit_type = "reweighting"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "reweighting",
-        engine = "cbc",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
+        engine = "cbc"
       )
     }
   )
 }
 
-analyze_LSPIM <- function(data, alpha = 0.05) {
-  metadata <- collect_analysis_metadata(data)
-  tryCatch(
-    {
-      validate_analysis_data(data)
-      analysis_data <- prepare_analysis_data(data, type = "LSPIM")
-      fit_result <- fit_LSPIM(analysis_data, alpha = alpha)
-      extract_LSPIM_results(
+analyze_lspim <- function(data, alpha = 0.05) {
+  run_method(
+    data,
+    method = "LSPIM",
+    engine = "LSPIM",
+    fit = function(analysis_data) fit_lspim(analysis_data, alpha = alpha),
+    extract = function(fit_result, original_data, analysis_data) {
+      extract_lspim_results(
         fit_result = fit_result,
-        original_data = data,
+        original_data = original_data,
         analysis_data = analysis_data,
         method = "LSPIM",
         engine = "LSPIM"
-      )
-    },
-    error = function(error) {
-      build_result_row(
-        metadata = metadata,
-        method = "LSPIM",
-        engine = "LSPIM",
-        status = "failure",
-        converged = FALSE,
-        singular = FALSE,
-        elapsed_seconds = NA_real_,
-        warning_message = NA_character_,
-        error_message = conditionMessage(error)
       )
     }
   )
@@ -201,7 +194,9 @@ analyze_LSPIM <- function(data, alpha = 0.05) {
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
+# Name mirrors the registry's other analyze_generated_data_* wrappers and is used across
+# pipeline.R, analysis_methods.R and tests; not renamed to stay under 30 characters.
+analyze_generated_data_classical_ml <- function(data, scenarios = NULL) { # nolint: object_length_linter.
   run_analysis_over_groups(
     data,
     scenarios,
@@ -226,7 +221,9 @@ analyze_generated_data_classical_ml <- function(data, scenarios = NULL) {
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_mi_closed_form <- function(
+# Name mirrors the registry's other analyze_generated_data_* wrappers and is used across
+# pipeline.R, analysis_methods.R and tests; not renamed to stay under 30 characters.
+analyze_generated_data_mi_closed_form <- function( # nolint: object_length_linter.
   data,
   scenarios = NULL,
   impute_args = set_impute_args(),
@@ -255,7 +252,9 @@ analyze_generated_data_mi_closed_form <- function(
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
-analyze_generated_data_closed_form_weights <- function(
+# Name mirrors the registry's other analyze_generated_data_* wrappers and is used across
+# pipeline.R, analysis_methods.R and tests; not renamed to stay under 30 characters.
+analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
   data,
   scenarios = NULL,
   fit_args = set_fit_args()
@@ -263,13 +262,13 @@ analyze_generated_data_closed_form_weights <- function(
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
-    analyzer_fn = analyze_closed_form_reweighting,
+    analyzer_fn = analyze_reweighting,
     parallel = .Platform$OS.type != "windows",
     fit_args = fit_args
   )
 }
 
-analyze_generated_data_LSPIM <- function(
+analyze_generated_data_lspim <- function(
   data,
   scenarios = NULL,
   alpha = 0.05
@@ -277,7 +276,7 @@ analyze_generated_data_LSPIM <- function(
   run_analysis_over_groups(
     data = data,
     scenarios = scenarios,
-    analyzer_fn = analyze_LSPIM,
+    analyzer_fn = analyze_lspim,
     parallel = .Platform$OS.type != "windows",
     alpha = alpha
   )
@@ -311,7 +310,7 @@ build_analysis_registry <- function() {
         fit_args = set_fit_args(reweighting = TRUE)
       ),
       runner = function(scenario_data, scenarios, config) {
-        analyze_generated_data_closed_form_weights(
+        analyze_generated_data_reweighting(
           data = scenario_data,
           scenarios = scenarios,
           fit_args = config$fit_args
@@ -335,7 +334,7 @@ build_analysis_registry <- function() {
         scenario_row$n <= config$lspim_max_n
       },
       runner = function(scenario_data, scenarios, config) {
-        analyze_generated_data_LSPIM(
+        analyze_generated_data_lspim(
           data = scenario_data,
           scenarios = scenarios,
           alpha = config$alpha

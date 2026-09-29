@@ -19,7 +19,7 @@ fast_classical_ml_scenario <- function(seed_base = 1) {
     d22_values = 1,
     d12_values = 0.4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = seed_base
   )
 }
@@ -55,7 +55,7 @@ test_that("prepare_analysis_data() keeps all rows (including unobserved) for imp
   scenario <- fast_classical_ml_scenario()
   dat <- simulate_scenario(scenario[1, , drop = FALSE], B = 1)
 
-  prepared <- prepare_analysis_data(dat, type = "imputation")
+  prepared <- prepare_analysis_data(dat, type = "multiple_imputation")
 
   expect_identical(nrow(prepared), nrow(dat))
   expect_true(is.integer(prepared$subject_id))
@@ -96,7 +96,7 @@ test_that("analyze_generated_data_classical_ml() returns one labeled, non-NA-est
     d22_values = 1,
     d12_values = 0.4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 2
   )
   generated_stacked <- do.call(rbind, lapply(seq_len(nrow(scenarios)), function(i) {

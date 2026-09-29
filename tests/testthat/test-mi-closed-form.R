@@ -18,11 +18,11 @@
 # exercised end-to-end by test-golden-pipeline.R, so it was not re-ported
 # here.
 #
-# analyze_mi_closed_form()'s and analyze_closed_form_reweighting()'s
+# analyze_mi_closed_form()'s and analyze_reweighting()'s
 # failure-row labeling is already covered by test-failure-labels.R; the
 # success-path canonical labels for the generated-data wrappers
 # (analyze_generated_data_mi_closed_form()/
-# analyze_generated_data_closed_form_weights(), which go through
+# analyze_generated_data_reweighting(), which go through
 # run_analysis_over_groups()) were not covered anywhere else and are added
 # below.
 
@@ -38,7 +38,7 @@ fast_mi_scenario <- function(seed_base = 2609) {
     d22_values = 1,
     d12_values = 0.4,
     sigma2_values = 1,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = seed_base
   )
 }
@@ -60,11 +60,11 @@ test_that("analyze_generated_data_mi_closed_form() labels rows with the canonica
   expect_true(all(mi_results$engine == "mice_cbc"))
 })
 
-test_that("analyze_generated_data_closed_form_weights() labels rows with the canonical reweighting method/engine", {
+test_that("analyze_generated_data_reweighting() labels rows with the canonical reweighting method/engine", {
   scenarios <- fast_mi_scenario()
   generated <- simulate_scenario(scenarios[1, , drop = FALSE], B = 1)
 
-  rw_results <- suppressWarnings(analyze_generated_data_closed_form_weights(
+  rw_results <- suppressWarnings(analyze_generated_data_reweighting(
     data = generated,
     scenarios = scenarios,
     fit_args = set_fit_args(reweighting = TRUE)

@@ -81,7 +81,7 @@ tiny_scenario_grid <- function(seed_base = 1) {
     n_values = 10,
     n_measures = 4,
     beta2_values = 0.3,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = seed_base
   )
 }
@@ -124,7 +124,8 @@ test_that("run_requested_analyses writes artifacts at the paths the path builder
 
   scenario_id <- scenarios$scenario_id[[1L]]
   expected_method_path <- build_analysis_scenario_method_path(
-    out$analysis_run_hash, scenario_id, "classical_ml", dir = output_dir
+    out$analysis_run_hash, scenario_id, "classical_ml",
+    dir = output_dir
   )
   expect_true(file.exists(expected_method_path))
   record <- out$analysis_manifest$records[
@@ -231,11 +232,11 @@ test_that("a changed analysis config yields a different analysis_run_hash and ru
 
 test_that("add_convergence_status applies the documented precedence hierarchy", {
   data <- data.frame(
-    status           = c("failure", "success",  "success",  "success",  "success"),
-    converged        = c(NA,        FALSE,      TRUE,       TRUE,       TRUE),
-    singular         = c(NA,        NA,         TRUE,       FALSE,      FALSE),
-    warning_message  = c(NA,        NA,         NA,         "warn",     NA),
-    error_message    = c(NA,        NA,         NA,         NA,         NA),
+    status           = c("failure", "success", "success", "success", "success"),
+    converged        = c(NA, FALSE, TRUE, TRUE, TRUE),
+    singular         = c(NA, NA, TRUE, FALSE, FALSE),
+    warning_message  = c(NA, NA, NA, "warn", NA),
+    error_message    = c(NA, NA, NA, NA, NA),
     stringsAsFactors = FALSE
   )
 

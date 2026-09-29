@@ -11,6 +11,10 @@
 # golden fixture: <reason>"), so reviewers know the new numbers were
 # reviewed and not just accepted because the test failed.
 #
+# Before regenerating, run fixtures/compare_golden.R with an explicit
+# allowlist of the differences you expect; only regenerate once it reports
+# ok = TRUE. See the header comment of that file for usage.
+#
 # Run from the repo root:
 #   "/c/Program Files/R/R-4.6.1/bin/Rscript" tests/testthat/fixtures/make_golden_pipeline.R
 

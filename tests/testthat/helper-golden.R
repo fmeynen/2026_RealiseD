@@ -61,7 +61,7 @@ run_golden_pipeline <- function(root_dir) {
     d22_values = 0.2239,
     d12_values = -0.4985,
     sigma2_values = 3.1508,
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 260925
   )
 

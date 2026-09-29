@@ -5,7 +5,7 @@ test_that("build_scenario_grid builds a valid grid", {
     n_values = c(10, 20),
     n_measures = 4,
     beta3_values = c(0, 0.5),
-    dropout_mechanism = "half-missing",
+    dropout_mechanism = "half_missing",
     seed_base = 1
   )
 

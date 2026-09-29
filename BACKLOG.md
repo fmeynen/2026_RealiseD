@@ -19,7 +19,9 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   In the B = 3 smoke run (2026-09-29), only 13 of 48 reweighting fits were `converged_ok`;
   13 were singular and 22 ended with warnings (likely non-convergence within
   `max_iterations = 30` and/or D_tilde being adjusted for positive definiteness). Check which
-  warnings dominate per N before the full B = 5000 rerun.
+  warnings dominate per N before the full B = 5000 rerun. Since the consistency pass, loop
+  non-convergence is reported as `not_converged` rather than `converged_warning`, so rerun the
+  smoke run to separate the two.
 
 - [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
   Coverage uses a normal quantile (`aggregate_results(ci_level)`, currently
@@ -37,7 +39,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
   already give each replicate an independent stream, so results stay reproducible.
 
 - [ ] **[efficiency] CbC D-matrix step costs O(N²).**
-  `calculate_stage2_Dmatrix()` loops over every pair i≠j with three `kronecker()` calls per
+  `calculate_stage2_dmatrix()` loops over every pair i≠j with three `kronecker()` calls per
   pair ([analysis_layer.R:625-634](scripts/simulation/analysis_layer.R#L625-L634)).
   By the Kronecker mixed-product rule each term equals
   `kron(W_j K_i HH_j, K_i HH_j t(W_j))` (two q×q factors). Since `K_i` only takes one value
@@ -46,7 +48,7 @@ is the suggested issue label. Line numbers refer to the code as of commit `d0ce1
 - [ ] **[efficiency] Smaller CbC savings.**
   - `expm::sqrtm()` is applied to diagonal weight matrices
     ([analysis_layer.R:604](scripts/simulation/analysis_layer.R#L604)); use `sqrt()` on the diagonal.
-  - `solve(crossprod(Z))` and `calculate_inv_sum_KWK()` are recomputed several times per fit.
+  - `solve(crossprod(Z))` and `calculate_inv_sum_kwk()` are recomputed several times per fit.
   - `ks` is only used for `vec()`, `vech()`, `invvec()`, `invvech()`; replace with base-R one-liners
     and drop the dependency.
 
@@ -92,38 +94,61 @@ All items below were completed in the clarity pass (branch `refactor/clarity`, p
 
 ## Consistency
 
-- [ ] **[consistency] One name per method.**
-  Multiple imputation is called `multiple_imputation` / `imputation`; reweighting is
-  `reweighting` / `weighting` / `closed_form_reweighting` / `closed_form_weights`; engines are
-  `cbc` / `mice_cbc`. Use the keys of `build_analysis_registry()` everywhere.
+Items below were worked on in the consistency pass (branch `refactor/consistency`, plan
+[plans/2026-09-29-consistency-pass.md](plans/2026-09-29-consistency-pass.md)); the open ones are
+follow-ups.
 
-- [ ] **[consistency] Dropout mechanism names mix separators.**
-  `"half-missing"` vs `"three_obs_minimum"`.
+- [x] **[consistency] One name per method.**
+  Multiple imputation was called `multiple_imputation` / `imputation`; reweighting was
+  `reweighting` / `weighting` / `closed_form_reweighting` / `closed_form_weights`. Done:
+  `prepare_analysis_data()`, `classify_fit_status()` and the extractors use the registry keys
+  (`classical_ml`, `multiple_imputation`, `reweighting`, `LSPIM`), and the reweighting analyzers
+  are `analyze_reweighting()` / `analyze_generated_data_reweighting()`.
 
-- [ ] **[consistency] Code style.**
+- [x] **[consistency] Dropout mechanism names mix separators.**
+  `"half-missing"` renamed to `"half_missing"` everywhere; the old spelling now errors loudly
+  in `validate_scenario_grid()` (consistency pass, branch `refactor/consistency`).
+
+- [x] **[consistency] Code style.**
   Mixed 2/4-space argument indentation, `if(` vs `if (`, `=` for assignment, `T`/`F`,
-  `&` where `&&` is meant. Run `styler` and `lintr::lint_dir("scripts")`.
+  `&` where `&&` is meant. Done: code and tests formatted with styler (tidyverse style), all
+  lintr findings fixed, and `tests/testthat/test-lint.R` keeps them at zero.
 
-- [ ] **[consistency] Names violate the project's own `.lintr` rule.**
-  `CbCEstimator`, `fit_LSPIM`, `K_mi`, `W_i1`, `D_tilde`, ... Either rename or extend the
-  allowed pattern for statistical notation.
+- [x] **[consistency] Function names violate the project's own `.lintr` rule.**
+  `CbCEstimator` → `cbc_estimator`, `fit_LSPIM` → `fit_lspim`, and other offending function
+  names renamed to snake_case; `LSPIM_subversion.R` renamed to `lspim.R`.
 
-- [ ] **[consistency] Centralise paths and schema versions.**
-  `"results/data"` and `"data/processed/generated"` are repeated as defaults in ~15 functions;
-  schema-version globals are spread across files, and `run_all.R` depends on alphabetical
-  `source()` order (hence `ensure_results_artifact_helpers()`).
+- [x] **[consistency] `.lintr` naming rule for matrix notation.**
+  Done: the `object_name_linter` pattern in `.lintr` now allows the CbC paper's notation in
+  variable names (`K_mi`, `W_i1`, `D_tilde`, `Sigma_tilde`, ...); `object_usage_linter` is
+  disabled (false positives for functions defined in other sourced files).
 
-- [ ] **[consistency] One failure-row builder.**
-  The four `analyze_*()` wrappers duplicate failure-row construction; a generic
-  `run_method(data, prepare, fit, extract, method, engine)` removes the duplication.
+- [x] **[consistency] Centralise paths and schema versions.**
+  Default paths and all six schema-version constants now live in
+  `scripts/simulation/config.R` (`default_paths`, `*_schema_version`); `ensure_results_artifact_helpers()`
+  was removed as it only guarded against a source-order issue that no longer applies.
 
-- [ ] **[consistency] Declare dependencies.**
-  lme4, mice, miceadds, ks, expm, reformulas, geessbin, multcomp, dplyr (only `bind_rows`),
-  testthat, withr (the reference code in `scripts/reference/` also uses mvnfast). The README
-  lists them for now; use `renv` or a `DESCRIPTION` file.
+- [x] **[consistency] One failure-row builder.**
+  The four `analyze_*()` wrappers now call a generic `run_method(data, method, engine,
+  prepare_type, fit, extract)` (`scripts/simulation/analysis_methods.R`) that validates,
+  prepares, fits, and extracts inside a single `tryCatch()` (consistency pass, branch
+  `refactor/consistency`).
 
-- [ ] **[consistency] `not_converged` status can never occur.**
-  Every analyzer sets `converged = status != "failure"`, so `add_convergence_status()`'s
-  `not_converged` level is unreachable, and non-convergence (e.g. the reweighting loop hitting
-  `max_iterations`) shows up only as `converged_warning`. Either record real convergence per
-  method or drop the level.
+- [ ] **[consistency] Consider removing the thin `analyze_*()` wrappers.**
+  They add little beyond `run_method()`; callers (registry runners, tests) could call
+  `run_method()`/the registry directly.
+
+- [x] **[consistency] Declare dependencies.**
+  Done: `renv.lock` pins exact versions (107 packages, R 4.6.1); restore with `renv::restore()`.
+
+- [x] **[consistency] `not_converged` status can never occur.**
+  Every analyzer set `converged = status != "failure"`, so `add_convergence_status()`'s
+  `not_converged` level was unreachable. Done: `converged` now records each method's own
+  convergence criterion (lme4 checks, reweighting loop vs `epsilon_B`, LSPIM GEE status; MI is
+  always converged on success); `convergence_status_version` bumped. See "What *converged*
+  means" in the README.
+
+- [ ] **[statistics] Mice convergence diagnostic for multiple imputation.**
+  `multiple_imputation` is always `converged = TRUE` on success because `mice` runs a fixed
+  number of iterations with no convergence test. Add a diagnostic, e.g. R-hat across the
+  imputation chains, and decide whether it should feed `converged`.
