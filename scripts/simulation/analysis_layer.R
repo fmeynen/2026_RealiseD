@@ -557,6 +557,35 @@ calculate_stage2_sigma <- function(Sigma_hats, weights) {
   invvech_mat(apply(vech_Sigma_hat, 2, weighted.mean, w = weights))
 }
 
+# Sum over ordered pairs i != j of
+# each term is the product of the three Kronecker products (W_j x K_i)(K_i x HH_j)(HH_j x t(W_j)),
+# which by the mixed-product rule equals (W_j K_i HH_j) x (K_i HH_j t(W_j)), with x the Kronecker product.
+# K_i enters the term twice, so the K_i cannot be summed first. Instead the clusters are grouped by
+# exactly identical K_i (compared bit for bit via hexadecimal keys, no tolerance), and for each j the
+# term is evaluated once per group with multiplicity count_g - [K_j in g]. Cost: N x (distinct K_i).
+sum_offdiag_kron_terms <- function(K_mi, sqrt_W, HH_i) {
+  keys <- vapply(K_mi, function(K) {
+    paste(c(dim(K), sprintf("%a", as.vector(K))), collapse = ",")
+  }, character(1))
+  group_of <- match(keys, unique(keys))
+  group_K <- K_mi[!duplicated(keys)]
+  group_size <- tabulate(group_of, nbins = length(group_K))
+
+  total <- 0
+  for (j in seq_along(HH_i)) {
+    W <- sqrt_W[[j]]
+    HH <- HH_i[[j]]
+    for (g in seq_along(group_K)) {
+      multiplicity <- group_size[g] - (group_of[j] == g)
+      if (multiplicity > 0) {
+        A <- group_K[[g]] %*% HH
+        total <- total + multiplicity * kronecker(W %*% A, A %*% t(W))
+      }
+    }
+  }
+  total
+}
+
 calculate_stage2_dmatrix <- function(K_mi, weights, inv_ZZ_i, inv_sum_KWK,
                                      beta_hats, beta_tilde, Sigma_tilde) {
   # square root of weights to use for matrix multiplication
@@ -600,17 +629,7 @@ calculate_stage2_dmatrix <- function(K_mi, weights, inv_ZZ_i, inv_sum_KWK,
   ))
 
   # denom part 2
-  idx_combinations <- expand.grid(i = seq_along(K_mi), j = seq_along(HH_i))
-  idx_combinations <- idx_combinations[idx_combinations$i != idx_combinations$j, ]
-  denom_p2 <- Reduce(
-    `+`,
-    mapply(function(i, j) {
-      W <- sqrt_W[[j]]
-      K <- K_mi[[i]]
-      HH <- HH_i[[j]]
-      kronecker(W, K) %*% kronecker(K, HH) %*% kronecker(HH, t(W))
-    }, idx_combinations$i, idx_combinations$j, SIMPLIFY = FALSE)
-  )
+  denom_p2 <- sum_offdiag_kron_terms(K_mi, sqrt_W, HH_i)
   denom <- denom_p1 + denom_p2
   # c
   R_i <- lapply(inv_ZZ_i, function(inv_ZZ) {
@@ -952,9 +971,12 @@ lme4_converged <- function(fit) {
 
 ## Classify fit status ---------------------------------------------------------------------------------------------
 
+# An eigenvalue at the tolerance counts as singular. A D_tilde repaired for positive definiteness has its
+# smallest eigenvalue set to epsilon_D (= tol): a variance component truncated at the boundary, which is a
+# singular fit (as in lme4). The relative slack keeps that from depending on ~1e-17 rounding noise.
 is_singular <- function(cov_matrix, tol) {
   evals <- eigen(cov_matrix, symmetric = TRUE, only.values = TRUE)$values
-  any(evals <= tol)
+  any(evals <= tol * (1 + 1e-8))
 }
 
 #' Classify the classical ML fit status for downstream simulation results.

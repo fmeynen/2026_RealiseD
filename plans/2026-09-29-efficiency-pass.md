@@ -56,7 +56,7 @@ Ground rules:
     `renv::status()` is clean.
   - Golden unchanged (within tolerance).
 
-- [ ] **3. O(N) D-matrix.**
+- [x] **3. O(N) D-matrix.**
   - Rewrite the i ≠ j double sum `denom_p2` in `calculate_stage2_dmatrix()`. By the Kronecker
     mixed-product rule each term `kron(W_j, K_i) %*% kron(K_i, HH_j) %*% kron(HH_j, t(W_j))`
     equals `kron(W_j K_i HH_j, K_i HH_j t(W_j))`.
