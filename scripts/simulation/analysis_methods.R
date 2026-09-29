@@ -322,8 +322,8 @@ build_analysis_registry <- function() {
       default_config = list(alpha = 0.05, lspim_max_n = 50),
       applies_to = function(scenario_row, config) {
         if (!is.numeric(config$lspim_max_n) ||
-              length(config$lspim_max_n) != 1L ||
-              is.na(config$lspim_max_n)) {
+          length(config$lspim_max_n) != 1L ||
+          is.na(config$lspim_max_n)) {
           stop(
             "LSPIM config 'lspim_max_n' must be a single number; ",
             "set it in analysis_configs$LSPIM"

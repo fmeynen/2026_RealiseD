@@ -34,7 +34,7 @@ Ground rules:
 
   Document the usage at the top of the file and in `make_golden_pipeline.R`.
 
-- [ ] **1. Formatting.**
+- [x] **1. Formatting.**
   - Install `styler`, then run `styler::style_dir()` on `scripts/simulation`, and
     `styler::style_file()` on `scripts/run_all.R` and `tests/testthat/*.R`, with the tidyverse
     style and 2-space indent.

@@ -70,19 +70,19 @@ analysis_rng_scheme_version <- "lecuyer_analysis_substream_v1"
 #'   column holding the global seed.
 
 build_scenario_grid <- function(
-    n_values,
-    n_measures,
-    beta0_values = 0,
-    beta1_values = 0,
-    beta2_values = 0,
-    beta3_values = 0,
-    d11_values = 1,
-    d22_values = 1,
-    d12_values = 0,
-    sigma2_values = 1,
-    dropout_mechanism = NULL,
-    dropout_rate_values = 0,
-    seed_base
+  n_values,
+  n_measures,
+  beta0_values = 0,
+  beta1_values = 0,
+  beta2_values = 0,
+  beta3_values = 0,
+  d11_values = 1,
+  d22_values = 1,
+  d12_values = 0,
+  sigma2_values = 1,
+  dropout_mechanism = NULL,
+  dropout_rate_values = 0,
+  seed_base
 ) {
   if (is.null(dropout_mechanism)) {
     dropout_mechanism <- NA_character_
@@ -155,8 +155,10 @@ validate_scenario_grid <- function(scenario_grid) {
   # Check that D = [[d11, d12], [d12, d22]] is positive semi-definite in each scenario.
   for (i in seq_len(nrow(scenario_grid))) {
     d_mat <- matrix(
-      c(scenario_grid$d11[i], scenario_grid$d12[i],
-        scenario_grid$d12[i], scenario_grid$d22[i]),
+      c(
+        scenario_grid$d11[i], scenario_grid$d12[i],
+        scenario_grid$d12[i], scenario_grid$d22[i]
+      ),
       nrow = 2
     )
     eigenvalues <- eigen(d_mat, symmetric = TRUE, only.values = TRUE)$values
@@ -167,7 +169,6 @@ validate_scenario_grid <- function(scenario_grid) {
   if (anyDuplicated(scenario_grid$scenario_id)) stop("scenario_id values must be unique.")
   invisible(scenario_grid)
 }
-
 
 
 # Single dataset building blocks ----------------------------------------------------------------------------------
@@ -215,7 +216,7 @@ allocate_treatment <- function(n, n_arms = 2) {
   if (remainder > 0) {
     base_allocation <- c(base_allocation, sample(arm_labels, remainder, replace = FALSE))
   }
-  treatment <- sample(base_allocation)  # randomise assignment order
+  treatment <- sample(base_allocation) # randomise assignment order
   data.frame(subject_id = subject_id, treatment = treatment)
 }
 
@@ -232,9 +233,9 @@ allocate_treatment <- function(n, n_arms = 2) {
 #' @return Data frame with columns: subject_id, b0_i, b1_i.
 
 generate_random_effects <- function(n, d_mat) {
-  chol_d <- chol(d_mat)                        # upper-triangular Cholesky factor of D
+  chol_d <- chol(d_mat) # upper-triangular Cholesky factor of D
   z <- matrix(rnorm(n * 2L), nrow = n, ncol = 2L)
-  re <- z %*% chol_d                           # n x 2 matrix: rows are (b0_i, b1_i)
+  re <- z %*% chol_d # n x 2 matrix: rows are (b0_i, b1_i)
   data.frame(subject_id = seq_len(n), b0_i = re[, 1L], b1_i = re[, 2L])
 }
 
@@ -256,7 +257,7 @@ generate_random_effects <- function(n, d_mat) {
 #'   time_label, b0_i, b1_i.
 
 expand_subject_time_panel <- function(subjects, time_grid, scenario_id, sim_id) {
-  panel <- merge(subjects, time_grid, by = NULL)  # full Cartesian cross-join
+  panel <- merge(subjects, time_grid, by = NULL) # full Cartesian cross-join
   panel$scenario_id <- scenario_id
   panel$sim_id <- sim_id
   col_order <- c(
@@ -287,10 +288,10 @@ compute_linear_predictor <- function(panel, beta0, beta1, beta2, beta3) {
   panel$eta_ij <- (
     beta0
     + beta1 * panel$treatment
-    + beta2 * panel$time_value
-    + beta3 * panel$treatment * panel$time_value
-    + panel$b0_i
-    + panel$b1_i * panel$time_value
+      + beta2 * panel$time_value
+      + beta3 * panel$treatment * panel$time_value
+      + panel$b0_i
+      + panel$b1_i * panel$time_value
   )
   panel
 }
@@ -359,7 +360,9 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
     n_complete <- n_subjects %/% 2L
     complete_subjects <- sample(subject_ids, size = n_complete)
     dropout_time <- vapply(subject_ids, function(id) {
-      if (id %in% complete_subjects) return(NA_integer_)
+      if (id %in% complete_subjects) {
+        return(NA_integer_)
+      }
       sample.int(n = n_measures - 1L, size = 1L)
     }, integer(1L))
   } else if (mechanism == "three_obs_minimum") {
@@ -372,7 +375,9 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
     n_complete <- n_subjects %/% 2L
     complete_subjects <- sample(subject_ids, size = n_complete)
     dropout_time <- vapply(subject_ids, function(id) {
-      if (id %in% complete_subjects) return(NA_integer_)
+      if (id %in% complete_subjects) {
+        return(NA_integer_)
+      }
       sample(3L:(n_measures - 1L), size = 1L)
     }, integer(1L))
   } else if (mechanism == "fixed_rate") {
@@ -380,7 +385,9 @@ generate_dropout_process <- function(panel, dropout_rate = 0, mechanism = "none"
     # Dropout is monotone: once dropped, always dropped.
     dropout_time <- vapply(subject_ids, function(id) {
       for (k in seq(2L, n_measures)) {
-        if (runif(1L) < dropout_rate) return(k - 1L)
+        if (runif(1L) < dropout_rate) {
+          return(k - 1L)
+        }
       }
       NA_integer_
     }, integer(1L))
@@ -600,8 +607,10 @@ simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
 
   n <- scenario_row$n
   d_mat <- matrix(
-    c(scenario_row$d11, scenario_row$d12,
-      scenario_row$d12, scenario_row$d22),
+    c(
+      scenario_row$d11, scenario_row$d12,
+      scenario_row$d12, scenario_row$d22
+    ),
     nrow = 2L
   )
 
@@ -622,14 +631,14 @@ simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
   )
   epsilon <- generate_residual_errors(nrow(panel), scenario_row$sigma2)
   panel <- generate_outcomes(panel, epsilon)
-  
+
   dropout_mechanism <- scenario_row$dropout_mechanism
   if (is.null(dropout_mechanism) || is.na(dropout_mechanism)) {
     dropout_mechanism <- if (scenario_row$dropout_rate > 0) "fixed_rate" else "none"
   }
   dropout_info <- generate_dropout_process(panel, scenario_row$dropout_rate, dropout_mechanism)
   output <- apply_missingness(panel, dropout_info)
-  output[,c("sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed")]
+  output[, c("sim_id", "scenario_id", "subject_id", "treatment", "time_value", "y", "observed")]
 }
 
 
@@ -696,8 +705,7 @@ simulate_scenario <- function(scenario_row, B, seed_base = NULL) {
 #'   parameters.
 
 summarize_generated_data <- function(data) {
-
-  #Treatment Balance
+  # Treatment Balance
   unique_subjects <- data[!duplicated(data[, c("scenario_id", "sim_id", "subject_id")]), ]
   treatment_balance <- aggregate(
     subject_id ~ scenario_id + sim_id + treatment,
@@ -706,7 +714,7 @@ summarize_generated_data <- function(data) {
   )
   names(treatment_balance)[names(treatment_balance) == "subject_id"] <- "n_subjects"
 
-  #observation rate by time
+  # observation rate by time
   obs_rate_by_time <- aggregate(
     observed ~ scenario_id + time_value,
     data = data,
@@ -721,7 +729,7 @@ summarize_generated_data <- function(data) {
   )
   rownames(obs_rate_by_time) <- NULL
 
-  #mean outcome by treatment * time
+  # mean outcome by treatment * time
   mean_y_by_treatment_time <- aggregate(
     y ~ scenario_id + treatment + time_value,
     data = data,
@@ -730,11 +738,11 @@ summarize_generated_data <- function(data) {
 
   # model params
   res <- lme4::lmer(formula = y ~ treatment + time_value + treatment:time_value +
-                      (1+time_value|subject_id) , data = data)
+    (1 + time_value | subject_id), data = data)
   fixef <- lme4::fixef(res)
   VarCorr <- lme4::VarCorr(res)
-  
-  
+
+
   # mean # of obs per subject
   obs_per_subject <- aggregate(
     observed ~ scenario_id + sim_id + subject_id,
@@ -752,7 +760,7 @@ summarize_generated_data <- function(data) {
     treatment_balance = treatment_balance,
     obs_rate_by_time = obs_rate_by_time,
     fixed_effects = fixef,
-    random_effect_cov = as.data.frame(VarCorr),#print(VarCorr, comp = c("Variance")),
+    random_effect_cov = as.data.frame(VarCorr), # print(VarCorr, comp = c("Variance")),
     mean_y_by_treatment_time = mean_y_by_treatment_time,
     n_obs_per_subject = n_obs_per_subject
   )

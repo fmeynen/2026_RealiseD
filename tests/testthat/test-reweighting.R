@@ -63,10 +63,10 @@ test_that("set_fit_args() rejects an invalid damping", {
 test_that("damping changes the reweighted beta on a small dataset", {
   mats <- build_reweighting_mats()
   args_default <- set_fit_args(reweighting = TRUE, damping = 0.7, max_iterations = 1)
-  args_full    <- set_fit_args(reweighting = TRUE, damping = 1,   max_iterations = 1)
+  args_full <- set_fit_args(reweighting = TRUE, damping = 1, max_iterations = 1)
 
   fit_default <- suppressWarnings(CbCEstimator(mats, args_default))
-  fit_full    <- suppressWarnings(CbCEstimator(mats, args_full))
+  fit_full <- suppressWarnings(CbCEstimator(mats, args_full))
 
   expect_false(isTRUE(all.equal(fit_default$beta_tilde, fit_full$beta_tilde)))
 })

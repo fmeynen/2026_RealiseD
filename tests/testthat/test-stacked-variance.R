@@ -15,7 +15,7 @@ test_that("stacked_variance_inflation inflates fixed-effect SEs by sqrt(m) only"
     seed_base = 7
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)
-  ad  <- prepare_analysis_data(dat, type = "imputation")
+  ad <- prepare_analysis_data(dat, type = "imputation")
 
   ia <- set_impute_args(method_y = "2l.norm", m = 3, maxit = 2)
 
@@ -31,7 +31,7 @@ test_that("stacked_variance_inflation inflates fixed-effect SEs by sqrt(m) only"
   expect_null(fit_plain$error_message)
   expect_null(fit_inflated$error_message)
 
-  plain    <- fit_plain$fit
+  plain <- fit_plain$fit
   inflated <- fit_inflated$fit
 
   estimate_names <- c("estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3")
@@ -61,9 +61,9 @@ test_that("fit_closed_form_reweighting() output is unaffected by stacked_varianc
     seed_base = 7
   )
   dat <- simulate_scenario(sc[1, , drop = FALSE], B = 1)
-  ad  <- suppressWarnings(prepare_analysis_data(dat, type = "weighting"))
+  ad <- suppressWarnings(prepare_analysis_data(dat, type = "weighting"))
 
-  fit_plain    <- suppressWarnings(fit_closed_form_reweighting(ad, set_fit_args()))
+  fit_plain <- suppressWarnings(fit_closed_form_reweighting(ad, set_fit_args()))
   fit_inflated <- suppressWarnings(
     fit_closed_form_reweighting(ad, set_fit_args(stacked_variance_inflation = TRUE))
   )

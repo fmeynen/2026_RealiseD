@@ -282,8 +282,7 @@ run_analysis_over_groups <- function(
   names(results) <- names(split_data)
   combined_results <- do.call(rbind, results)
   combined_results <- combined_results[
-    order(combined_results$scenario_id, combined_results$sim_id),
-    ,
+    order(combined_results$scenario_id, combined_results$sim_id), ,
     drop = FALSE
   ]
 
@@ -310,8 +309,7 @@ sort_analysis_results_deterministically <- function(results_df) {
     return(results_df)
   }
   sorted <- results_df[
-    do.call(order, unname(results_df[sort_cols])),
-    ,
+    do.call(order, unname(results_df[sort_cols])), ,
     drop = FALSE
   ]
   rownames(sorted) <- NULL
@@ -360,8 +358,7 @@ run_requested_analyses <- function(
 
   scenario_entries <- iterate_generated_scenarios(generation_manifest)
   generation_failures <- generation_manifest$entries[
-    !generation_manifest$entries$status %in% c("success", "skipped_existing"),
-    ,
+    !generation_manifest$entries$status %in% c("success", "skipped_existing"), ,
     drop = FALSE
   ]
   record_rows <- vector(
@@ -376,8 +373,7 @@ run_requested_analyses <- function(
     scenario_started <- proc.time()[["elapsed"]]
     message(sprintf("[scenario %d] loading generated data", scenario_id))
     scenario_metadata <- scenarios[
-      scenarios$scenario_id == scenario_id,
-      ,
+      scenarios$scenario_id == scenario_id, ,
       drop = FALSE
     ]
     if (nrow(scenario_metadata) != 1L) {
@@ -563,8 +559,7 @@ run_requested_analyses <- function(
     }
   }
   artifact_records <- artifact_records[
-    order(artifact_records$scenario_id, artifact_records$method),
-    ,
+    order(artifact_records$scenario_id, artifact_records$method), ,
     drop = FALSE
   ]
   rownames(artifact_records) <- NULL

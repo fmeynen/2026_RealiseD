@@ -46,11 +46,11 @@ results_schema_version <- "v2"
 #' @return data with a new convergence_status character column appended.
 
 add_convergence_status <- function(data) {
-  is_failure    <- !is.na(data$status) & data$status == "failure"
+  is_failure <- !is.na(data$status) & data$status == "failure"
   has_error_msg <- !is.na(data$error_message)
-  is_converged  <- !is.na(data$converged) & as.logical(data$converged)
-  is_singular   <- !is.na(data$singular) & as.logical(data$singular)
-  has_warning   <- !is.na(data$warning_message)
+  is_converged <- !is.na(data$converged) & as.logical(data$converged)
+  is_singular <- !is.na(data$singular) & as.logical(data$singular)
+  has_warning <- !is.na(data$warning_message)
 
   data$convergence_status <- ifelse(
     is_failure | has_error_msg,
@@ -382,18 +382,15 @@ save_combined_convenience_artifact <- function(
   overwrite = FALSE
 ) {
   successful <- artifact_records[
-    artifact_records$status %in% c("success", "skipped_existing"),
-    ,
+    artifact_records$status %in% c("success", "skipped_existing"), ,
     drop = FALSE
   ]
   failed_records <- artifact_records[
-    artifact_records$status == "failure",
-    ,
+    artifact_records$status == "failure", ,
     drop = FALSE
   ]
   skipped_by_config_records <- artifact_records[
-    artifact_records$status == "skipped_by_config",
-    ,
+    artifact_records$status == "skipped_by_config", ,
     drop = FALSE
   ]
   successful_has_path <- !is.na(successful$path)
@@ -469,8 +466,7 @@ save_combined_convenience_artifact <- function(
 
 build_analysis_source_signature <- function(artifact_records) {
   successful <- artifact_records[
-    artifact_records$status %in% c("success", "skipped_existing"),
-    ,
+    artifact_records$status %in% c("success", "skipped_existing"), ,
     drop = FALSE
   ]
   if (nrow(successful) == 0L) {

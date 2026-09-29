@@ -18,14 +18,14 @@ collect_analysis_metadata <- function(data) {
       n_subjects = 0L
     ))
   }
-  
+
   observed_values <- if ("observed" %in% names(data)) as.logical(data$observed) else rep(FALSE, nrow(data))
   outcome_values <- if ("y" %in% names(data)) data$y else rep(NA_real_, nrow(data))
-  
+
   scenario_values <- if ("scenario_id" %in% names(data)) stats::na.omit(unique(data$scenario_id)) else integer()
   sim_values <- if ("sim_id" %in% names(data)) stats::na.omit(unique(data$sim_id)) else integer()
   subject_values <- if ("subject_id" %in% names(data)) stats::na.omit(unique(data$subject_id)) else integer()
-  
+
   list(
     scenario_id = if (length(scenario_values) > 0L) as.integer(scenario_values[1L]) else NA_integer_,
     sim_id = if (length(sim_values) > 0L) as.integer(sim_values[1L]) else NA_integer_,
@@ -52,44 +52,45 @@ prepare_analysis_data <- function(data, type = c("imputation", "weighting", "cla
   }
   type <- match.arg(type)
   analysis_data <- data[
-    if(type == "imputation") TRUE else !is.na(data$observed) & as.logical(data$observed) & !is.na(data$y),
-    ,
+    if (type == "imputation") TRUE else !is.na(data$observed) & as.logical(data$observed) & !is.na(data$y), ,
     drop = FALSE
   ]
-  if(type == "imputation") {
+  if (type == "imputation") {
     analysis_data$subject_id <- as.integer(analysis_data$subject_id)
   } else {
     analysis_data$subject_id <- factor(analysis_data$subject_id)
   }
-  
-  if(type == "weighting") {
+
+  if (type == "weighting") {
     # The closed-form estimator fits a random intercept and a random slope per
     # subject, which needs at least three observations per subject to identify
     # both; the threshold itself depends on the data at hand.
-    obs_per_subject   <- table(analysis_data$subject_id)
-    keep_subjects     <- names(obs_per_subject)[obs_per_subject >= 3]
+    obs_per_subject <- table(analysis_data$subject_id)
+    keep_subjects <- names(obs_per_subject)[obs_per_subject >= 3]
     excluded_subjects <- names(obs_per_subject)[obs_per_subject < 3]
-    
+
     if (length(excluded_subjects) > 0) {
-      warning("The following subjects were excluded (fewer than 3 observations): ", 
-              paste(excluded_subjects, collapse = ", "))
+      warning(
+        "The following subjects were excluded (fewer than 3 observations): ",
+        paste(excluded_subjects, collapse = ", ")
+      )
     }
-    analysis_data   <- analysis_data[analysis_data$subject_id %in% keep_subjects, ]
+    analysis_data <- analysis_data[analysis_data$subject_id %in% keep_subjects, ]
   }
-  
-  analysis_data$treatment  <- coerce_treatment_numeric(analysis_data$treatment)
+
+  analysis_data$treatment <- coerce_treatment_numeric(analysis_data$treatment)
   analysis_data$time_value <- as.numeric(analysis_data$time_value)
-  analysis_data$y          <- as.numeric(analysis_data$y)
-  analysis_data$observed   <- as.logical(analysis_data$observed)
-  
+  analysis_data$y <- as.numeric(analysis_data$y)
+  analysis_data$observed <- as.logical(analysis_data$observed)
+
   if (anyNA(analysis_data$treatment)) {
     stop("treatment contains values that cannot be coerced to numeric.")
   }
-  
+
   if (anyNA(analysis_data$time_value)) {
     stop("time_value contains values that cannot be coerced to numeric.")
   }
-  
+
   analysis_data[order(analysis_data$subject_id, analysis_data$time_value), , drop = FALSE]
 }
 
@@ -130,15 +131,15 @@ empty_results <- function() {
 }
 
 build_result_row <- function(
-    metadata,
-    method          = NA_character_,
-    engine          = NA_character_,
-    status          = "failure",
-    converged       = FALSE,
-    singular        = FALSE,
-    elapsed_seconds = NA_real_,
-    warning_message = NA_character_,
-    error_message   = NA_character_
+  metadata,
+  method = NA_character_,
+  engine = NA_character_,
+  status = "failure",
+  converged = FALSE,
+  singular = FALSE,
+  elapsed_seconds = NA_real_,
+  warning_message = NA_character_,
+  error_message = NA_character_
 ) {
   data.frame(
     scenario_id = metadata$scenario_id,
@@ -147,8 +148,8 @@ build_result_row <- function(
     engine = engine,
     status = status,
     converged = converged,
-    singular  = singular,
-    n_rows     = metadata$n_rows,
+    singular = singular,
+    n_rows = metadata$n_rows,
     n_observed = metadata$n_observed,
     n_subjects = metadata$n_subjects,
     interaction_tested = NA,
@@ -163,13 +164,13 @@ build_result_row <- function(
     se_beta1 = NA_real_,
     se_beta2 = NA_real_,
     se_beta3 = NA_real_,
-    var_b0     = NA_real_,
-    cov_b0b1   = NA_real_,
-    var_b1     = NA_real_,
+    var_b0 = NA_real_,
+    cov_b0b1 = NA_real_,
+    var_b1 = NA_real_,
     sigma2_hat = NA_real_,
     elapsed_seconds = as.numeric(elapsed_seconds),
     warning_message = warning_message,
-    error_message   = error_message,
+    error_message = error_message,
     stringsAsFactors = FALSE
   )
 }
@@ -238,15 +239,14 @@ build_mi_predictor_row <- function(impute_cols, cluster_col, target_col) {
 }
 
 set_impute_args <- function(
-    impute_cols      = c("subject_id", "treatment", "time_value", "y"),
-    cluster_col      = "subject_id",
-    target_col       = "y",
-    method_y         = c("2l.pmm", "2l.norm"),
-    m                = 3,
-    maxit            = 10,
-    include_original = FALSE
+  impute_cols = c("subject_id", "treatment", "time_value", "y"),
+  cluster_col = "subject_id",
+  target_col = "y",
+  method_y = c("2l.pmm", "2l.norm"),
+  m = 3,
+  maxit = 10,
+  include_original = FALSE
 ) {
-
   if (missing(method_y)) {
     stop("method_y must be specified: choose one of \"2l.pmm\" or \"2l.norm\"")
   }
@@ -282,28 +282,29 @@ set_impute_args <- function(
 #' @return Named list of fit settings.
 
 set_fit_args <- function(
-    subject_col    = "subject_id", time_col = "time_value", treatment_col = "treatment", outcome_col = "y",
-    formula        = build_formula(),
-    epsilon_D      = 1e-6,
-    reweighting    = FALSE, epsilon_B = 1e-6, max_iterations = 30,
-    stacked_variance_inflation = FALSE,
-    damping        = 0.7) {
+  subject_col = "subject_id", time_col = "time_value", treatment_col = "treatment", outcome_col = "y",
+  formula = build_formula(),
+  epsilon_D = 1e-6,
+  reweighting = FALSE, epsilon_B = 1e-6, max_iterations = 30,
+  stacked_variance_inflation = FALSE,
+  damping = 0.7
+) {
   if (!is.numeric(damping) || length(damping) != 1L || is.na(damping) ||
-      damping <= 0 || damping > 1) {
+    damping <= 0 || damping > 1) {
     stop("damping must be a single number in (0, 1].")
   }
   list(
-    subject_col     = subject_col,
-    time_col        = time_col,
-    treatment_col   = treatment_col,
-    outcome_col     = outcome_col,
-    formula         = formula,
-    epsilon_D       = epsilon_D,
-    reweighting     = reweighting,
-    epsilon_B       = epsilon_B,
+    subject_col = subject_col,
+    time_col = time_col,
+    treatment_col = treatment_col,
+    outcome_col = outcome_col,
+    formula = formula,
+    epsilon_D = epsilon_D,
+    reweighting = reweighting,
+    epsilon_B = epsilon_B,
     max_iterations = max_iterations,
     stacked_variance_inflation = stacked_variance_inflation,
-    damping         = damping
+    damping = damping
   )
 }
 
@@ -313,40 +314,40 @@ set_fit_args <- function(
 
 build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
   # helper function to split dataframe into lists
-  split_data <- function(clusterID, X){
+  split_data <- function(clusterID, X) {
     data_list <- lapply(unique(clusterID), function(id) {
       X[clusterID == id, , drop = FALSE]
     })
     names(data_list) <- unique(clusterID)
     data_list
   }
-  
+
   # Cluster Information
   clusterID <- data[[subject_col]]
-  n_c       <- length(unique(clusterID))
-  
+  n_c <- length(unique(clusterID))
+
   # Extract fixed effects design matrix
   fixed_formula <- reformulas::nobars(formula)
-  X             <- model.matrix(fixed_formula, data = data)
-  p             <- ncol(X)
-  X_list        <- split_data(clusterID, X)
-  
+  X <- model.matrix(fixed_formula, data = data)
+  p <- ncol(X)
+  X_list <- split_data(clusterID, X)
+
   # Extract outcome
   outcome_col <- all.vars(formula)[1]
-  Y           <- matrix(as.numeric(data[[outcome_col]]), ncol = 1L)
-  m           <- ncol(Y)
-  Y_list      <- split_data(clusterID, Y)
-  
+  Y <- matrix(as.numeric(data[[outcome_col]]), ncol = 1L)
+  m <- ncol(Y)
+  Y_list <- split_data(clusterID, Y)
+
   # Extract random effects
-  re_bars         <- reformulas::findbars(formula)  # Returns list of bar notation expressions
+  re_bars <- reformulas::findbars(formula) # Returns list of bar notation expressions
   re_formula_char <- deparse(re_bars[[1]][[2]])
-  Z               <- model.matrix(as.formula(paste("~", re_formula_char)), data = data)
-  q               <- ncol(Z)
-  Z_list          <- split_data(clusterID, Z)
-  
-  #observations per cluster
+  Z <- model.matrix(as.formula(paste("~", re_formula_char)), data = data)
+  q <- ncol(Z)
+  Z_list <- split_data(clusterID, Z)
+
+  # observations per cluster
   n_i <- lapply(Y_list, nrow)
-  
+
   list(
     Y = Y_list,
     X = X_list,
@@ -365,11 +366,11 @@ build_cbc_matrices <- function(data, subject_col, formula = build_formula()) {
 # are caught once per method and recorded in error_message.
 
 apply_cbc <- function(data, fit_args = set_fit_args()) {
-  subject_col   <- fit_args$subject_col
-  time_col      <- fit_args$time_col
+  subject_col <- fit_args$subject_col
+  time_col <- fit_args$time_col
   treatment_col <- fit_args$treatment_col
-  outcome_col   <- fit_args$outcome_col
-  formula       <- fit_args$formula
+  outcome_col <- fit_args$outcome_col
+  formula <- fit_args$formula
   required_cols <- unique(c(subject_col, time_col, treatment_col, outcome_col))
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0L) {
@@ -388,15 +389,18 @@ apply_cbc <- function(data, fit_args = set_fit_args()) {
 # apply_cbc() are not caught here and propagate to the caller.
 
 extract_cbc_result <- function(cbc_result) {
-  param_names <- c("estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
-                   "sigma2_hat",
-                   "se_beta0", "se_beta1", "se_beta2", "se_beta3",
-                   "var_b0", "cov_b0b1", "var_b1"
+  param_names <- c(
+    "estimate_beta0", "estimate_beta1", "estimate_beta2", "estimate_beta3",
+    "sigma2_hat",
+    "se_beta0", "se_beta1", "se_beta2", "se_beta3",
+    "var_b0", "cov_b0b1", "var_b1"
   )
-  res <- c(t(cbc_result$beta_tilde),
-           cbc_result$Sigma_tilde,
-           sqrt(diag(cbc_result$variance_beta_tilde)),
-           cbc_result$D_tilde[upper.tri(cbc_result$D_tilde, diag = TRUE)])
+  res <- c(
+    t(cbc_result$beta_tilde),
+    cbc_result$Sigma_tilde,
+    sqrt(diag(cbc_result$variance_beta_tilde)),
+    cbc_result$D_tilde[upper.tri(cbc_result$D_tilde, diag = TRUE)]
+  )
   names(res) <- param_names
   res
 }
@@ -416,11 +420,11 @@ extract_cbc_result <- function(cbc_result) {
 #' @return A model formula for `lme4::lmer()`.
 
 build_formula <- function(
-    outcome = "y",
-    treatment = "treatment",
-    time = "time_value",
-    subject = "subject_id",
-    random_slope = TRUE
+  outcome = "y",
+  treatment = "treatment",
+  time = "time_value",
+  subject = "subject_id",
+  random_slope = TRUE
 ) {
   random_terms <- if (random_slope) {
     paste0("(1 + ", time, " | ", subject, ")")
@@ -436,23 +440,23 @@ build_formula <- function(
 
 ## Imputation ---------------------------------------------------------------------------------------
 
-impute_data <- function(data, impute_args = set_impute_args()){
+impute_data <- function(data, impute_args = set_impute_args()) {
   impute_cols <- impute_args$impute_cols
-  target_col  <- impute_args$target_col
+  target_col <- impute_args$target_col
   cluster_col <- impute_args$cluster_col
-  
+
   sub_df <- data[, impute_cols, drop = FALSE]
-  
-  ini  <- mice::mice(sub_df, maxit = 0, print = FALSE)
+
+  ini <- mice::mice(sub_df, maxit = 0, print = FALSE)
   meth <- ini$method
   pred <- ini$predictorMatrix
-  
-  meth[]             <- ""
+
+  meth[] <- ""
   meth[[target_col]] <- impute_args$method_y
-  
-  pred_row                          <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
+
+  pred_row <- build_mi_predictor_row(impute_cols, cluster_col, target_col)
   pred[target_col, names(pred_row)] <- pred_row
-  
+
   # No seed is passed: mice draws from the current global RNG, which the orchestration layer
   # sets to the replicate's "analysis" L'Ecuyer-CMRG substream (see run_analysis_over_groups()).
   imp <- mice::mice(
@@ -463,28 +467,32 @@ impute_data <- function(data, impute_args = set_impute_args()){
     maxit           = impute_args$maxit,
     print           = FALSE
   )
-  
+
   completed <- mice::complete(imp, action = "long", include = impute_args$include_original)
   completed
 }
 
 ## Closed-form estimator (CbCEstimator) -----------------------------------------------------------
 
-#helper formula inv_sum_kwk
+# helper formula inv_sum_kwk
 calculate_inv_sum_KWK <- function(K_mi, weights) {
-  KWK  <- mapply(function(K, W) {crossprod(K, W) %*% K},
-                 K_mi, weights,
-                 SIMPLIFY = FALSE)
-  solve(Reduce('+', KWK))
+  KWK <- mapply(
+    function(K, W) {
+      crossprod(K, W) %*% K
+    },
+    K_mi, weights,
+    SIMPLIFY = FALSE
+  )
+  solve(Reduce("+", KWK))
 }
 
-#stage 1
+# stage 1
 calculate_stage1_results <- function(Z, Y, n, q) {
   mapply(
     function(Z, Y, n) {
-      beta_hat  = solve(crossprod(Z),crossprod(Z,Y))
-      e         = Y-Z%*%beta_hat
-      Sigma_hat = crossprod(e)/(n-q)
+      beta_hat <- solve(crossprod(Z), crossprod(Z, Y))
+      e <- Y - Z %*% beta_hat
+      Sigma_hat <- crossprod(e) / (n - q)
       list(
         beta_hat  = beta_hat,
         Sigma_hat = Sigma_hat
@@ -495,171 +503,223 @@ calculate_stage1_results <- function(Z, Y, n, q) {
   )
 }
 
-#stage 2
+# stage 2
 calculate_stage2_beta <- function(K_mi, weights, beta_hats) {
   inv_sum_KWK <- calculate_inv_sum_KWK(K_mi, weights)
-  KWB         <- mapply(function(K, W, B) {crossprod(K, W) %*% B}, 
-                        K_mi, weights, beta_hats, SIMPLIFY = FALSE)
-  sum_KWB     <- Reduce('+', KWB)
+  KWB <- mapply(
+    function(K, W, B) {
+      crossprod(K, W) %*% B
+    },
+    K_mi, weights, beta_hats,
+    SIMPLIFY = FALSE
+  )
+  sum_KWB <- Reduce("+", KWB)
   inv_sum_KWK %*% sum_KWB
 }
 
 calculate_stage2_Sigma <- function(Sigma_hats, weights) {
   vech_Sigma_hat <- as.data.frame(do.call(rbind, lapply(Sigma_hats, ks::vech)))
-  ks::invvech(apply(vech_Sigma_hat,2,weighted.mean,w=weights))
+  ks::invvech(apply(vech_Sigma_hat, 2, weighted.mean, w = weights))
 }
 
 calculate_stage2_Dmatrix <- function(K_mi, weights, Z_i,
-                                     beta_hats,beta_tilde, Sigma_tilde) {
-  #square root of weights to use for matrix multiplication
+                                     beta_hats, beta_tilde, Sigma_tilde) {
+  # square root of weights to use for matrix multiplication
   sqrt_W <- lapply(weights, expm::sqrtm)
-  #vec Sb: formula 5
-  b_i_tilde <- mapply(function(beta_hats, K_mi){beta_hats - K_mi %*% beta_tilde},
-                      beta_hats, K_mi, SIMPLIFY = F)
-  vec_sb    <- ks::vec(Reduce('+', mapply(function(b, W){tcrossprod(W %*% b)},
-                                       b_i_tilde, sqrt_W, SIMPLIFY = F))) ##
-  
+  # vec Sb: formula 5
+  b_i_tilde <- mapply(
+    function(beta_hats, K_mi) {
+      beta_hats - K_mi %*% beta_tilde
+    },
+    beta_hats, K_mi,
+    SIMPLIFY = F
+  )
+  vec_sb <- ks::vec(Reduce("+", mapply(
+    function(b, W) {
+      tcrossprod(W %*% b)
+    },
+    b_i_tilde, sqrt_W,
+    SIMPLIFY = F
+  ))) ##
+
 
   # D: formula 9, c: formula 9b
-  #Hii
+  # Hii
   inv_sum_KWK <- calculate_inv_sum_KWK(K_mi, weights)
-  HH_i        <- mapply(function(K, W) {inv_sum_KWK %*% crossprod(K, W)}, K_mi, weights, SIMPLIFY = F)
-  H_ii        <- mapply(function(K, H) {K %*% H}, K_mi, HH_i, SIMPLIFY = F)
+  HH_i <- mapply(function(K, W) {
+    inv_sum_KWK %*% crossprod(K, W)
+  }, K_mi, weights, SIMPLIFY = F)
+  H_ii <- mapply(function(K, H) {
+    K %*% H
+  }, K_mi, HH_i, SIMPLIFY = F)
 
   # denom part 1
-  I_min_Hii <- lapply(H_ii, function(H){diag(1, dim(H)) - H})
-  denom_p1  <- Reduce('+', mapply(function(X, W){kronecker(W %*% X, tcrossprod(X, W))},
-                                  I_min_Hii, sqrt_W, SIMPLIFY = F))
-  
+  I_min_Hii <- lapply(H_ii, function(H) {
+    diag(1, dim(H)) - H
+  })
+  denom_p1 <- Reduce("+", mapply(
+    function(X, W) {
+      kronecker(W %*% X, tcrossprod(X, W))
+    },
+    I_min_Hii, sqrt_W,
+    SIMPLIFY = F
+  ))
+
   # denom part 2
   idx_combinations <- expand.grid(i = 1:length(K_mi), j = 1:length(HH_i))
-  idx_combinations <- idx_combinations[idx_combinations$i != idx_combinations$j,]
-  denom_p2         <- Reduce(`+`,
-                             mapply(function(i, j) {
-                               W  <- sqrt_W[[j]]
-                               K  <- K_mi[[i]]
-                               HH <- HH_i[[j]]
-                               kronecker(W, K) %*% kronecker(K, HH) %*% kronecker(HH, t(W))
-                               },idx_combinations$i, idx_combinations$j, SIMPLIFY = F)
-                             )
+  idx_combinations <- idx_combinations[idx_combinations$i != idx_combinations$j, ]
+  denom_p2 <- Reduce(
+    `+`,
+    mapply(function(i, j) {
+      W <- sqrt_W[[j]]
+      K <- K_mi[[i]]
+      HH <- HH_i[[j]]
+      kronecker(W, K) %*% kronecker(K, HH) %*% kronecker(HH, t(W))
+    }, idx_combinations$i, idx_combinations$j, SIMPLIFY = F)
+  )
   denom <- denom_p1 + denom_p2
-  #c
-  R_i   <- lapply(Z_i, function(Z){ks::vec(kronecker(Sigma_tilde, solve(crossprod(Z))))})
-  vec_c <- Reduce('+',mapply(function(W, IH, R){(kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% ks::vec(R)},
-                             sqrt_W, I_min_Hii, R_i, SIMPLIFY = F))
-  
-  
-  vec_D_tilde = solve(denom) %*% (vec_sb - vec_c)
+  # c
+  R_i <- lapply(Z_i, function(Z) {
+    ks::vec(kronecker(Sigma_tilde, solve(crossprod(Z))))
+  })
+  vec_c <- Reduce("+", mapply(
+    function(W, IH, R) {
+      (kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% ks::vec(R)
+    },
+    sqrt_W, I_min_Hii, R_i,
+    SIMPLIFY = F
+  ))
+
+
+  vec_D_tilde <- solve(denom) %*% (vec_sb - vec_c)
   ks::invvec(vec_D_tilde, sqrt(length(vec_D_tilde)))
 }
 
 calculate_stage2_varbeta <- function(K_mi, weights, Z_i, D_tilde, Sigma_tilde) {
-  var_beta_i     <- mapply(function(Z) {D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))},
-                           Z_i, SIMPLIFY = F)
+  var_beta_i <- mapply(
+    function(Z) {
+      D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))
+    },
+    Z_i,
+    SIMPLIFY = F
+  )
   var_beta_part1 <- calculate_inv_sum_KWK(K_mi, weights)
-  var_beta_part2 <- Reduce('+', mapply(function(K, W, VB) {crossprod(K, W) %*% VB %*% crossprod(W, K)},
-                                       K_mi, weights, var_beta_i, SIMPLIFY = F))
-  
+  var_beta_part2 <- Reduce("+", mapply(
+    function(K, W, VB) {
+      crossprod(K, W) %*% VB %*% crossprod(W, K)
+    },
+    K_mi, weights, var_beta_i,
+    SIMPLIFY = F
+  ))
+
   var_beta_part1 %*% var_beta_part2 %*% var_beta_part1
 }
 
 # Cluster-by-cluster estimator
-CbCEstimator <- function(mats, fit_args){
-  
+CbCEstimator <- function(mats, fit_args) {
   Z_i <- mats$Z
   Y_i <- mats$Y
   X_i <- mats$X
-  q   <- mats$q
-  p   <- mats$p
-  m   <- mats$m
+  q <- mats$q
+  p <- mats$p
+  m <- mats$m
   n_i <- mats$n_i
-  epsilon_D   <- fit_args$epsilon_D
+  epsilon_D <- fit_args$epsilon_D
   reweighting <- fit_args$reweighting
-  damping     <- fit_args$damping
-  if(reweighting) {
-    epsilon_B      <- fit_args$epsilon_B
-    convergence    <- epsilon_B + 1L
+  damping <- fit_args$damping
+  if (reweighting) {
+    epsilon_B <- fit_args$epsilon_B
+    convergence <- epsilon_B + 1L
     max_iterations <- fit_args$max_iterations
-    iterations     <- 1}
-  
-  
+    iterations <- 1
+  }
+
+
   stage1_results <- calculate_stage1_results(Z_i, Y_i, n_i, q)
-  
-  B_i        <- lapply(stage1_results, `[[`, "beta_hat")
-  beta_hats  <- lapply(B_i, ks::vec)
+
+  B_i <- lapply(stage1_results, `[[`, "beta_hat")
+  beta_hats <- lapply(B_i, ks::vec)
   Sigma_hats <- lapply(stage1_results, `[[`, "Sigma_hat")
-  
+
   # K matrix:
   K_i <- mapply(function(Z_i, X_i) {
     solve(crossprod(Z_i), crossprod(Z_i, X_i))
   }, Z_i, X_i, SIMPLIFY = FALSE)
-  K_mi <- lapply(K_i, function(K_i) {kronecker(diag(m), K_i)})
-  
-  #initial weights
-  total_obs <- Reduce('+', n_i)
-  w_i1      <- lapply(n_i, function(n) n / total_obs) #simple first proportional weights
-  W_i1      <- mapply(diag,w_i1,list(q*m),SIMPLIFY = FALSE)
-  denom     <- Reduce('+', lapply(n_i, function(x){x-q}))
-  w_i2      <- unlist(lapply(n_i, function(n) (n-q) / denom))
+  K_mi <- lapply(K_i, function(K_i) {
+    kronecker(diag(m), K_i)
+  })
 
-  #2nd stage calculations
-  beta_tilde  <- calculate_stage2_beta(K_mi, W_i1, beta_hats)
+  # initial weights
+  total_obs <- Reduce("+", n_i)
+  w_i1 <- lapply(n_i, function(n) n / total_obs) # simple first proportional weights
+  W_i1 <- mapply(diag, w_i1, list(q * m), SIMPLIFY = FALSE)
+  denom <- Reduce("+", lapply(n_i, function(x) {
+    x - q
+  }))
+  w_i2 <- unlist(lapply(n_i, function(n) (n - q) / denom))
+
+  # 2nd stage calculations
+  beta_tilde <- calculate_stage2_beta(K_mi, W_i1, beta_hats)
   Sigma_tilde <- calculate_stage2_Sigma(Sigma_hats, w_i2)
-  D_tilde     <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
-    #adjust D_tilde for positive definiteness
-  adjust_D_pd <- function(D_tilde, epsilon = 1e-6){
-    eig         <- eigen(D_tilde)
+  D_tilde <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
+  # adjust D_tilde for positive definiteness
+  adjust_D_pd <- function(D_tilde, epsilon = 1e-6) {
+    eig <- eigen(D_tilde)
     eigenvalues <- eig$values
     eigenvalues[eigenvalues < 0] <- epsilon
-    
+
     E <- diag(eigenvalues)
     L <- eig$vectors
-    
+
     L %*% tcrossprod(E, L)
   }
-  if(min(eigen(D_tilde,only.values = T)$values) < 0 ){
+  if (min(eigen(D_tilde, only.values = T)$values) < 0) {
     warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
-    D_tilde = adjust_D_pd(D_tilde, epsilon_D)
+    D_tilde <- adjust_D_pd(D_tilde, epsilon_D)
   }
   variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_i1, Z_i, D_tilde, Sigma_tilde)
-  #Reweighting
-  
-  if(reweighting){
-    while(convergence > epsilon_B && iterations <= max_iterations){
+  # Reweighting
 
+  if (reweighting) {
+    while (convergence > epsilon_B && iterations <= max_iterations) {
       beta_tilde_ori <- beta_tilde
-      var_beta_i     <- mapply(function(Z) {D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))},Z_i, SIMPLIFY = F)
-      inv_Sum_V_i    <- solve(Reduce('+',lapply(var_beta_i, solve)))
-      W_opt_1i       <- lapply(var_beta_i, function(V){inv_Sum_V_i %*% solve(V)})
+      var_beta_i <- mapply(function(Z) {
+        D_tilde + kronecker(Sigma_tilde, solve(crossprod(Z)))
+      }, Z_i, SIMPLIFY = F)
+      inv_Sum_V_i <- solve(Reduce("+", lapply(var_beta_i, solve)))
+      W_opt_1i <- lapply(var_beta_i, function(V) {
+        inv_Sum_V_i %*% solve(V)
+      })
 
       beta_tilde_new <- calculate_stage2_beta(K_mi, W_opt_1i, beta_hats)
-      beta_tilde     <- damping * beta_tilde_new + (1 - damping) * beta_tilde_ori
-      D_tilde        <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
-          #note: optimal weights are for beta's only, keep original weights for D_tilde
-      
-      if(min(eigen(D_tilde,only.values = T)$values) < 0 ){
+      beta_tilde <- damping * beta_tilde_new + (1 - damping) * beta_tilde_ori
+      D_tilde <- calculate_stage2_Dmatrix(K_mi, W_i1, Z_i, beta_hats, beta_tilde, Sigma_tilde)
+      # note: optimal weights are for beta's only, keep original weights for D_tilde
+
+      if (min(eigen(D_tilde, only.values = T)$values) < 0) {
         warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
-        D_tilde = adjust_D_pd(D_tilde, epsilon_D)
+        D_tilde <- adjust_D_pd(D_tilde, epsilon_D)
       }
       variance_beta_tilde <- calculate_stage2_varbeta(K_mi, W_opt_1i, Z_i, D_tilde, Sigma_tilde)
-      
+
       convergence <- max(abs(beta_tilde_ori - beta_tilde))
-      iterations  <- iterations + 1
+      iterations <- iterations + 1
     }
-    if(convergence > epsilon_B) {
+    if (convergence > epsilon_B) {
       warning(paste("Convergence of beta parameters not reached.
                     Maximal absolute difference:", convergence, " > ", epsilon_B))
-      }
+    }
   }
 
   # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma (3) Estimates D,
   # and (4) variance of estimates for fixed effects
-  list(beta_tilde          = beta_tilde,
-       Sigma_tilde         = Sigma_tilde,
-       D_tilde             = D_tilde,
-       variance_beta_tilde = variance_beta_tilde,
-       iterations          = if (reweighting) iterations - 1 else 0)
-
+  list(
+    beta_tilde = beta_tilde,
+    Sigma_tilde = Sigma_tilde,
+    D_tilde = D_tilde,
+    variance_beta_tilde = variance_beta_tilde,
+    iterations = if (reweighting) iterations - 1 else 0
+  )
 }
 
 
@@ -683,8 +743,8 @@ CbCEstimator <- function(mats, fit_args){
 #'   \code{var_b1}.
 
 fit_closed_form <- function(
-    long_data,
-    fit_args = set_fit_args()
+  long_data,
+  fit_args = set_fit_args()
 ) {
   if (!is.data.frame(long_data)) {
     stop("'long_data' must be a data.frame.")
@@ -695,9 +755,9 @@ fit_closed_form <- function(
 
 
 ## Fit MI closed form -------------------------------------------------------------------------------
-fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args = set_fit_args()){
+fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args = set_fit_args()) {
   warning_messages <- character(0)
-  error_message    <- NULL
+  error_message <- NULL
   start_time <- proc.time()[["elapsed"]]
   # Stacking the m imputations into one long-format fit (clustered by subject_id)
   # is intentional; see stacked_variance_inflation in set_fit_args() to correct
@@ -732,14 +792,12 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
     warnings = unique(warning_messages),
     error_message = error_message
   )
-
-
 }
 
 ## Fit closed form + reweighting---------------------------------------------------------------------
-fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()){
+fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
   warning_messages <- character(0)
-  error_message    <- NULL
+  error_message <- NULL
   start_time <- proc.time()[["elapsed"]]
   fit <- withCallingHandlers(
     tryCatch(
@@ -757,15 +815,13 @@ fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()){
     }
   )
   elapsed_seconds <- proc.time()[["elapsed"]] - start_time
-  
+
   list(
     fit = fit,
     elapsed_seconds = as.numeric(elapsed_seconds),
     warnings = unique(warning_messages),
     error_message = error_message
   )
-  
-  
 }
 
 ## Fit classical ML model ------------------------------------------------------------------------------------------
@@ -784,7 +840,7 @@ fit_classical_ml_model <- function(data, formula = build_formula()) {
   warning_messages <- character(0)
   error_message <- NULL
   start_time <- proc.time()[["elapsed"]]
-  
+
   fit <- withCallingHandlers(
     tryCatch(
       lme4::lmer(formula = formula, data = data, REML = FALSE),
@@ -798,14 +854,14 @@ fit_classical_ml_model <- function(data, formula = build_formula()) {
       invokeRestart("muffleWarning")
     }
   )
-  
+
   elapsed_seconds <- proc.time()[["elapsed"]] - start_time
-  
+
   optimizer_messages <- character(0)
   if (!is.null(fit) && !is.null(fit@optinfo$conv$lme4$messages)) {
     optimizer_messages <- fit@optinfo$conv$lme4$messages
   }
-  
+
   list(
     fit = fit,
     formula = formula,
@@ -830,30 +886,29 @@ is_singular <- function(cov_matrix, tol) {
 
 classify_fit_status <- function(fit_result, singular_tol = 1e-06,
                                 type = c("classical_ml", "imputation", "reweighting", "LSPIM")) {
-  
-  #TODO fix implementaiton
-  if(type == "LSPIM"){
+  # TODO fix implementaiton
+  if (type == "LSPIM") {
     return("success")
   }
-  
+
   if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) {
     return("failure")
   }
-  
-  if (type == "classical_ml"){
-    if(lme4::isSingular(fit_result$fit, tol = singular_tol)){
+
+  if (type == "classical_ml") {
+    if (lme4::isSingular(fit_result$fit, tol = singular_tol)) {
       return("singular_fit")
     }
-  } 
-  if (type == "imputation"| type == "reweighting"){#only works ad hoc #TODO generalize for any RE covariance matrix
+  }
+  if (type == "imputation" | type == "reweighting") { # only works ad hoc #TODO generalize for any RE covariance matrix
     if (is_singular(matrix(fit_result$fit[c("var_b0", "cov_b0b1", "cov_b0b1", "var_b1")], nrow = 2),
-                    tol = singular_tol)){
+      tol = singular_tol
+    )) {
       return("singular_fit")
     }
   }
   "success"
 }
-
 
 
 # Results extraction ------------------------------------------------------------------------------------------------
@@ -870,14 +925,14 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
 #' @return One-row data frame for the fitted simulation replicate.
 
 extract_classical_ml_results <- function(
-    fit_result,
-    original_data,
-    analysis_data,
-    method = "classical_ml",
-    engine = "lme4"
+  fit_result,
+  original_data,
+  analysis_data,
+  method = "classical_ml",
+  engine = "lme4"
 ) {
-  metadata        <- collect_analysis_metadata(original_data)
-  status          <- classify_fit_status(fit_result, type = method)
+  metadata <- collect_analysis_metadata(original_data)
+  status <- classify_fit_status(fit_result, type = method)
   warning_message <- if (length(fit_result$warnings) > 0L) {
     paste(fit_result$warnings, collapse = " | ")
   } else {
@@ -920,23 +975,23 @@ extract_classical_ml_results <- function(
 }
 
 extract_closed_form_results <- function(
-    fit_result,
-    original_data,
-    analysis_data,
-    method = c("multiple_imputation", "reweighting"),
-    engine = "mice_cbc",
-    fit_type = c("imputation", "reweighting")
+  fit_result,
+  original_data,
+  analysis_data,
+  method = c("multiple_imputation", "reweighting"),
+  engine = "mice_cbc",
+  fit_type = c("imputation", "reweighting")
 ) {
   fit_type <- match.arg(fit_type)
   metadata <- collect_analysis_metadata(original_data)
-  
+
   status <- classify_fit_status(fit_result, type = fit_type)
   warning_message <- if (length(fit_result$warnings) > 0L) {
     paste(fit_result$warnings, collapse = " | ")
   } else {
     NA_character_
   }
-  
+
   result_row <- build_result_row(
     metadata        = metadata,
     method          = method,
@@ -948,7 +1003,7 @@ extract_closed_form_results <- function(
     warning_message = warning_message,
     error_message   = if (is.null(fit_result$error_message)) NA_character_ else fit_result$error_message
   )
-  
+
   if (status == "failure") {
     return(result_row)
   }
@@ -958,11 +1013,11 @@ extract_closed_form_results <- function(
 }
 
 extract_LSPIM_results <- function(
-    fit_result,
-    original_data,
-    analysis_data,
-    method = "LSPIM",
-    engine = "LSPIM"
+  fit_result,
+  original_data,
+  analysis_data,
+  method = "LSPIM",
+  engine = "LSPIM"
 ) {
   metadata <- collect_analysis_metadata(original_data)
   status <- if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) "failure" else "success"
@@ -971,7 +1026,7 @@ extract_LSPIM_results <- function(
   } else {
     NA_character_
   }
-  
+
   result_row <- build_result_row(
     metadata        = metadata,
     method          = method,
@@ -983,7 +1038,7 @@ extract_LSPIM_results <- function(
     warning_message = warning_message,
     error_message   = if (is.null(fit_result$error_message)) NA_character_ else fit_result$error_message
   )
-  
+
   if (status == "failure") {
     return(result_row)
   }

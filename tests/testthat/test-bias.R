@@ -3,7 +3,7 @@
 test_that("compute_bias_summary returns signed bias, not absolute or mean error", {
   df <- data.frame(
     scenario_id = c(1, 1, 1, 2, 2),
-    method      = c("m", "m", "m", "m", "m"),
+    method = c("m", "m", "m", "m", "m"),
     estimate_beta0 = c(1, 3, NA, 5, 5),
     estimate_beta1 = c(1, 3, NA, 5, 5),
     estimate_beta2 = c(1, 3, NA, 5, 5),
