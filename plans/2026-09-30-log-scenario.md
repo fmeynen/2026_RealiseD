@@ -115,7 +115,7 @@ Ground rules:
     missing-column error; the exact set of output columns.
   - Golden: allowlist the aggregation summary's new column, then regenerate.
 
-- [ ] **4. Add the log scenarios to `run_all.R`.**
+- [x] **4. Add the log scenarios to `run_all.R`.**
   - Keep the linear `build_scenario_grid()` call as it is. Build the log crossing grid and the
     log null grid with the expressions from the parameter table, and bind the three grids.
   - Test: the bound grid has 24 rows, ids 1-16 equal the linear-only grid, and ids 17-24 are
