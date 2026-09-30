@@ -83,7 +83,7 @@ Ground rules:
     and keeps the first grid's ids.
   - Hand-built grids in other tests get the column where validation now requires it.
 
-- [ ] **2. Log time transform in the generator.**
+- [x] **2. Log time transform in the generator.**
   - Add a helper (e.g. `transform_time(time_value, time_trend)`) returning `time_value` for
     `"linear"` and `log1p(time_value)` for `"log"`, and stopping on anything else.
   - `compute_linear_predictor()` gets a `time_trend = "linear"` argument and uses the transformed
@@ -100,7 +100,7 @@ Ground rules:
       t = 11, negative at t = 2 and positive at t = 3.
     - The random-slope contribution at t = 11 has the same variance under the rescaled log
       parameters as under the linear parameters (analytic check on `d22 * f(11)^2`).
-  - Golden: allowlist only hash columns and the new `time_trend` column, then regenerate.
+  - Golden: `compare_golden.R` reported no differences, so the fixture was not regenerated.
 
 - [ ] **3. Aggregation: NA accuracy and coverage for log scenarios.**
   - Add `time_trend` to the design columns, after `sigma2`.
