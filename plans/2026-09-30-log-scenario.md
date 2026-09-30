@@ -102,7 +102,7 @@ Ground rules:
       parameters as under the linear parameters (analytic check on `d22 * f(11)^2`).
   - Golden: `compare_golden.R` reported no differences, so the fixture was not regenerated.
 
-- [ ] **3. Aggregation: NA accuracy and coverage for log scenarios.**
+- [x] **3. Aggregation: NA accuracy and coverage for log scenarios.**
   - Add `time_trend` to the design columns, after `sigma2`.
   - `validate_aggregation_inputs()` stops with a clear message when the scenario metadata has no
     `time_trend`.
