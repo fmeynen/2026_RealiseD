@@ -3,14 +3,16 @@
 # "research_question/meeting_notes/programming_planning.qmd".
 #
 # Mixed model:
-#   y_ij is beta0 + beta1*T_i + beta2*t_ij + beta3*T_i*t_ij + b0_i + b1_i*t_ij + epsilon_ij
+#   y_ij is beta0 + beta1*T_i + beta2*f(t_ij) + beta3*T_i*f(t_ij) + b0_i + b1_i*f(t_ij) + epsilon_ij
+#   with f(t) = t for time_trend "linear" and f(t) = log(1 + t) for time_trend "log". The fixed slope
+#   terms and the random slope both act on f(t). The stored time_value is always the raw time t.
 #
 # Canonical output format (long):
 #   sim_id, scenario_id, subject_id, treatment, time_value, y, observed
 #   (optional diagnostics: y_complete, eta_ij, epsilon_ij, dropout_time)
 #
 # Function hierarchy:
-#   build_scenario_grid, validate_scenario_grid
+#   build_scenario_grid, bind_scenario_grids, validate_scenario_grid
 #   scenario_rng_stream, replicate_rng_states, with_rng_state
 #   simulate_scenario
 #     simulate_one_dataset
@@ -19,6 +21,7 @@
 #       generate_random_effects
 #       expand_subject_time_panel
 #       compute_linear_predictor
+#         transform_time
 #       generate_residual_errors
 #       generate_outcomes
 #       generate_dropout_process
@@ -52,6 +55,8 @@
 #'   'half_missing', 'three_obs_minimum', 'fixed_rate', or NA/NULL (default) to derive
 #'   the mechanism from dropout_rate at generation time (see simulate_one_dataset()).
 #' @param dropout_rate_values Numeric vector. Per-visit dropout probabilities.
+#' @param time_trend          String vector. Shape of the time trend: 'linear' (default) or 'log'.
+#'   It is the last factor of the grid, so grids without it keep their scenario ids and row order.
 #' @param seed_base           Integer. Global base seed, stored unchanged on every row. It seeds a
 #'   master L'Ecuyer-CMRG stream from which each scenario derives its own non-overlapping
 #'   streams (one for data generation, one for analysis); replicate b uses substream b of
@@ -73,6 +78,7 @@ build_scenario_grid <- function(
   sigma2_values = 1,
   dropout_mechanism = NULL,
   dropout_rate_values = 0,
+  time_trend = "linear",
   seed_base
 ) {
   if (is.null(dropout_mechanism)) {
@@ -91,11 +97,43 @@ build_scenario_grid <- function(
     sigma2 = sigma2_values,
     dropout_mechanism = dropout_mechanism,
     dropout_rate = dropout_rate_values,
+    time_trend = time_trend,
     stringsAsFactors = FALSE
   )
   grid$scenario_id <- seq_len(nrow(grid))
   grid$seed_base <- rep(as.integer(seed_base), nrow(grid))
   grid[, c("scenario_id", "seed_base", setdiff(names(grid), c("scenario_id", "seed_base")))]
+}
+
+
+## Bind Scenario Grids ---------------------------------------------------------------------------------------------
+
+#' Row-bind scenario grids and renumber the scenario ids.
+#'
+#' Combines two or more grids as returned by build_scenario_grid() in the order given and
+#' renumbers scenario_id to 1..N. The first grid therefore keeps its original ids when they
+#' were 1..n. Stops if the grids differ in their set of columns or do not share one seed_base.
+#'
+#' @param ... Two or more data frames as returned by build_scenario_grid().
+#'
+#' @return Data frame with the rows of all grids, scenario_id running from 1 to N and the
+#'   column order of the first grid.
+
+bind_scenario_grids <- function(...) {
+  grids <- list(...)
+  if (length(grids) < 2) stop("bind_scenario_grids() needs at least two grids.")
+  first_cols <- names(grids[[1]])
+  for (grid in grids[-1]) {
+    if (!setequal(names(grid), first_cols) || anyDuplicated(names(grid))) {
+      stop("All grids must have the same set of columns.")
+    }
+  }
+  seeds <- unique(unlist(lapply(grids, function(grid) grid$seed_base)))
+  if (length(seeds) != 1) stop("All grids must share one single seed_base value.")
+  combined <- do.call(rbind, lapply(grids, function(grid) grid[, first_cols, drop = FALSE]))
+  combined$scenario_id <- seq_len(nrow(combined))
+  rownames(combined) <- NULL
+  combined
 }
 
 
@@ -116,11 +154,20 @@ validate_scenario_grid <- function(scenario_grid) {
     "scenario_id", "seed_base", "n", "n_measures",
     "beta0", "beta1", "beta2", "beta3",
     "d11", "d22", "d12",
-    "sigma2", "dropout_rate"
+    "sigma2", "dropout_rate", "time_trend"
   )
   missing_cols <- setdiff(required_cols, names(scenario_grid))
   if (length(missing_cols) > 0) {
     stop("scenario_grid is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+  allowed_trends <- c("linear", "log")
+  if (anyNA(scenario_grid$time_trend)) stop("time_trend must not contain missing values.")
+  invalid_trends <- setdiff(unique(scenario_grid$time_trend), allowed_trends)
+  if (length(invalid_trends) > 0) {
+    stop(
+      "time_trend must be one of: ", paste(allowed_trends, collapse = ", "),
+      ". Found invalid value(s): ", paste(invalid_trends, collapse = ", ")
+    )
   }
   if (anyNA(scenario_grid$seed_base)) stop("seed_base must not contain missing values.")
   if (!is.numeric(scenario_grid$seed_base) && !is.integer(scenario_grid$seed_base)) {
@@ -274,30 +321,62 @@ expand_subject_time_panel <- function(subjects, time_grid, scenario_id, sim_id) 
 }
 
 
+## Transform time --------------------------------------------------------------------------------------------------
+
+#' Apply the time trend f(t) used inside the linear predictor.
+#'
+#' f(t) = t for 'linear' and f(t) = log(1 + t) for 'log'. The transform is used only inside
+#' compute_linear_predictor(); the stored time_value column keeps the raw time.
+#'
+#' @param time_value Numeric vector. Raw time values.
+#' @param time_trend String. Shape of the time trend: 'linear' or 'log'.
+#'
+#' @return Numeric vector of the same length as time_value: time_value itself (unchanged) for
+#'   'linear', log1p(time_value) for 'log'. Stops on any other time_trend.
+
+transform_time <- function(time_value, time_trend) {
+  if (!is.character(time_trend) || length(time_trend) != 1L || is.na(time_trend)) {
+    stop("'time_trend' must be a single non-missing string: 'linear' or 'log'.")
+  }
+  if (time_trend == "linear") {
+    return(time_value)
+  }
+  if (time_trend == "log") {
+    return(log1p(time_value))
+  }
+  stop("Unknown time_trend: '", time_trend, "'. Use 'linear' or 'log'.")
+}
+
+
 ## Compute linear predictor ----------------------------------------------------------------------------------------
 
 #' Compute the linear predictor eta_ij from the mixed model mean structure.
 #'
-#' Model: eta_ij = beta0 + beta1*T_i + beta2*t_ij + beta3*T_i*t_ij
-#'                + b0_i + b1_i*t_ij
+#' Model: eta_ij = beta0 + beta1*T_i + beta2*f(t_ij) + beta3*T_i*f(t_ij)
+#'                + b0_i + b1_i*f(t_ij)
+#' with f(t) = t for time_trend = 'linear' and f(t) = log(1 + t) for time_trend = 'log'
+#' (see transform_time()). The fixed slope terms and the random slope all act on f(t).
 #'
 #' @param panel A long-format data frame containing at least:
 #'   treatment, time_value, b0_i, b1_i.
 #' @param beta0 Numeric. Intercept.
 #' @param beta1 Numeric. Main effect of treatment.
-#' @param beta2 Numeric. Main effect of time.
-#' @param beta3 Numeric. Time-by-treatment interaction.
+#' @param beta2 Numeric. Main effect of (transformed) time.
+#' @param beta3 Numeric. (Transformed) time-by-treatment interaction.
+#' @param time_trend String. Shape of the time trend: 'linear' (default) or 'log'.
 #'
-#' @return The same data frame with an additional column eta_ij.
+#' @return The same data frame with an additional column eta_ij. The time_value column is
+#'   left as the raw time.
 
-compute_linear_predictor <- function(panel, beta0, beta1, beta2, beta3) {
+compute_linear_predictor <- function(panel, beta0, beta1, beta2, beta3, time_trend = "linear") {
+  time_f <- transform_time(panel$time_value, time_trend)
   panel$eta_ij <- (
     beta0
     + beta1 * panel$treatment
-    + beta2 * panel$time_value
-    + beta3 * panel$treatment * panel$time_value
+    + beta2 * time_f
+    + beta3 * panel$treatment * time_f
     + panel$b0_i
-    + panel$b1_i * panel$time_value
+    + panel$b1_i * time_f
   )
   panel
 }
@@ -637,7 +716,8 @@ simulate_one_dataset <- function(scenario_row, sim_id, rng_state = NULL, ...) {
     beta0 = scenario_row$beta0,
     beta1 = scenario_row$beta1,
     beta2 = scenario_row$beta2,
-    beta3 = scenario_row$beta3
+    beta3 = scenario_row$beta3,
+    time_trend = scenario_row$time_trend
   )
   epsilon <- generate_residual_errors(nrow(panel), scenario_row$sigma2)
   panel <- generate_outcomes(panel, epsilon)

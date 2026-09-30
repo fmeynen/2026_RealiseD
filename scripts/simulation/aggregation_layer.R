@@ -4,10 +4,14 @@
 #
 # Consumes the scenario-wise combined convenience analysis artifact and returns per-scenario x per-method
 # summary statistics (one row per scenario_id x method[, engine]):
-#   - Design columns of the scenario (n, n_measures, beta0..beta3, d11, d22, d12, sigma2, dropout_*)
+#   - Design columns of the scenario (n, n_measures, beta0..beta3, d11, d22, d12, sigma2, time_trend, dropout_*)
 #   - Convergence status counts and proportions
 #   - MSE for beta0..beta3 (NA for methods that do not estimate them) and the number of estimated fits
 #   - Wald CI coverage for beta3 at level 1 - alpha, where alpha is read from interaction_alpha
+#   - MSE and coverage are NA (n_coverage_beta3 = 0) for scenarios with time_trend == "log": the parametric
+#     methods fit a model linear in time, so their estimates have no true value to be compared with (the
+#     scenario's beta2 / beta3 are coefficients on log(1 + t)). Type I error and power are decisions and are
+#     reported as for the linear scenarios
 #   - Type I error (true beta3 == 0) or power (true beta3 != 0) of the interaction test, computed the
 #     same way for every method; the metric that does not apply to a group is NA with a count of 0
 #   - Mean and median computation time
@@ -22,8 +26,10 @@
 #     extract_interaction_alpha
 #     compute_convergence_summary
 #     compute_accuracy_summary
+#       is_log_trend_group
 #     compute_time_summary
 #     compute_coverage_summary
+#       is_log_trend_group
 #     compute_testing_summary
 #     merge_aggregation_summaries
 
@@ -43,8 +49,11 @@ convergence_status_levels <- c(
 # left out of the aggregation table.
 design_columns <- c(
   "n", "n_measures", "beta0", "beta1", "beta2", "beta3",
-  "d11", "d22", "d12", "sigma2", "dropout_mechanism", "dropout_rate"
+  "d11", "d22", "d12", "sigma2", "time_trend", "dropout_mechanism", "dropout_rate"
 )
+
+# Values of the scenario's time_trend column recognised by the aggregation.
+time_trend_levels <- c("linear", "log")
 
 
 # Validation -------------------------------------------------------------------------------------------------------
@@ -56,19 +65,24 @@ design_columns <- c(
 #' (results from before the unified interaction decision, which must be
 #' rerun) or when the results contain more than one distinct interaction_alpha.
 #' Warns (does not stop) when all elapsed_seconds values are missing. If beta
-#' truth columns (beta0..beta3) are absent from results_df, they are joined
-#' from scenarios_df by scenario_id.
+#' truth columns (beta0..beta3) or the time_trend design column are absent from
+#' results_df, they are joined from scenarios_df by scenario_id. Stops when
+#' neither results_df nor scenarios_df has a time_trend column (scenarios from
+#' before the time_trend design column), or when time_trend is missing or not
+#' "linear" / "log" on any row.
 #'
 #' @param results_df   Data frame of simulation results as stored in the
 #'   combined analysis artifact (combined$results).
 #' @param scenarios_df Data frame of scenario metadata (combined$scenarios), used
-#'   as a fallback source for true beta values when those columns are absent
-#'   from results_df. May be NULL when all beta columns are already present.
+#'   as a fallback source for the true beta values and time_trend when those
+#'   columns are absent from results_df. May be NULL when they are all already
+#'   present.
 #' @param include_engine Logical. Whether engine is part of the grouping key
 #'   (default FALSE).
 #'
-#' @return results_df, possibly enriched with beta truth columns joined from
-#'   scenarios_df. Stops with an informative message on hard failures.
+#' @return results_df, possibly enriched with beta truth columns and time_trend
+#'   joined from scenarios_df. Stops with an informative message on hard
+#'   failures.
 
 validate_aggregation_inputs <- function(results_df, scenarios_df = NULL, include_engine = FALSE) {
   if (is.null(results_df) || nrow(results_df) == 0L) {
@@ -100,7 +114,7 @@ validate_aggregation_inputs <- function(results_df, scenarios_df = NULL, include
   }
   extract_interaction_alpha(results_df)
 
-  # Join true beta values from scenarios if absent from results.
+  # True beta values are joined from scenarios if absent from results.
   beta_truth_cols <- c("beta0", "beta1", "beta2", "beta3")
   missing_betas <- setdiff(beta_truth_cols, names(results_df))
   if (length(missing_betas) > 0L) {
@@ -117,9 +131,37 @@ validate_aggregation_inputs <- function(results_df, scenarios_df = NULL, include
         paste(missing_scenario_betas, collapse = ", ")
       )
     }
-    join_cols <- c("scenario_id", intersect(missing_betas, names(scenarios_df)))
-    results_df <- merge(results_df, scenarios_df[, join_cols, drop = FALSE],
+  }
+
+  # time_trend gates the accuracy and coverage summaries; it comes from the scenarios like the true betas.
+  needs_time_trend <- !"time_trend" %in% names(results_df)
+  if (needs_time_trend && !"time_trend" %in% names(scenarios_df)) {
+    stop(
+      "Neither results_df nor scenarios_df has a 'time_trend' column. These scenarios predate the time_trend ",
+      "design column; rebuild the scenario grid and rerun before aggregating."
+    )
+  }
+
+  # One join for every truth / design column that results_df lacks.
+  join_cols <- c(missing_betas, if (needs_time_trend) "time_trend")
+  if (length(join_cols) > 0L) {
+    results_df <- merge(results_df, scenarios_df[, c("scenario_id", join_cols), drop = FALSE],
       by = "scenario_id", all.x = TRUE, sort = FALSE
+    )
+  }
+
+  if (anyNA(results_df$time_trend)) {
+    stop(
+      "time_trend is missing (NA) for scenario_id: ",
+      paste(sort(unique(results_df$scenario_id[is.na(results_df$time_trend)])), collapse = ", "),
+      ". Every scenario in results_df needs a time_trend."
+    )
+  }
+  invalid_trends <- setdiff(unique(as.character(results_df$time_trend)), time_trend_levels)
+  if (length(invalid_trends) > 0L) {
+    stop(
+      "time_trend must be one of: ", paste(time_trend_levels, collapse = ", "),
+      ". Found: ", paste(invalid_trends, collapse = ", ")
     )
   }
 
@@ -186,6 +228,11 @@ column_or_na <- function(grp, name) {
   if (name %in% names(grp)) grp[[name]] else rep(NA_real_, nrow(grp))
 }
 
+# TRUE when the group's scenario has a logarithmic time trend. time_trend is constant within a group.
+is_log_trend_group <- function(grp) {
+  identical(as.character(grp$time_trend[1L]), "log")
+}
+
 # Row-binds a list of per-group lists into a data frame.
 bind_group_rows <- function(rows) {
   out <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
@@ -246,8 +293,12 @@ compute_convergence_summary <- function(results_df, group_cols) {
 #' example LSPIM, which does not estimate the betas). n_estimated counts the
 #' replicates with a non-missing estimate_beta3.
 #'
+#' For a group with time_trend == "log" every MSE is NA: the estimates come from
+#' a model linear in time and have no true value to be compared with.
+#' n_estimated is counted as for the linear groups.
+#'
 #' @param results_df Data frame of simulation results (validated, with beta
-#'   truth columns present).
+#'   truth columns and time_trend present).
 #' @param group_cols Character vector of grouping column names.
 #'
 #' @return Data frame with one row per group and columns:
@@ -257,13 +308,14 @@ compute_accuracy_summary <- function(results_df, group_cols) {
   groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
 
   rows <- lapply(groups, function(grp) {
+    is_log <- is_log_trend_group(grp)
     mse_parts <- list()
 
     for (k in 0:3) {
       est <- column_or_na(grp, paste0("estimate_beta", k))
       true <- grp[[paste0("beta", k)]]
 
-      eligible <- !is.na(est) & !is.na(true)
+      eligible <- !is_log & !is.na(est) & !is.na(true)
       mse_parts[[paste0("mse_beta", k)]] <- if (any(eligible)) {
         mean((est[eligible] - true[eligible])^2)
       } else {
@@ -320,8 +372,12 @@ compute_time_summary <- function(results_df, group_cols) {
 #' z = qnorm(1 - alpha / 2) gives a Wald interval at level 1 - alpha. Replicates
 #' with a missing estimate, standard error or true value are not eligible.
 #'
+#' For a group with time_trend == "log" no replicate is eligible: coverage_beta3
+#' is NA and n_coverage_beta3 is 0, because the beta3 of a model linear in time
+#' has no true value to be covered.
+#'
 #' @param results_df Data frame of simulation results (validated, with beta3
-#'   truth column present).
+#'   truth column and time_trend present).
 #' @param group_cols Character vector of grouping column names.
 #' @param alpha Numeric in (0, 1), or NA_real_ when the data hold no alpha; the
 #'   coverage is then NA with n_coverage_beta3 = 0.
@@ -339,7 +395,7 @@ compute_coverage_summary <- function(results_df, group_cols, alpha) {
     se <- column_or_na(grp, "se_beta3")
     true <- grp$beta3
 
-    eligible <- !is.na(est) & !is.na(se) & !is.na(true) & !is.na(z)
+    eligible <- !is_log_trend_group(grp) & !is.na(est) & !is.na(se) & !is.na(true) & !is.na(z)
     covered <- abs(est[eligible] - true[eligible]) <= z * se[eligible]
     n_coverage <- sum(eligible)
 
@@ -442,7 +498,8 @@ merge_aggregation_summaries <- function(
 #'
 #' Orchestrates the full aggregation pipeline:
 #'   1. Extract results and (optionally) scenarios from the input object.
-#'   2. Validate inputs and join true-beta columns from scenarios when absent.
+#'   2. Validate inputs and join true-beta columns and time_trend from
+#'      scenarios when absent.
 #'   3. Compute convergence, accuracy, coverage, testing, and time summaries
 #'      per group.
 #'   4. Merge summaries into a single tidy table and add the scenario design
@@ -450,7 +507,9 @@ merge_aggregation_summaries <- function(
 #'   5. Return a list with the summary table and provenance metadata.
 #'
 #' The Wald CI level is 1 - alpha, with alpha read from the results'
-#' interaction_alpha (one value shared by all methods).
+#' interaction_alpha (one value shared by all methods). Groups whose scenario
+#' has time_trend == "log" get NA for mse_beta0..mse_beta3 and coverage_beta3
+#' (n_coverage_beta3 = 0); their type I error and power are reported as usual.
 #'
 #' @param results_obj  Combined analysis artifact as returned by
 #'   save_combined_convenience_artifact() (see artifact_store.R) or loaded
@@ -477,7 +536,7 @@ merge_aggregation_summaries <- function(
 #' # combined <- readRDS(build_analysis_combined_convenience_path(analysis_run_hash))
 #' # agg <- aggregate_results(combined)
 #' # str(agg$summary)
-#' # agg$meta$aggregation_schema_version  # "v5"
+#' # agg$meta$aggregation_schema_version  # "v6"
 #' #
 #' # -- Include engine as an extra grouping column --
 #' # agg_eng <- aggregate_results(combined, include_engine = TRUE)

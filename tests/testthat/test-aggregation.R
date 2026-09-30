@@ -4,7 +4,8 @@
 # same columns for LSPIM and the parametric methods), the testing eligibility
 # rule (failures out, singular / non-converged fits in), hand-computed MSE,
 # coverage at the alpha found in the data, the two hard errors for old or
-# inconsistent results, and the design-only merge of the scenario columns.
+# inconsistent results, the design-only merge of the scenario columns, and the
+# time_trend rule (NA MSE and coverage for "log" scenarios, testing unchanged).
 
 # Scenario 1 has beta3 == 0 (null), scenario 2 beta3 == 0.5 (alternative). The
 # scenarios carry non-design columns (seed_base, scenario_note) that must not
@@ -23,10 +24,29 @@ build_agg_scenarios <- function() {
     d22 = c(1, 1),
     d12 = c(0, 0),
     sigma2 = c(1, 1),
+    time_trend = c("linear", "linear"),
     dropout_mechanism = c("none", "none"),
     dropout_rate = c(0, 0),
     scenario_note = c("a", "b"),
     stringsAsFactors = FALSE
+  )
+}
+
+# The linear artifact plus two "log" scenarios that repeat the classical_ml replicates of scenarios 1 and 2:
+# scenario 3 is a log null (beta3 == 0), scenario 4 a log alternative (beta3 == 0.5).
+build_agg_log_artifact <- function() {
+  artifact <- build_agg_artifact()
+
+  log_scenarios <- artifact$scenarios
+  log_scenarios$scenario_id <- c(3L, 4L)
+  log_scenarios$time_trend <- "log"
+
+  log_results <- artifact$results[artifact$results$method == "classical_ml", ]
+  log_results$scenario_id <- log_results$scenario_id + 2L
+
+  list(
+    results = rbind(artifact$results, log_results),
+    scenarios = rbind(artifact$scenarios, log_scenarios)
   )
 }
 
@@ -111,7 +131,7 @@ test_that("the summary has exactly the documented columns in the documented orde
     c(
       "scenario_id", "method",
       "n", "n_measures", "beta0", "beta1", "beta2", "beta3", "d11", "d22", "d12", "sigma2",
-      "dropout_mechanism", "dropout_rate",
+      "time_trend", "dropout_mechanism", "dropout_rate",
       "n_total", "prop_converged_ok", "prop_converged_warning", "prop_converged_singular",
       "prop_not_converged", "prop_error",
       "n_estimated", "mse_beta0", "mse_beta1", "mse_beta2", "mse_beta3",
@@ -288,10 +308,10 @@ test_that("results with more than one distinct interaction_alpha stop", {
   expect_error(aggregate_results(artifact), "more than one distinct interaction_alpha")
 })
 
-test_that("meta records alpha and the v5 schema version, and ci_level is gone", {
+test_that("meta records alpha and the v6 schema version, and ci_level is gone", {
   agg <- aggregate_results(build_agg_artifact())
 
-  expect_identical(agg$meta$aggregation_schema_version, "v5")
+  expect_identical(agg$meta$aggregation_schema_version, "v6")
   expect_identical(agg$meta$group_cols, c("scenario_id", "method"))
   expect_identical(agg$meta$alpha, 0.05)
   expect_s3_class(agg$meta$timestamp, "POSIXct")
@@ -305,6 +325,106 @@ test_that("the true-beta fallback join from scenarios still works", {
   agg <- aggregate_results(artifact)
 
   expect_equal(agg_row(agg, 2L, "classical_ml")$power, 0.75)
+})
+
+test_that("a log alternative group gets NA MSE and coverage but keeps n_estimated and power", {
+  artifact <- build_agg_log_artifact()
+  agg <- aggregate_results(artifact)
+  row <- agg_row(agg, 4L, "classical_ml")
+
+  # The group has four estimates with standard errors, so the NAs come from the time_trend rule alone.
+  rows <- artifact$results[artifact$results$scenario_id == 4L, ]
+  expect_false(anyNA(rows$estimate_beta3))
+  expect_false(anyNA(rows$se_beta3))
+
+  expect_identical(row$time_trend, "log")
+  expect_true(all(is.na(row[paste0("mse_beta", 0:3)])))
+  expect_true(is.na(row$coverage_beta3))
+  expect_identical(row$n_coverage_beta3, 0L)
+  expect_identical(row$n_estimated, 4L)
+  expect_equal(row$power, 0.75)
+  expect_identical(row$n_power, 4L)
+  expect_true(is.na(row$type1_error))
+  expect_identical(row$n_type1_error, 0L)
+})
+
+test_that("a log null group gets NA MSE and coverage but keeps type1_error", {
+  agg <- aggregate_results(build_agg_log_artifact())
+  row <- agg_row(agg, 3L, "classical_ml")
+
+  expect_identical(row$time_trend, "log")
+  expect_true(all(is.na(row[paste0("mse_beta", 0:3)])))
+  expect_true(is.na(row$coverage_beta3))
+  expect_identical(row$n_coverage_beta3, 0L)
+  expect_identical(row$n_estimated, 5L)
+  expect_equal(row$type1_error, 0.5)
+  expect_identical(row$n_type1_error, 4L)
+  expect_true(is.na(row$power))
+  expect_identical(row$n_power, 0L)
+})
+
+test_that("linear groups are unchanged by log groups in the same input", {
+  linear_only <- aggregate_results(build_agg_artifact())$summary
+  mixed <- aggregate_results(build_agg_log_artifact())$summary
+  mixed_linear <- mixed[mixed$scenario_id %in% 1:2, ]
+  rownames(mixed_linear) <- NULL
+
+  expect_identical(names(mixed), names(linear_only))
+  expect_identical(sum(names(mixed) == "time_trend"), 1L)
+  expect_identical(mixed$time_trend, rep(c("linear", "log"), times = c(4L, 2L)))
+  expect_identical(mixed_linear, linear_only)
+
+  # The linear groups still carry values, not NA.
+  row <- mixed[mixed$scenario_id == 1L & mixed$method == "classical_ml", ]
+  expect_equal(row$mse_beta0, (0 + 1 + 4 + 1 + 0) / 5)
+  expect_equal(row$coverage_beta3, 1)
+  expect_identical(row$n_coverage_beta3, 4L)
+})
+
+test_that("a time_trend already present in the results is used and appears once in the summary", {
+  artifact <- build_agg_log_artifact()
+  expected <- aggregate_results(artifact)$summary
+  artifact$results <- merge(artifact$results, artifact$scenarios[, c("scenario_id", "time_trend")])
+
+  agg <- aggregate_results(artifact)$summary
+  expect_identical(agg, expected)
+})
+
+test_that("scenarios without a time_trend column stop with a rebuild message", {
+  artifact <- build_agg_artifact()
+  artifact$scenarios$time_trend <- NULL
+
+  expect_error(aggregate_results(artifact), "predate the time_trend design column")
+
+  # Same stop when the results already carry the true betas and no scenario metadata is given.
+  results <- merge(artifact$results, artifact$scenarios[, c("scenario_id", paste0("beta", 0:3))])
+  expect_error(validate_aggregation_inputs(results, NULL), "predate the time_trend design column")
+})
+
+test_that("a missing or unknown time_trend value stops", {
+  unknown <- build_agg_artifact()
+  unknown$scenarios$time_trend[2L] <- "quadratic"
+  expect_error(aggregate_results(unknown), "time_trend must be one of: linear, log. Found: quadratic", fixed = TRUE)
+
+  missing_value <- build_agg_artifact()
+  missing_value$scenarios$time_trend[2L] <- NA
+  expect_error(aggregate_results(missing_value), "time_trend is missing (NA) for scenario_id: 2", fixed = TRUE)
+
+  # A scenario of the results that the scenario metadata does not list has no time_trend either.
+  unlisted <- build_agg_artifact()
+  unlisted$scenarios <- unlisted$scenarios[1L, ]
+  expect_error(aggregate_results(unlisted), "time_trend is missing (NA) for scenario_id: 2", fixed = TRUE)
+})
+
+test_that("validate_aggregation_inputs() joins time_trend once and keeps the row set", {
+  results <- build_agg_results()
+  validated <- validate_aggregation_inputs(results, build_agg_scenarios())
+
+  expect_identical(nrow(validated), nrow(results))
+  expect_identical(sum(names(validated) == "time_trend"), 1L)
+  expect_false(any(grepl("\\.(x|y)$", names(validated))))
+  expect_setequal(setdiff(names(validated), names(results)), c(paste0("beta", 0:3), "time_trend"))
+  expect_identical(unique(validated$time_trend), "linear")
 })
 
 test_that("validate_aggregation_inputs() rejects empty input, missing columns and duplicate keys", {

@@ -1,8 +1,8 @@
 # 2026_RealiseD
 
 A simulation study comparing four ways to analyse longitudinal two-arm trials with monotone dropout,
-in the small-sample setting typical of rare-disease trials. Data are generated from a linear mixed
-model with a random intercept and slope; each replicate is analysed with every method, and the
+in the small-sample setting typical of rare-disease trials. Data are generated from a mixed
+model with a random intercept and slope, on a linear or a logarithmic time trend; each replicate is analysed with every method, and the
 methods are compared on convergence, MSE, beta3 coverage, type I error and power of the interaction
 test, and run time.
 
@@ -12,10 +12,12 @@ Data-generating model for subject *i* at visit *j* (`T_i` = treatment, 0/1; `t_i
 0, 1, ..., `n_measures` − 1):
 
 ```
-y_ij = beta0 + beta1*T_i + beta2*t_ij + beta3*T_i*t_ij + b0_i + b1_i*t_ij + epsilon_ij
+y_ij = beta0 + beta1*T_i + beta2*f(t_ij) + beta3*T_i*f(t_ij) + b0_i + b1_i*f(t_ij) + epsilon_ij
 (b0_i, b1_i) ~ N(0, D),  D = [[d11, d12], [d12, d22]],  epsilon_ij ~ N(0, sigma2)
 ```
 
+The scenario column `time_trend` sets `f` (`transform_time()`): `"linear"` gives `f(t) = t`,
+`"log"` gives `f(t) = log(1 + t)`. Both the fixed slope terms and the random slope act on `f(t)`.
 The quantity of interest is `beta3`, the treatment-by-time interaction. Treatment is allocated 1:1.
 Dropout is monotone (`generate_dropout_process()`):
 
@@ -47,6 +49,39 @@ repaired `D_tilde` always counts as singular (see [What *converged* means](#what
 Method settings are built with `set_impute_args()` and `set_fit_args()`. LSPIM is fitted by
 `fit_lspim()` in [lspim.R](scripts/simulation/lspim.R).
 
+### Logarithmic scenarios
+
+The linear scenarios favour the methods that are linear in time. As a fairness check against the
+semiparametric LSPIM, the study also has scenarios with `time_trend = "log"`. The stored
+`time_value` stays the raw time 0..`n_measures` − 1, so the analysis methods are unchanged and the
+three parametric methods (`classical_ml`, `multiple_imputation`, `reweighting`) are deliberately
+misspecified there (linear in `t` under a log mean). All log scenarios use `n_measures = 12`,
+`three_obs_minimum` dropout and n = 10, 20, 50, 100:
+
+- **Crossing:** treatment starts below control and ends above it; the mean curves cross at
+  `t = sqrt(12) − 1`, about 2.46.
+- **Null (identical arms):** `beta1 = beta3 = 0`. Parallel shifted curves would not be a true null
+  for LSPIM, because a constant mean shift combined with time-varying variance makes its per-visit
+  probabilistic index drift.
+
+| Parameter | Crossing | Null | Approx. value |
+|---|---|---|---|
+| `beta0` | `2.4562` | `2.4562` | 2.456 |
+| `beta1` | `-0.0350 * 11` | `0` | −0.385 (crossing) |
+| `beta2` | `0.2792 * 11 / log(12)` | `0.2792 * 11 / log(12)` | 1.236 |
+| `beta3` | `2 * 0.0350 * 11 / log(12)` | `0` | 0.310 (crossing) |
+| `d11` | `7.3174` | `7.3174` | 7.317 |
+| `d22` | `0.2239 * (11 / log(12))^2` | same | 4.39 |
+| `d12` | `-0.4985 * 11 / log(12)` | same | −2.21 |
+| `sigma2` | `3.1508` | `3.1508` | 3.151 |
+
+`beta2`, `d22` and `d12` are the linear scenario's values rescaled by `11 / log(12)`, so the total
+rise over the study and the random-slope variance and covariance at `t = 11` equal the linear
+scenario's. In the crossing scenario treatment starts 0.385 below control and ends 0.385 above it.
+The mean-trajectory plot of the crossing scenario is drawn by
+[scripts/figures/log_scenario_trajectories.R](scripts/figures/log_scenario_trajectories.R) into
+[results/figures/log_scenario_trajectories.png](results/figures/log_scenario_trajectories.png).
+
 ## Pipeline
 
 ```mermaid
@@ -61,7 +96,7 @@ flowchart LR
 
 | Step | Function | Writes |
 |---|---|---|
-| Scenario grid | `build_scenario_grid()`, `validate_scenario_grid()` | nothing (data frame, one row per scenario) |
+| Scenario grid | `build_scenario_grid()`, `bind_scenario_grids()`, `validate_scenario_grid()` | nothing (data frame, one row per scenario) |
 | Generation | `run_generation()` → `simulate_scenario()` → `simulate_one_dataset()` | `generated_scenario_NNNNNN.rds` per scenario + `generation_manifest.rds` |
 | Analysis | `run_requested_analyses()` → `run_single_analysis_method()` → `run_analysis_over_groups()` → `analyze_*()` → `run_method()` | `scen_XX_<method>_<hash>.rds` per scenario × method + `analysis_manifest.rds` |
 | Combine | `save_combined_convenience_artifact()` | `analysis_combined_convenience.rds` (all result rows + scenario grid) |
@@ -83,14 +118,14 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
 | Group | Columns |
 |---|---|
 | Keys | `scenario_id`, `method` (`engine`) |
-| Design | `n`, `n_measures`, `beta0`..`beta3`, `d11`, `d22`, `d12`, `sigma2`, `dropout_mechanism`, `dropout_rate` (other scenario columns such as `seed_base` are left out) |
+| Design | `n`, `n_measures`, `beta0`..`beta3`, `d11`, `d22`, `d12`, `sigma2`, `time_trend`, `dropout_mechanism`, `dropout_rate` (other scenario columns such as `seed_base` are left out) |
 | Convergence | `n_total`, `prop_converged_ok`, `prop_converged_warning`, `prop_converged_singular`, `prop_not_converged`, `prop_error` |
-| Accuracy | `n_estimated` (rows with an `estimate_beta3`), `mse_beta0`..`mse_beta3` |
-| Coverage | `coverage_beta3`, `n_coverage_beta3` |
+| Accuracy | `n_estimated` (rows with an `estimate_beta3`), `mse_beta0`..`mse_beta3` (`NA` for log scenarios) |
+| Coverage | `coverage_beta3` (`NA` for log scenarios), `n_coverage_beta3` |
 | Testing | `type1_error`, `n_type1_error`, `power`, `n_power` |
 | Time | `time_mean_seconds`, `time_median_seconds` |
 
-`meta` holds `aggregation_schema_version` (v5), `timestamp`, `group_cols` and `alpha`.
+`meta` holds `aggregation_schema_version` (v6), `timestamp`, `group_cols` and `alpha`.
 
 - **Shared alpha.** `run_requested_analyses(alpha = 0.05)` passes one significance level to every
   method; it is part of the analysis hash and is recorded per row as `interaction_alpha`.
@@ -103,16 +138,23 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
   `interaction_alpha` and `interaction_test_procedure` (`wald_z` or the LSPIM procedure).
 - **beta3 gate.** The true beta3 of a group decides which rate is computed. With `beta3 == 0`
   only `type1_error` is computed (`power` is `NA`, `n_power` is 0); with `beta3 != 0` only `power`
-  (`type1_error` is `NA`, `n_type1_error` is 0). MSE and coverage are computed in both cases.
+  (`type1_error` is `NA`, `n_type1_error` is 0). MSE and coverage are computed in both cases,
+  except in log scenarios (next bullet). The gate applies to log scenarios too.
+- **Log scenarios.** For `time_trend = "log"`, `mse_beta0`..`mse_beta3` and `coverage_beta3` are
+  `NA` and `n_coverage_beta3` is 0: the linear fits estimate a slope of a misspecified model, so
+  there is no true beta to compare them with. `n_estimated` is still counted. `time_trend` comes
+  from the scenario metadata; aggregation stops with an error when it is missing or not `linear`
+  or `log`.
 - **Eligibility.** A row counts towards type I error or power when its `status` is not `failure`
   and it has a decision (`interaction_rejected` is not `NA`). Singular and non-converged fits
   count. The rule is the same for every method; `n_type1_error` / `n_power` are the eligible
   rows.
 - **LSPIM** reports no beta estimates, so its `mse_beta*` and `coverage_beta3` are `NA` and
   `n_estimated` is 0. Its groups exist only for `n <= lspim_max_n`.
-- **Old artifacts.** Results schema v4 and aggregation schema v5 changed the format. Aggregation
+- **Old artifacts.** Results schema v4 and aggregation schema v6 changed the format. Aggregation
   stops with a "rerun the analyses" error when a non-failure row has `interaction_tested = NA`
-  (results made before the unified decision), or when the results contain more than one distinct
+  (results made before the unified decision), when the scenarios have no `time_trend` column
+  (made before the log scenarios), or when the results contain more than one distinct
   `interaction_alpha`. The changed schema versions change the analysis hash, so a full rerun is
   needed.
 
@@ -180,12 +222,14 @@ scripts/
     artifact_store.R         Hashes, output paths, manifests, cache checks, convergence_status
     aggregation_layer.R      Performance metrics (aggregate_results())
     input_checks.R           validate_analysis_data()
+  figures/                   Figure scripts (log_scenario_trajectories.R)
   reference/alvaro_cbc/      Original CbC reference implementation; not used by the pipeline
 tests/testthat/              testthat suite, helpers, golden-output fixture and tools
 data/                        raw/, processed/ (ignored by git), test/
 results/
   data/                      Analysis outputs, one folder per analysis hash
   archive/                   Outputs from earlier code versions (2026-09-28)
+  figures/                   Figures written by scripts/figures/ (log_scenario_trajectories.png)
   graphs/, tables/           Placeholders
 reports/                     Drafts and final reports
 research_question/           Meeting notes and background
@@ -198,8 +242,15 @@ supplementary_material/      CbC derivation (CBCEstimator.tex/.pdf) and papers
    all paths are relative to it).
 2. Install the packages once with `renv::restore()` (see [Dependencies](#dependencies)).
 3. Edit the **Settings** section of [scripts/run_all.R](scripts/run_all.R):
-   - `scenarios`: the `build_scenario_grid()` call. Every combination of the supplied vectors
-     becomes one scenario (currently 4 N × 2 beta3 × 2 dropout mechanisms = 16 scenarios).
+   - `scenarios`: built from three `build_scenario_grid()` calls (`scenarios_linear`,
+     `scenarios_log_crossing`, `scenarios_log_null`) joined by `bind_scenario_grids()`. Within a
+     call, every combination of the supplied vectors becomes one scenario: 16 linear scenarios
+     (4 N × 2 beta3 × 2 dropout mechanisms, ids 1-16) plus 8 log scenarios (ids 17-24), 24 in
+     total. `bind_scenario_grids()` row-binds the grids (same columns and one `seed_base`) and
+     numbers `scenario_id` 1..N in the order given, so a grid appended at the end keeps the ids
+     and RNG streams of the earlier ones. To add scenarios with a logarithmic trend, pass
+     `time_trend = "log"` to `build_scenario_grid()` (default `"linear"`); `time_trend` is a
+     required grid column.
    - `n_simulations`: B, the number of replicates per scenario.
    - `analysis_configs`: per-method overrides of the defaults in `build_analysis_registry()`,
      e.g. `set_fit_args(reweighting = TRUE, damping = 0.5)` or `lspim_max_n`.
@@ -297,7 +348,12 @@ so its draws, and hence its results, differ from runs made before the efficiency
 (statistically equivalent); `analysis_rng_scheme_version` is now
 `lecuyer_analysis_substream_v2`.
 Streams follow `scenario_id`, which is the row position in the grid: adding a value to any grid
-factor renumbers scenarios and changes their draws (backlog item).
+factor renumbers scenarios and changes their draws (backlog item). Appending a whole grid with
+`bind_scenario_grids()` does not.
+
+The log-scenario feature bumped `data_generation_schema_version` (v3 to v4) and
+`aggregation_schema_version` (v5 to v6). Generated data and results made before it are not
+reused, so a full rerun is needed.
 
 ## Tests
 
@@ -315,6 +371,10 @@ check in `test-power-type1-mc.R`, about 90 s) are skipped unless the environment
 ```sh
 RUN_SLOW_TESTS=true Rscript -e 'testthat::test_dir("tests/testthat")'
 ```
+
+**Grid tests.** `test-run-all-grid.R` checks the grid built in `run_all.R` (it parses the
+`scenarios*` assignments). `test-data-generation-identical.R` guards that data generated with
+`time_trend = "linear"` stay bit-identical to the earlier generator.
 
 **Lint test.** `test-lint.R` runs lintr on `scripts/simulation/`, `scripts/run_all.R` and
 `tests/testthat/` and fails on any finding, so new code must be lint-clean (see
@@ -399,6 +459,10 @@ testthat 3.3.2, lintr 3.4.0, renv 1.2.4).
 On this R build, `Rscript -e` with **multi-line** code crashes (segfault). Single-line `-e`
 calls are fine; for anything longer, put the code in a file and run `Rscript file.R`
 (e.g. `"/c/Program Files/R/R-4.6.1/bin/Rscript" file.R` from Git Bash).
+
+- The project `.Rprofile` (renv) can make `Rscript` hang at startup. Use `Rscript --no-init-file`
+  with `R_LIBS` pointing at `renv/library/windows/R-4.6/x86_64-w64-mingw32`.
+- A `|` inside an `Rscript -e '...'` string is treated as a pipe by Windows; put such code in a file.
 
 ## Known issues and roadmap
 

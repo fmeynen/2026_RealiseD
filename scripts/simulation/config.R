@@ -34,7 +34,7 @@ default_paths <- list(
 # Schema versions ------------------------------------------------------------------------------------------------------
 
 # Increment this string whenever the raw per-replicate data generation format changes.
-data_generation_schema_version <- "v3"
+data_generation_schema_version <- "v4"
 
 # Increment this string whenever the generation manifest's structure changes.
 # Used across config.R, data_generation_layer.R and tests; not renamed to stay under 30 characters.
@@ -50,4 +50,4 @@ results_schema_version <- "v4"
 convergence_status_version <- "v2"
 
 # Increment this string whenever the aggregation output schema changes.
-aggregation_schema_version <- "v5"
+aggregation_schema_version <- "v6"
