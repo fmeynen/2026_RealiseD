@@ -127,14 +127,17 @@ Ground rules:
     generated replicates of the crossing scenario, and saves a PNG for the next meeting notes.
   - Check `.gitignore` before choosing the output folder.
 
-- [ ] **6. Smoke run.**
+- [x] **6. Smoke run.**
   - Run all 24 scenarios through the four methods with a small B (e.g. B = 3), serially or in
     parallel, whichever is faster for that size.
   - **Before starting, estimate the run time and ask the user whether it is acceptable.**
   - Report per method for the log scenarios: convergence status counts, rejection rates, and
     any failures. Confirm that MSE and coverage are NA for ids 17-24 and present for ids 1-16.
+  - Result (2026-09-30, B = 3, parallel, 16.6 min): no failures in 270 fits. MSE and coverage
+    are NA in all 30 log rows and present in all 48 linear parametric rows. Reweighting was
+    `converged_singular` in 22 of 24 log fits (34 of 48 linear); see BACKLOG.md.
 
-- [ ] **7. Docs and close-out.**
+- [x] **7. Docs and close-out.**
   - README: describe `time_trend`, the log scenario and its parameters, the identical-arms null,
     and the NA rule for MSE and coverage.
   - Update BACKLOG.md if anything new turns up.

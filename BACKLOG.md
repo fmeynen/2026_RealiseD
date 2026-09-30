@@ -14,7 +14,15 @@ see the plans in [plans/](plans/) and the git history for what was done.
   warnings dominate per N before the full B = 5000 rerun. Since the consistency and efficiency
   passes, loop non-convergence is reported as `not_converged` and a `D_tilde` repair as
   `converged_singular` (neither as `converged_warning`), so rerun the smoke run to separate
-  the causes.
+  the causes. In the B = 3 smoke run of 2026-09-30 (24 scenarios) reweighting was
+  `converged_singular` in 34 of 48 linear fits and in 22 of 24 fits of the log scenarios.
+
+- [ ] **[statistics] Accuracy target for the log scenarios.**
+  For `time_trend = "log"` the aggregation reports `NA` for MSE and coverage, because the linear
+  fits have no true beta ([aggregation_layer.R](scripts/simulation/aggregation_layer.R)). Options
+  if accuracy is wanted there: a pseudo-true beta (least-squares projection of the log curve on
+  linear time, which depends on the dropout pattern), or an extra correctly specified fit on
+  `log(1 + t)`.
 
 - [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
   Coverage uses a normal quantile at level 1 - alpha (alpha is the shared
@@ -44,7 +52,8 @@ see the plans in [plans/](plans/) and the git history for what was done.
   ([data_generation_layer.R](scripts/simulation/data_generation_layer.R), `scenario_rng_stream()`),
   and `scenario_id` is the row number produced by `expand.grid()`. Adding a value to any grid
   factor renumbers the scenarios, so an unchanged scenario gets different random draws and
-  cannot be compared replicate-by-replicate across grid versions. Caching stays correct because
+  cannot be compared replicate-by-replicate across grid versions. Appending a whole grid with
+  `bind_scenario_grids()` keeps the earlier ids, so only changes inside a grid renumber. Caching stays correct because
   the generation hash covers the whole grid. Target: derive each scenario's stream from a hash of
   its parameter values, so the same scenario always gets the same draws.
 
