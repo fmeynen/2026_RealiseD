@@ -14,7 +14,7 @@ scenarios_linear <- build_scenario_grid(
   beta0_values = 2.4562,
   beta1_values = 0,
   beta2_values = 0.2792,
-  beta3_values = c(0.0350, 0),
+  beta3_values = c(0.22, 0.0350, 0),
   d11_values = 7.3174,
   d22_values = 0.2239,
   d12_values = -0.4985,
@@ -29,9 +29,9 @@ scenarios_log_crossing <- build_scenario_grid(
   n_values = c(10, 20, 50, 100),
   n_measures = 12,
   beta0_values = 2.4562,
-  beta1_values = -0.0350 * 11,
+  beta1_values = c(-0.22 * 11, -0.0350 * 11),
   beta2_values = 0.2792 * 11 / log(12),
-  beta3_values = 2 * 0.0350 * 11 / log(12),
+  beta3_values = c(2 * 0.22 * 11 / log(12), 2 * 0.0350 * 11 / log(12)),
   d11_values = 7.3174,
   d22_values = 0.2239 * (11 / log(12))^2,
   d12_values = -0.4985 * 11 / log(12),
@@ -55,7 +55,11 @@ scenarios_log_null <- build_scenario_grid(
   time_trend = "log",
   seed_base = 260925
 )
-scenarios <- bind_scenario_grids(scenarios_linear, scenarios_log_crossing, scenarios_log_null)
+scenarios <- bind_scenario_grids(
+  scenarios_linear,
+  scenarios_log_crossing,
+  scenarios_log_null
+)
 n_simulations <- 5000L
 use_parallel <- TRUE
 n_cores <- default_n_cores()
