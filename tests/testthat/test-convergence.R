@@ -18,6 +18,26 @@ build_convergence_data <- function(n = 20, n_measures = 6, seed_base = 42) {
   simulate_scenario(sc[1, , drop = FALSE], B = 1)
 }
 
+# Tiny random-effect variances relative to sigma2, so the moment estimator of
+# D goes negative and D_tilde is repaired (both eigenvalues set to epsilon_D).
+# seed_base = 7 triggers the repair on every reweighting pass.
+build_repair_data <- function(seed_base = 7) {
+  sc <- build_scenario_grid(
+    n_values = 20,
+    n_measures = 6,
+    beta0_values = 1,
+    beta2_values = 0.3,
+    beta3_values = 0.1,
+    d11_values = 0.01,
+    d22_values = 0.001,
+    d12_values = 0,
+    sigma2_values = 1,
+    dropout_mechanism = "half_missing",
+    seed_base = seed_base
+  )
+  simulate_scenario(sc[1, , drop = FALSE], B = 1)
+}
+
 build_convergence_mats <- function() {
   dat <- build_convergence_data()
   ad <- suppressWarnings(prepare_analysis_data(dat, type = "reweighting"))
@@ -82,12 +102,12 @@ test_that("cbc_estimator() without reweighting is always converged", {
 })
 
 test_that("a non-converged reweighting row maps to not_converged", {
-  dat <- build_convergence_data()
+  dat <- build_repair_data()
   args <- set_fit_args(reweighting = TRUE, epsilon_B = 1e-12, max_iterations = 1)
 
   row <- add_convergence_status(suppressWarnings(analyze_reweighting(dat, args)))
 
-  # After one pass the adjusted D_tilde is singular; not_converged takes precedence.
+  # After one pass the repaired D_tilde is singular; not_converged takes precedence.
   expect_identical(row$status, "singular_fit")
   expect_false(row$converged)
   expect_identical(row$convergence_status, "not_converged")
@@ -96,7 +116,7 @@ test_that("a non-converged reweighting row maps to not_converged", {
 
 test_that("a converged reweighting row with a D_tilde repair stays converged but is labelled singular", {
   row <- add_convergence_status(
-    suppressWarnings(analyze_reweighting(build_convergence_data(), set_fit_args(reweighting = TRUE)))
+    suppressWarnings(analyze_reweighting(build_repair_data(), set_fit_args(reweighting = TRUE)))
   )
 
   expect_true(row$converged)

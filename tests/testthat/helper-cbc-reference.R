@@ -34,36 +34,33 @@ dmatrix_pairwise_reference <- function(K_mi, weights, inv_ZZ_i, inv_sum_KWK,
   I_min_Hii <- lapply(H_ii, function(H) {
     diag(1, dim(H)) - H
   })
-  denom_p1 <- Reduce("+", mapply(
+  own_j <- mapply(
     function(X, W) {
       kronecker(W %*% X, tcrossprod(X, W))
     },
     I_min_Hii, sqrt_W,
     SIMPLIFY = FALSE
-  ))
-
-  # denom part 2
-  idx_combinations <- expand.grid(i = seq_along(K_mi), j = seq_along(HH_i))
-  idx_combinations <- idx_combinations[idx_combinations$i != idx_combinations$j, ]
-  denom_p2 <- Reduce(
-    `+`,
-    mapply(function(i, j) {
-      W <- sqrt_W[[j]]
-      K <- K_mi[[i]]
-      HH <- HH_i[[j]]
-      kronecker(W, K) %*% kronecker(K, HH) %*% kronecker(HH, t(W))
-    }, idx_combinations$i, idx_combinations$j, SIMPLIFY = FALSE)
   )
-  denom <- denom_p1 + denom_p2
-  # c
+
+  # denom part 2, per cluster j: sum over all i != j of the pairwise triple product
+  offdiag_j <- lapply(seq_along(HH_i), function(j) {
+    W <- sqrt_W[[j]]
+    HH <- HH_i[[j]]
+    Reduce(`+`, lapply(setdiff(seq_along(K_mi), j), function(i) {
+      K <- K_mi[[i]]
+      kronecker(W, K) %*% kronecker(K, HH) %*% kronecker(HH, t(W))
+    }), 0)
+  })
+  denom <- Reduce("+", own_j) + Reduce("+", offdiag_j)
+  # c: each R_j is paired with cluster j's own and cross terms
   R_i <- lapply(inv_ZZ_i, function(inv_ZZ) {
     vec_mat(kronecker(Sigma_tilde, inv_ZZ))
   })
   vec_c <- Reduce("+", mapply(
-    function(W, IH, R) {
-      (kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% vec_mat(R)
+    function(own, offdiag, R) {
+      (own + offdiag) %*% R
     },
-    sqrt_W, I_min_Hii, R_i,
+    own_j, offdiag_j, R_i,
     SIMPLIFY = FALSE
   ))
 

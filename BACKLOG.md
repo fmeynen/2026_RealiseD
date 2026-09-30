@@ -1,21 +1,11 @@
 # Backlog
 
 Open items left over from the correctness, clarity, efficiency and consistency passes
-(2026-09-28 to 2026-09-29). Each item is written so it can be turned into a GitHub issue later;
+(2026-09-28 to 2026-09-29) and the CbC D-matrix / multiple-imputation fix (2026-09-30). Each item is written so it can be turned into a GitHub issue later;
 the label in brackets is the suggested issue label. Finished items are removed from this file;
 see the plans in [plans/](plans/) and the git history for what was done.
 
 ## Statistical methods
-
-- [ ] **[statistics] Investigate reweighting fit quality.**
-  In the B = 3 smoke run (2026-09-29), only 13 of 48 reweighting fits were `converged_ok`;
-  13 were singular and 22 ended with warnings (likely non-convergence within
-  `max_iterations = 30` and/or D_tilde being adjusted for positive definiteness). Check which
-  warnings dominate per N before the full B = 5000 rerun. Since the consistency and efficiency
-  passes, loop non-convergence is reported as `not_converged` and a `D_tilde` repair as
-  `converged_singular` (neither as `converged_warning`), so rerun the smoke run to separate
-  the causes. In the B = 3 smoke run of 2026-09-30 (24 scenarios) reweighting was
-  `converged_singular` in 34 of 48 linear fits and in 22 of 24 fits of the log scenarios.
 
 - [ ] **[statistics] Accuracy target for the log scenarios.**
   For `time_trend = "log"` the aggregation reports `NA` for MSE and coverage, because the linear
@@ -30,6 +20,18 @@ see the plans in [plans/](plans/) and the git history for what was done.
   [aggregation_layer.R](scripts/simulation/aggregation_layer.R)); with N = 10
   subjects a t-quantile (df based on N, e.g. N − p) may be more appropriate. Would change
   coverage results.
+
+- [ ] **[statistics] Consider a Barnard-Rubin t test for the multiple_imputation interaction decision.**
+  The `multiple_imputation` interaction test uses the shared Wald z test on the Rubin-pooled beta3
+  (`wald_interaction_decision()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)). With
+  `m = 3` the between-imputation variance has only 2 degrees of freedom, so a t reference with
+  Barnard-Rubin degrees of freedom may be more accurate. In the validation (n = 50,
+  `half_missing`, `m = 3`, treatment x time in the imputation model) the type I error was 7.5%
+  with z and 6.1% with Barnard-Rubin df
+  ([report](reports/drafts/2026-09-30-mi-stacking-and-cbc-dmatrix.md)). `m = 3` was kept on
+  2026-09-30; a larger `m` may also be worth considering (it shrinks the `(1 + 1/m) B` term and
+  its uncertainty, at the cost of `m` CbC fits per replicate). Would change type I error and
+  power for `multiple_imputation`.
 
 - [ ] **[statistics] Mice convergence diagnostic for multiple imputation.**
   `multiple_imputation` is always `converged = TRUE` on success because `mice` runs a fixed
