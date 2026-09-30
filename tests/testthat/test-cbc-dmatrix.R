@@ -78,11 +78,11 @@ test_that("grouped D-matrix matches the pairwise reference with three or more K 
   expect_dmatrix_pairwise(random_dmatrix_inputs(n_clusters = 17, k_pool = 5L, seed = 3L))
 })
 
-test_that("sum_offdiag_kron_terms() handles a single cluster (no pairs)", {
+test_that("offdiag_kron_terms() handles a single cluster (no pairs)", {
   inputs <- random_dmatrix_inputs(n_clusters = 1, k_pool = 1L, p = 2L)
   sqrt_W <- lapply(inputs$weights, sqrt_diagonal)
   HH_i <- list(inputs$inv_sum_KWK %*% crossprod(inputs$K_mi[[1]], inputs$weights[[1]]))
-  expect_identical(sum_offdiag_kron_terms(inputs$K_mi, sqrt_W, HH_i), 0)
+  expect_identical(offdiag_kron_terms(inputs$K_mi, sqrt_W, HH_i), list(0))
 })
 
 fit_with_pairwise_dmatrix <- function(mats, args) {

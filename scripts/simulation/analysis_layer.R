@@ -559,13 +559,14 @@ calculate_stage2_sigma <- function(Sigma_hats, weights) {
   invvech_mat(apply(vech_Sigma_hat, 2, weighted.mean, w = weights))
 }
 
-# Sum over ordered pairs i != j of
-# each term is the product of the three Kronecker products (W_j x K_i)(K_i x HH_j)(HH_j x t(W_j)),
-# which by the mixed-product rule equals (W_j K_i HH_j) x (K_i HH_j t(W_j)), with x the Kronecker product.
+# For each cluster j, the sum over i != j of the product of the three Kronecker products
+# (W_j x K_i)(K_i x HH_j)(HH_j x t(W_j)), which by the mixed-product rule equals
+# (W_j K_i HH_j) x (K_i HH_j t(W_j)), with x the Kronecker product. The result is a list with one
+# matrix per j (numeric 0 when there is no i != j), so that each j's term can be paired with R_j.
 # K_i enters the term twice, so the K_i cannot be summed first. Instead the clusters are grouped by
 # exactly identical K_i (compared bit for bit via hexadecimal keys, no tolerance), and for each j the
 # term is evaluated once per group with multiplicity count_g - [K_j in g]. Cost: N x (distinct K_i).
-sum_offdiag_kron_terms <- function(K_mi, sqrt_W, HH_i) {
+offdiag_kron_terms <- function(K_mi, sqrt_W, HH_i) {
   keys <- vapply(K_mi, function(K) {
     paste(c(dim(K), sprintf("%a", as.vector(K))), collapse = ",")
   }, character(1))
@@ -573,10 +574,10 @@ sum_offdiag_kron_terms <- function(K_mi, sqrt_W, HH_i) {
   group_K <- K_mi[!duplicated(keys)]
   group_size <- tabulate(group_of, nbins = length(group_K))
 
-  total <- 0
-  for (j in seq_along(HH_i)) {
+  lapply(seq_along(HH_i), function(j) {
     W <- sqrt_W[[j]]
     HH <- HH_i[[j]]
+    total <- 0
     for (g in seq_along(group_K)) {
       multiplicity <- group_size[g] - (group_of[j] == g)
       if (multiplicity > 0) {
@@ -584,8 +585,8 @@ sum_offdiag_kron_terms <- function(K_mi, sqrt_W, HH_i) {
         total <- total + multiplicity * kronecker(W %*% A, A %*% t(W))
       }
     }
-  }
-  total
+    total
+  })
 }
 
 calculate_stage2_dmatrix <- function(K_mi, weights, inv_ZZ_i, inv_sum_KWK,
@@ -618,30 +619,28 @@ calculate_stage2_dmatrix <- function(K_mi, weights, inv_ZZ_i, inv_sum_KWK,
     K %*% H
   }, K_mi, HH_i, SIMPLIFY = FALSE)
 
-  # denom part 1
+  # denom: each cluster j contributes its own term (I - H_jj) and its cross terms H_ij, i != j
   I_min_Hii <- lapply(H_ii, function(H) {
     diag(1, dim(H)) - H
   })
-  denom_p1 <- Reduce("+", mapply(
+  own_j <- mapply(
     function(X, W) {
       kronecker(W %*% X, tcrossprod(X, W))
     },
     I_min_Hii, sqrt_W,
     SIMPLIFY = FALSE
-  ))
-
-  # denom part 2
-  denom_p2 <- sum_offdiag_kron_terms(K_mi, sqrt_W, HH_i)
-  denom <- denom_p1 + denom_p2
-  # c
+  )
+  offdiag_j <- offdiag_kron_terms(K_mi, sqrt_W, HH_i)
+  denom <- Reduce("+", own_j) + Reduce("+", offdiag_j)
+  # c: each R_j enters once, with the same coefficient as D gets from cluster j
   R_i <- lapply(inv_ZZ_i, function(inv_ZZ) {
     vec_mat(kronecker(Sigma_tilde, inv_ZZ))
   })
   vec_c <- Reduce("+", mapply(
-    function(W, IH, R) {
-      (kronecker(W %*% IH, tcrossprod(IH, W)) + denom_p2) %*% vec_mat(R)
+    function(own, offdiag, R) {
+      (own + offdiag) %*% R
     },
-    sqrt_W, I_min_Hii, R_i,
+    own_j, offdiag_j, R_i,
     SIMPLIFY = FALSE
   ))
 

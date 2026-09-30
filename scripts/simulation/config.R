@@ -44,7 +44,7 @@ generation_manifest_schema_version <- "v2" # nolint: object_length_linter.
 analysis_rng_scheme_version <- "lecuyer_analysis_substream_v2"
 
 # Increment this string whenever the final results schema changes.
-results_schema_version <- "v4"
+results_schema_version <- "v5"
 
 # Increment this string whenever the convergence_status mapping rules change.
 convergence_status_version <- "v2"

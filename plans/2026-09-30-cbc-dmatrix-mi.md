@@ -80,7 +80,7 @@ Ground rules:
     `reports/drafts/2026-09-30-cbc-mi-validation/`.
   - No output change.
 
-- [ ] **2. Fix the D-matrix correction term.**
+- [x] **2. Fix the D-matrix correction term.**
   - In `calculate_stage2_dmatrix()`, replace the total `sum_offdiag_kron_terms()` with a per-`j`
     version (`offdiag_kron_terms()`, same grouping by identical `K_i`) and build
     `denom = sum_j (own_j + offdiag_j)` and `vec_c = sum_j (own_j + offdiag_j) %*% vec(R_j)`.

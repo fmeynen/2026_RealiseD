@@ -16,6 +16,11 @@ see the plans in [plans/](plans/) and the git history for what was done.
   `converged_singular` (neither as `converged_warning`), so rerun the smoke run to separate
   the causes. In the B = 3 smoke run of 2026-09-30 (24 scenarios) reweighting was
   `converged_singular` in 34 of 48 linear fits and in 22 of 24 fits of the log scenarios.
+  Likely cause (2026-09-30): the D-matrix correction term `vec_c` counted the cross terms once
+  per cluster, which pushed `D_tilde` below zero; in the validation simulations the repairs fell
+  from 86-96% to 0-1% after the fix
+  ([report](reports/drafts/2026-09-30-mi-stacking-and-cbc-dmatrix.md), finding 1). Close this
+  item if the next smoke run confirms it.
 
 - [ ] **[statistics] Accuracy target for the log scenarios.**
   For `time_trend = "log"` the aggregation reports `NA` for MSE and coverage, because the linear
