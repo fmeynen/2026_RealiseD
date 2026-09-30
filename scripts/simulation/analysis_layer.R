@@ -1014,6 +1014,34 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
 
 # Results extraction ------------------------------------------------------------------------------------------------
 
+# Wald z decision on beta3, shared by the parametric methods (classical_ml, multiple_imputation, reweighting).
+# For classical_ml a t-test with Satterthwaite df (lmerTest) might be more accurate at small n; not implemented,
+# see BACKLOG.md.
+
+#' Decide the interaction test with a two-sided Wald z test on beta3.
+#'
+#' @param estimate Estimate of beta3.
+#' @param se       Standard error of beta3.
+#' @param alpha    Significance level.
+#'
+#' @return List with the four interaction_* result fields. \code{interaction_rejected} is NA when the estimate
+#'   or standard error is not usable (non-finite, or se <= 0).
+wald_interaction_decision <- function(estimate, se, alpha) {
+  usable <- is.finite(estimate) && is.finite(se) && se > 0
+  list(
+    interaction_tested = TRUE,
+    interaction_rejected = if (usable) abs(estimate / se) > stats::qnorm(1 - alpha / 2) else NA,
+    interaction_alpha = alpha,
+    interaction_test_procedure = "wald_z"
+  )
+}
+
+set_interaction_decision <- function(result_row, alpha) {
+  decision <- wald_interaction_decision(result_row$estimate_beta3, result_row$se_beta3, alpha)
+  result_row[names(decision)] <- decision
+  result_row
+}
+
 #' Extract a one-row tidy results record from a classical ML fit.
 #'
 #' Returns a standardized row with estimates, standard errors, variance
@@ -1022,6 +1050,7 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
 #' @param fit_result    List returned by fit_classical_ml_model().
 #' @param original_data Original canonical long-format dataset for one replicate.
 #' @param analysis_data Prepared observed-data analysis frame.
+#' @param alpha         Significance level of the Wald z interaction decision.
 #'
 #' @return One-row data frame for the fitted simulation replicate.
 
@@ -1030,7 +1059,8 @@ extract_classical_ml_results <- function(
   original_data,
   analysis_data,
   method = "classical_ml",
-  engine = "lme4"
+  engine = "lme4",
+  alpha = 0.05
 ) {
   metadata <- collect_analysis_metadata(original_data)
   status <- classify_fit_status(fit_result, method = method)
@@ -1072,7 +1102,7 @@ extract_classical_ml_results <- function(
   result_row$cov_b0b1 <- extract_varcorr_value(varcorr_df, "subject_id", "(Intercept)", "time_value")
   result_row$var_b1 <- extract_varcorr_value(varcorr_df, "subject_id", "time_value")
   result_row$sigma2_hat <- extract_varcorr_value(varcorr_df, "Residual")
-  result_row
+  set_interaction_decision(result_row, alpha)
 }
 
 extract_closed_form_results <- function(
@@ -1080,7 +1110,8 @@ extract_closed_form_results <- function(
   original_data,
   analysis_data,
   method = c("multiple_imputation", "reweighting"),
-  engine = "mice_cbc"
+  engine = "mice_cbc",
+  alpha = 0.05
 ) {
   metadata <- collect_analysis_metadata(original_data)
 
@@ -1108,7 +1139,7 @@ extract_closed_form_results <- function(
   }
   common_names <- intersect(names(result_row), names(fit_result$fit))
   result_row[common_names] <- fit_result$fit[common_names]
-  result_row
+  set_interaction_decision(result_row, alpha)
 }
 
 extract_lspim_results <- function(

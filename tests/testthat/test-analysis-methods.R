@@ -121,3 +121,90 @@ test_that("analyze_generated_data_classical_ml() returns one labeled, non-NA-est
   fitted_estimate_cols <- grep("^estimate_beta", names(fitted), value = TRUE)
   expect_false(anyNA(fitted[, fitted_estimate_cols]))
 })
+
+test_that("wald_interaction_decision() rejects clearly, does not reject clearly, and is two-sided", {
+  reject <- wald_interaction_decision(1, 0.1, 0.05)
+  expect_true(reject$interaction_tested)
+  expect_true(reject$interaction_rejected)
+  expect_identical(reject$interaction_test_procedure, "wald_z")
+
+  expect_false(wald_interaction_decision(0.01, 1, 0.05)$interaction_rejected)
+  expect_true(wald_interaction_decision(-1, 0.1, 0.05)$interaction_rejected)
+  expect_false(wald_interaction_decision(-0.01, 1, 0.05)$interaction_rejected)
+})
+
+test_that("wald_interaction_decision() does not reject exactly at the critical value", {
+  z_crit <- stats::qnorm(0.975)
+
+  expect_false(wald_interaction_decision(z_crit, 1, 0.05)$interaction_rejected)
+  expect_false(wald_interaction_decision(-z_crit, 1, 0.05)$interaction_rejected)
+  expect_true(wald_interaction_decision(z_crit + 1e-6, 1, 0.05)$interaction_rejected)
+})
+
+test_that("wald_interaction_decision() stores alpha and uses it for the critical value", {
+  decision <- wald_interaction_decision(1.7, 1, 0.10)
+
+  expect_identical(decision$interaction_alpha, 0.10)
+  expect_true(decision$interaction_rejected)
+  expect_false(wald_interaction_decision(1.7, 1, 0.05)$interaction_rejected)
+})
+
+test_that("wald_interaction_decision() gives NA rejected but tested TRUE for unusable inputs", {
+  unusable <- list(
+    wald_interaction_decision(1, NA_real_, 0.05),
+    wald_interaction_decision(NA_real_, 1, 0.05),
+    wald_interaction_decision(1, 0, 0.05),
+    wald_interaction_decision(1, -1, 0.05),
+    wald_interaction_decision(Inf, 1, 0.05)
+  )
+
+  for (decision in unusable) {
+    expect_true(decision$interaction_tested)
+    expect_true(is.na(decision$interaction_rejected))
+    expect_identical(decision$interaction_alpha, 0.05)
+    expect_identical(decision$interaction_test_procedure, "wald_z")
+  }
+})
+
+expect_wald_decision_row <- function(result, alpha) {
+  expected <- wald_interaction_decision(result$estimate_beta3, result$se_beta3, alpha)
+
+  expect_true(result$interaction_tested)
+  expect_identical(result$interaction_test_procedure, "wald_z")
+  expect_equal(result$interaction_alpha, alpha)
+  expect_identical(result$interaction_rejected, expected$interaction_rejected)
+  expect_false(is.na(result$interaction_rejected))
+}
+
+test_that("classical_ml, multiple_imputation and reweighting rows carry the Wald z decision", {
+  scenario <- fast_classical_ml_scenario()
+  dat <- simulate_scenario(scenario[1, , drop = FALSE], B = 1)
+
+  impute_args <- set_impute_args(method_y = "2l.norm")
+
+  expect_wald_decision_row(analyze_classical_ml(dat, alpha = 0.10), 0.10)
+  expect_wald_decision_row(analyze_mi_closed_form(dat, impute_args, alpha = 0.10), 0.10)
+  # reweighting warns that subjects with fewer than 3 observations are excluded
+  expect_wald_decision_row(suppressWarnings(analyze_reweighting(dat, alpha = 0.10)), 0.10)
+})
+
+test_that("parametric failure rows keep the interaction columns NA", {
+  dat <- data.frame(
+    sim_id = 1L, scenario_id = 1L, subject_id = 1L,
+    treatment = c(0, 0, 1, 1), time_value = c(0, 1, 0, 1),
+    y = c(1.0, 1.2, 1.4, 1.6), observed = TRUE
+  )
+  failures <- list(
+    analyze_classical_ml(dat),
+    analyze_mi_closed_form(dat, impute_args = set_impute_args(method_y = "2l.norm")),
+    analyze_reweighting(dat)
+  )
+
+  for (result in failures) {
+    expect_identical(result$status, "failure")
+    expect_true(is.na(result$interaction_tested))
+    expect_true(is.na(result$interaction_rejected))
+    expect_true(is.na(result$interaction_alpha))
+    expect_true(is.na(result$interaction_test_procedure))
+  }
+})
