@@ -121,7 +121,7 @@ Ground rules:
   - Test: the bound grid has 24 rows, ids 1-16 equal the linear-only grid, and ids 17-24 are
     `"log"` with `three_obs_minimum`.
 
-- [ ] **5. Trajectory plot.**
+- [x] **5. Trajectory plot.**
   - Add a script (e.g. `scripts/figures/log_scenario_trajectories.R`) that plots, per arm, the
     theoretical mean curve and the empirical mean of `y` by visit from a moderate number of
     generated replicates of the crossing scenario, and saves a PNG for the next meeting notes.
