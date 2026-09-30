@@ -238,8 +238,12 @@ build_mi_predictor_row <- function(impute_cols, cluster_col, target_col) {
   row_vals
 }
 
+# The default impute_cols include "trt_time" (treatment * time_value), which impute_data() derives
+# from the data, so that the imputation model for y contains the treatment x time interaction of
+# the analysis model (build_formula()) as a fixed effect.
+
 set_impute_args <- function(
-  impute_cols = c("subject_id", "treatment", "time_value", "y"),
+  impute_cols = c("subject_id", "treatment", "time_value", "trt_time", "y"),
   cluster_col = "subject_id",
   target_col = "y",
   method_y = c("2l.pmm", "2l.norm"),
@@ -447,6 +451,19 @@ impute_data <- function(data, impute_args = set_impute_args()) {
   impute_cols <- impute_args$impute_cols
   target_col <- impute_args$target_col
   cluster_col <- impute_args$cluster_col
+
+  # trt_time is derived here rather than stored in the data; build_mi_predictor_row() gives it
+  # code 1 (fixed-effect predictor of y).
+  if ("trt_time" %in% impute_cols) {
+    missing_cols <- setdiff(c("treatment", "time_value"), names(data))
+    if (length(missing_cols) > 0L) {
+      stop(
+        "impute_data() needs treatment and time_value to derive trt_time; missing: ",
+        paste(missing_cols, collapse = ", ")
+      )
+    }
+    data$trt_time <- data$treatment * data$time_value
+  }
 
   sub_df <- data[, impute_cols, drop = FALSE]
 

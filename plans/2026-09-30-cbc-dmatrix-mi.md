@@ -99,7 +99,7 @@ Ground rules:
     decision columns of the `reweighting` and `multiple_imputation` rows, plus the aggregation
     rows of those methods; then regenerate.
 
-- [ ] **3. Add treatment x time to the imputation model.**
+- [x] **3. Add treatment x time to the imputation model.**
   - In `impute_data()`, derive `trt_time` from `treatment` and `time_value` and include it as a
     fixed-effect predictor of `y` (predictor code 1). Keep the treatment and time columns and the
     cluster / random-slope codes as they are. The analysis formula is unchanged.
