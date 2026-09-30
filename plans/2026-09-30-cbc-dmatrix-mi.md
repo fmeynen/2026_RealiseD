@@ -140,7 +140,7 @@ Ground rules:
     columns updated.
   - Golden: allowlist the new aggregation column, then regenerate.
 
-- [ ] **6. Docs and backlog.**
+- [x] **6. Docs and backlog.**
   - README: the `multiple_imputation` row of the methods table (fit per imputation, Rubin's
     rules, imputation model with treatment x time, `m = 3`); remove "No Rubin pooling" and the
     `stacked_variance_inflation` sentence; describe the two new results columns and the new

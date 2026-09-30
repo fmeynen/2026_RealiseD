@@ -903,7 +903,7 @@ pool_rubin <- function(estimates_list) {
 #' when the averaged D is not singular.
 #'
 #' Convergence: converged = TRUE whenever the pooled fit succeeds (closed-form CbC fits; mice has
-#' no convergence criterion). A D_tilde PD adjustment is only a warning.
+#' no convergence criterion). A D_tilde PD adjustment does not affect converged (it makes the replicate singular, see above).
 #'
 #' @param data        Prepared analysis data (missing outcomes as NA).
 #' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.

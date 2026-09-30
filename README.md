@@ -38,7 +38,7 @@ are the only method names used anywhere in the code):
 | `method` | `engine` | Description |
 |---|---|---|
 | `classical_ml` | `lme4` | `lme4::lmer()` with `REML = FALSE` on the observed rows. |
-| `multiple_imputation` | `mice_cbc` | Two-level imputation (`mice`, `method_y = "2l.pmm"` via `miceadds`, `m = 3`); the `m` completed datasets are **stacked** and fitted once with the closed-form cluster-by-cluster (CbC) estimator. No Rubin pooling. `stacked_variance_inflation = TRUE` multiplies the fixed-effect SEs by sqrt(`m`) (default `FALSE`). |
+| `multiple_imputation` | `mice_cbc` | Two-level imputation (`mice`, `method_y = "2l.pmm"` via `miceadds`, `m = 3`) of `y`; the imputation model has `treatment`, `time_value` (fixed effect and random slope per subject) and `trt_time` = `treatment * time_value` (fixed effect, derived by `impute_data()`). The closed-form cluster-by-cluster (CbC) estimator is fitted **on each of the `m` completed datasets** and the fits are pooled with Rubin's rules (`pool_rubin()`): estimate = mean of the `m` estimates, SE = sqrt(`U_bar` + (1 + 1/`m`) `B`) with `U_bar` the mean per-imputation variance and `B` the variance of the estimates; `sigma2_hat` and the `D` entries are means of the per-imputation values. |
 | `reweighting` | `cbc` | CbC estimator on the observed data (subjects with fewer than 3 observations excluded), followed by iterative reweighting with optimal weights. Update is damped (`damping`, default 0.7) and stops when the max change in beta is below `epsilon_B` (1e-6) or after `max_iterations` (30). |
 | `LSPIM` | `LSPIM` | Pairwise pseudo-observations (win = 1, tie = 0.5) within subjects and between arms per visit, three GEE fits (`geessbin`), combined sandwich variance, and a Holm-adjusted test (`multcomp`) that the per-visit treatment effects differ. Reports only an interaction test decision, no beta estimates. Skipped for scenarios with `n > lspim_max_n` (default 50). |
 
@@ -46,6 +46,16 @@ The CbC estimator (`cbc_estimator()` in [analysis_layer.R](scripts/simulation/an
 a two-stage closed-form estimator: per-subject OLS in stage 1, weighted combination in stage 2.
 If `D_tilde` has negative eigenvalues they are replaced by `epsilon_D` (with a warning); such a
 repaired `D_tilde` always counts as singular (see [What *converged* means](#what-converged-means)).
+The correction term `vec_c` of the `D` estimate counts each subject's sampling-noise term once
+(cross terms weighted by `w_j`, as in the reference code); before 2026-09-30 it counted the cross
+terms once per subject, which pushed `D_tilde` below zero in most fits
+([report](reports/drafts/2026-09-30-mi-stacking-and-cbc-dmatrix.md), finding 1).
+
+**Multiple-imputation diagnostics.** The results have two extra columns, `NA` for every method
+except `multiple_imputation`: `mi_between_var_beta3` (`B` for beta3) and `mi_lambda_beta3`
+((1 + 1/`m`) `B` / `T` for beta3, with `T` the total Rubin variance: the share of the variance of
+beta3 due to missing data).
+
 Method settings are built with `set_impute_args()` and `set_fit_args()`. LSPIM is fitted by
 `fit_lspim()` in [lspim.R](scripts/simulation/lspim.R).
 
@@ -123,9 +133,10 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
 | Accuracy | `n_estimated` (rows with an `estimate_beta3`), `mse_beta0`..`mse_beta3` (`NA` for log scenarios) |
 | Coverage | `coverage_beta3` (`NA` for log scenarios), `n_coverage_beta3` |
 | Testing | `type1_error`, `n_type1_error`, `power`, `n_power` |
+| Multiple imputation | `mean_mi_lambda_beta3` (mean of `mi_lambda_beta3`; `NA` except for `multiple_imputation`) |
 | Time | `time_mean_seconds`, `time_median_seconds` |
 
-`meta` holds `aggregation_schema_version` (v6), `timestamp`, `group_cols` and `alpha`.
+`meta` holds `aggregation_schema_version` (v7), `timestamp`, `group_cols` and `alpha`.
 
 - **Shared alpha.** `run_requested_analyses(alpha = 0.05)` passes one significance level to every
   method; it is part of the analysis hash and is recorded per row as `interaction_alpha`.
@@ -151,7 +162,9 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
   rows.
 - **LSPIM** reports no beta estimates, so its `mse_beta*` and `coverage_beta3` are `NA` and
   `n_estimated` is 0. Its groups exist only for `n <= lspim_max_n`.
-- **Old artifacts.** Results schema v4 and aggregation schema v6 changed the format. Aggregation
+- **Old artifacts.** Results schema v5 and aggregation schema v7 are current (v5: the `D`-matrix
+  fix and Rubin-pooled multiple imputation with the two `mi_*` columns; v7:
+  `mean_mi_lambda_beta3`). Aggregation
   stops with a "rerun the analyses" error when a non-failure row has `interaction_tested = NA`
   (results made before the unified decision), when the scenarios have no `time_trend` column
   (made before the log scenarios), or when the results contain more than one distinct
@@ -169,7 +182,7 @@ The criterion differs per method:
 | Method | `converged = FALSE` when | Only a warning (still converged) |
 |---|---|---|
 | `classical_ml` | the optimizer return code is non-zero, or lme4's convergence checks produced any message (e.g. "Model failed to converge with max\|grad\| …", "Model is nearly unidentifiable …"); see `lme4_converged()` | lme4's "boundary (singular) fit" notice is **deliberately ignored** for convergence: singular fits count as converged and appear as `converged_singular` |
-| `multiple_imputation` | never on a successful fit (the CbC fit is closed form; `mice` runs a fixed number of iterations with no convergence test) | `D_tilde` positive-definiteness repair (also makes the fit singular, see below) |
+| `multiple_imputation` | never on a successful fit (the `m` CbC fits are closed form; `mice` runs a fixed number of iterations with no convergence test). If the imputation or any of the `m` fits fails, the replicate is an error (message `imputation k: ...` for a failed fit); there is no pooling over fewer fits | `D_tilde` positive-definiteness repair in any of the `m` fits (also makes the fit singular, see below) |
 | `reweighting` | the reweighting loop reached `max_iterations` while the largest change in beta was still above `epsilon_B` (flag `converged` returned by `cbc_estimator()`) | `D_tilde` positive-definiteness repair (also makes the fit singular, see below) |
 | `LSPIM` | any of its three GEE fits (`geessbin`) reports a `convergence` status other than "converged": in geessbin 1.0.2 that is "maximum number of iterations consumed" (iteration limit reached without meeting the tolerance), "convergence failure", "fitted probabilities numerically 0 or 1 occurred." or "infinite scale parameter" (`lspim_gees_converged()`) | replacing the combined covariance `V` by the nearest positive semi-definite matrix (`nearest_psd()`) |
 
@@ -178,8 +191,10 @@ repaired CbC `D_tilde` (`multiple_imputation`, `reweighting`) additionally count
 fit, because the repair sets its negative eigenvalues to `epsilon_D`: `is_singular()` treats an
 eigenvalue up to `tol * (1 + 1e-8)` as singular, so the outcome no longer depends on rounding
 noise. Such fits are `converged = TRUE` with `singular = TRUE` and show as `converged_singular`
-(with the warning still recorded). A repaired LSPIM `V` remains only a warning
-(`converged_warning`).
+(with the warning still recorded). For `multiple_imputation` the replicate is
+`converged_singular` when any per-imputation `D_tilde` is singular or repaired, even when the
+averaged `D` is not (`fit_mi_closed_form()`, `classify_fit_status()`). A repaired LSPIM `V`
+remains only a warning (`converged_warning`).
 
 Each result row then gets one `convergence_status` (`add_convergence_status()` in
 [artifact_store.R](scripts/simulation/artifact_store.R)); the first matching rule wins:
@@ -355,6 +370,10 @@ The log-scenario feature bumped `data_generation_schema_version` (v3 to v4) and
 `aggregation_schema_version` (v5 to v6). Generated data and results made before it are not
 reused, so a full rerun is needed.
 
+The `D`-matrix fix and Rubin-pooled multiple imputation (2026-09-30) bumped
+`results_schema_version` (v4 to v5) and `aggregation_schema_version` (v6 to v7). Generated data
+are reused, but all analyses are rerun.
+
 ## Tests
 
 From the repo root:
@@ -470,4 +489,5 @@ Open items are tracked in [BACKLOG.md](BACKLOG.md); agreed work plans are in [pl
 The largest open item is reweighting fit quality: in a B = 3 smoke run
 only 13 of 48 reweighting fits were `converged_ok` (measured before the consistency and
 efficiency passes, when non-convergence and `D_tilde` repairs still showed as
-`converged_warning`).
+`converged_warning`). The likely cause, the `D`-matrix correction term, was fixed on
+2026-09-30; the next smoke run should confirm that `D_tilde` repairs have become rare.
