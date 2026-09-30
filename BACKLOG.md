@@ -17,8 +17,9 @@ see the plans in [plans/](plans/) and the git history for what was done.
   the causes.
 
 - [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
-  Coverage uses a normal quantile (`aggregate_results(ci_level)`, currently
-  `z = qnorm(1 - (1 - ci_level) / 2)` in `compute_beta3_coverage_summary()`); with N = 10
+  Coverage uses a normal quantile at level 1 - alpha (alpha is the shared
+  `interaction_alpha`, `compute_coverage_summary()` in
+  [aggregation_layer.R](scripts/simulation/aggregation_layer.R)); with N = 10
   subjects a t-quantile (df based on N, e.g. N − p) may be more appropriate. Would change
   coverage results.
 
@@ -26,6 +27,15 @@ see the plans in [plans/](plans/) and the git history for what was done.
   `multiple_imputation` is always `converged = TRUE` on success because `mice` runs a fixed
   number of iterations with no convergence test. Add a diagnostic, e.g. R-hat across the
   imputation chains, and decide whether it should feed `converged`.
+- [ ] **[statistics] Satterthwaite t-test for the classical_ml interaction decision.**
+  The parametric methods decide the interaction test with a Wald z test on beta3
+  (`wald_interaction_decision()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)). For
+  classical_ml a t-test with Satterthwaite degrees of freedom (`lmerTest`) might be more accurate
+  at small n, where the z test can be anti-conservative. Supporting evidence: in the slow Monte Carlo check
+  (`test-power-type1-mc.R`, n = 100) the empirical SD of the classical_ml beta3 estimate is about
+  5% larger than the mean SE. Would change type I error and power for classical_ml at small N.
+
+## Efficiency
 
 ## Reproducibility
 
