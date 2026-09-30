@@ -66,11 +66,12 @@ run_method <- function(data, method, engine, prepare_type = method, fit, extract
 #' Performs validation, preparation, model fitting, and result extraction, and
 #' always returns a standardized one-row result even when fitting fails.
 #'
-#' @param data Long-format data frame for one simulation replicate.
+#' @param data  Long-format data frame for one simulation replicate.
+#' @param alpha Significance level shared by all methods.
 #'
 #' @return One-row data frame with standardized classical ML analysis results.
 
-analyze_classical_ml <- function(data) {
+analyze_classical_ml <- function(data, alpha = 0.05) {
   run_method(
     data,
     method = "classical_ml",
@@ -82,7 +83,8 @@ analyze_classical_ml <- function(data) {
         original_data = original_data,
         analysis_data = analysis_data,
         method = "classical_ml",
-        engine = "lme4"
+        engine = "lme4",
+        alpha = alpha
       )
     }
   )
@@ -97,6 +99,7 @@ analyze_classical_ml <- function(data) {
 #' @param data        Long-format data frame for one simulation replicate.
 #' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
 #' @param fit_args    Named list of fit arguments, as returned by \code{set_fit_args()}.
+#' @param alpha       Significance level shared by all methods.
 #' @param rng_state   Optional L'Ecuyer-CMRG \code{.Random.seed} (e.g. from
 #'   \code{replicate_rng_states(..., purpose = "analysis")}). When NULL, imputation draws from
 #'   the current global RNG; call \code{set.seed()} first for reproducible direct calls. The
@@ -108,12 +111,13 @@ analyze_mi_closed_form <- function(
   data,
   impute_args = set_impute_args(),
   fit_args = set_fit_args(),
+  alpha = 0.05,
   rng_state = NULL
 ) {
   if (!is.null(rng_state)) {
     return(with_rng_state(
       rng_state,
-      analyze_mi_closed_form(data, impute_args, fit_args, rng_state = NULL)
+      analyze_mi_closed_form(data, impute_args, fit_args, alpha = alpha, rng_state = NULL)
     ))
   }
 
@@ -139,13 +143,14 @@ analyze_mi_closed_form <- function(
         original_data = original_data,
         analysis_data = analysis_data,
         method = "multiple_imputation",
-        engine = "mice_cbc"
+        engine = "mice_cbc",
+        alpha = alpha
       )
     }
   )
 }
 
-analyze_reweighting <- function(data, fit_args = set_fit_args()) {
+analyze_reweighting <- function(data, fit_args = set_fit_args(), alpha = 0.05) {
   run_method(
     data,
     method = "reweighting",
@@ -157,7 +162,8 @@ analyze_reweighting <- function(data, fit_args = set_fit_args()) {
         original_data = original_data,
         analysis_data = analysis_data,
         method = "reweighting",
-        engine = "cbc"
+        engine = "cbc",
+        alpha = alpha
       )
     }
   )
@@ -193,6 +199,7 @@ analyze_lspim <- function(data, alpha = 0.05) {
 #'   in the results is absent from scenarios$scenario_id.
 #' @param parallel  Logical. Analyze the replicates on a PSOCK cluster (see parallel_map()).
 #' @param n_cores   Integer. Maximum number of workers when parallel = TRUE.
+#' @param alpha     Significance level shared by all methods. Forwarded to the analyzer.
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
@@ -202,14 +209,16 @@ analyze_generated_data_classical_ml <- function( # nolint: object_length_linter.
   data,
   scenarios = NULL,
   parallel = FALSE,
-  n_cores = default_n_cores()
+  n_cores = default_n_cores(),
+  alpha = 0.05
 ) {
   run_analysis_over_groups(
     data,
     scenarios,
     analyze_classical_ml,
     parallel = parallel,
-    n_cores = n_cores
+    n_cores = n_cores,
+    alpha = alpha
   )
 }
 
@@ -226,6 +235,7 @@ analyze_generated_data_classical_ml <- function( # nolint: object_length_linter.
 #'   \code{impute_data()}.
 #' @param fit_args    Named list of additional arguments forwarded to
 #'   \code{fit_closed_form()}.
+#' @param alpha       Significance level shared by all methods. Forwarded to the analyzer.
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
@@ -237,7 +247,8 @@ analyze_generated_data_mi_closed_form <- function( # nolint: object_length_linte
   impute_args = set_impute_args(),
   fit_args = set_fit_args(),
   parallel = FALSE,
-  n_cores = default_n_cores()
+  n_cores = default_n_cores(),
+  alpha = 0.05
 ) {
   run_analysis_over_groups(
     data = data,
@@ -246,7 +257,8 @@ analyze_generated_data_mi_closed_form <- function( # nolint: object_length_linte
     parallel = parallel,
     n_cores = n_cores,
     impute_args = impute_args,
-    fit_args = fit_args
+    fit_args = fit_args,
+    alpha = alpha
   )
 }
 
@@ -260,6 +272,7 @@ analyze_generated_data_mi_closed_form <- function( # nolint: object_length_linte
 #'   replicate is analyzed under its "analysis" RNG substream (see run_analysis_over_groups()).
 #' @param fit_args    Named list of additional arguments forwarded to
 #'   \code{fit_closed_form()}.
+#' @param alpha       Significance level shared by all methods. Forwarded to the analyzer.
 #'
 #' @return Tidy data frame with one results row per scenario_id x sim_id.
 
@@ -270,7 +283,8 @@ analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
   scenarios = NULL,
   fit_args = set_fit_args(),
   parallel = FALSE,
-  n_cores = default_n_cores()
+  n_cores = default_n_cores(),
+  alpha = 0.05
 ) {
   run_analysis_over_groups(
     data = data,
@@ -278,7 +292,8 @@ analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
     analyzer_fn = analyze_reweighting,
     parallel = parallel,
     n_cores = n_cores,
-    fit_args = fit_args
+    fit_args = fit_args,
+    alpha = alpha
   )
 }
 
@@ -304,12 +319,13 @@ build_analysis_registry <- function() {
   list(
     classical_ml = list(
       default_config = list(),
-      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
+      runner = function(scenario_data, scenarios, config, parallel, n_cores, alpha) {
         analyze_generated_data_classical_ml(
           scenario_data,
           scenarios,
           parallel = parallel,
-          n_cores = n_cores
+          n_cores = n_cores,
+          alpha = alpha
         )
       }
     ),
@@ -318,14 +334,15 @@ build_analysis_registry <- function() {
         impute_args = set_impute_args(method_y = "2l.pmm"),
         fit_args = set_fit_args()
       ),
-      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
+      runner = function(scenario_data, scenarios, config, parallel, n_cores, alpha) {
         analyze_generated_data_mi_closed_form(
           data = scenario_data,
           scenarios = scenarios,
           impute_args = config$impute_args,
           fit_args = config$fit_args,
           parallel = parallel,
-          n_cores = n_cores
+          n_cores = n_cores,
+          alpha = alpha
         )
       }
     ),
@@ -333,18 +350,19 @@ build_analysis_registry <- function() {
       default_config = list(
         fit_args = set_fit_args(reweighting = TRUE)
       ),
-      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
+      runner = function(scenario_data, scenarios, config, parallel, n_cores, alpha) {
         analyze_generated_data_reweighting(
           data = scenario_data,
           scenarios = scenarios,
           fit_args = config$fit_args,
           parallel = parallel,
-          n_cores = n_cores
+          n_cores = n_cores,
+          alpha = alpha
         )
       }
     ),
     LSPIM = list(
-      default_config = list(alpha = 0.05, lspim_max_n = 50),
+      default_config = list(lspim_max_n = 50),
       applies_to = function(scenario_row, config) {
         if (!is.numeric(config$lspim_max_n) ||
               length(config$lspim_max_n) != 1L ||
@@ -359,11 +377,11 @@ build_analysis_registry <- function() {
         }
         scenario_row$n <= config$lspim_max_n
       },
-      runner = function(scenario_data, scenarios, config, parallel, n_cores) {
+      runner = function(scenario_data, scenarios, config, parallel, n_cores, alpha) {
         analyze_generated_data_lspim(
           data = scenario_data,
           scenarios = scenarios,
-          alpha = config$alpha,
+          alpha = alpha,
           parallel = parallel,
           n_cores = n_cores
         )
@@ -374,6 +392,12 @@ build_analysis_registry <- function() {
 
 
 resolve_analysis_config <- function(analysis_entry, user_config = NULL) {
+  if ("alpha" %in% names(user_config)) {
+    stop(
+      "'alpha' is no longer a per-method setting in analysis_configs; ",
+      "use run_requested_analyses(alpha = ) instead"
+    )
+  }
   if (is.null(user_config)) {
     analysis_entry$default_config
   } else {
@@ -392,7 +416,8 @@ run_single_analysis_method <- function(
   user_config = list(),
   analysis_registry = NULL,
   parallel = FALSE,
-  n_cores = default_n_cores()
+  n_cores = default_n_cores(),
+  alpha = 0.05
 ) {
   if (is.null(analysis_registry)) {
     analysis_registry <- build_analysis_registry()
@@ -402,5 +427,5 @@ run_single_analysis_method <- function(
     stop("Unsupported analysis requested: ", analysis_name)
   }
   final_config <- resolve_analysis_config(analysis_entry, user_config)
-  analysis_entry$runner(scenario_data, scenarios, final_config, parallel, n_cores)
+  analysis_entry$runner(scenario_data, scenarios, final_config, parallel, n_cores, alpha)
 }

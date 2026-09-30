@@ -439,12 +439,16 @@ run_requested_analyses <- function(
   analyses = c("classical_ml", "multiple_imputation", "reweighting"),
   n_simulations = NULL,
   analysis_configs = list(),
+  alpha = 0.05,
   aggregation_include_engine = FALSE,
   output_dir = default_paths$results,
   overwrite = FALSE,
   parallel = FALSE,
   n_cores = default_n_cores()
 ) {
+  if (!is.numeric(alpha) || length(alpha) != 1L || !is.finite(alpha) || alpha <= 0 || alpha >= 1) {
+    stop("'alpha' must be a single number strictly between 0 and 1.")
+  }
   analysis_registry <- build_analysis_registry()
   available_analyses <- names(analysis_registry)
   unknown_analyses <- setdiff(analyses, available_analyses)
@@ -463,6 +467,7 @@ run_requested_analyses <- function(
     generation_manifest = generation_manifest,
     analyses = analyses,
     analysis_configs = analysis_configs,
+    alpha = alpha,
     aggregation_include_engine = aggregation_include_engine,
     analysis_registry = analysis_registry
   )
@@ -578,6 +583,7 @@ run_requested_analyses <- function(
               analysis_run_hash = analysis_run_hash,
               scenario_entry = scenario_entry,
               method = analysis_name,
+              alpha = alpha,
               output_dir = output_dir,
               overwrite = overwrite
             )
@@ -595,7 +601,8 @@ run_requested_analyses <- function(
                 user_config = analysis_configs[[analysis_name]],
                 analysis_registry = analysis_registry,
                 parallel = parallel,
-                n_cores = n_cores
+                n_cores = n_cores,
+                alpha = alpha
               )
               saved <- save_analysis_scenario_method_artifact(
                 analysis_results = method_results,
@@ -603,6 +610,7 @@ run_requested_analyses <- function(
                 generation_manifest = generation_manifest,
                 scenario_entry = scenario_entry,
                 method = analysis_name,
+                alpha = alpha,
                 output_dir = output_dir,
                 overwrite = overwrite
               )

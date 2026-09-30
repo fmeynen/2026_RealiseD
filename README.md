@@ -3,8 +3,8 @@
 A simulation study comparing four ways to analyse longitudinal two-arm trials with monotone dropout,
 in the small-sample setting typical of rare-disease trials. Data are generated from a linear mixed
 model with a random intercept and slope; each replicate is analysed with every method, and the
-methods are compared on convergence, bias, MSE, beta3 coverage, interaction-test error rates and
-run time.
+methods are compared on convergence, MSE, beta3 coverage, type I error and power of the interaction
+test, and run time.
 
 ## The model and methods
 
@@ -77,11 +77,44 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
 `analyze_generated_data_reweighting()`) apply an analyzer to every replicate of a scenario, and
 `build_analysis_registry()` maps each method key to its runner and default settings.
 
-Aggregation gives one row per scenario × method with: convergence proportions (next section);
-signed and relative bias and MSE for beta0..beta3 (relative bias is `NA` when the true value is 0);
-mean and median run time; Wald CI coverage and Wald rejection rate for beta3 (`ci_level`, default
-0.95, normal quantile); and, for methods that test the interaction (`LSPIM`), rejection rate,
-type I error (`beta3 == 0`) and power (`beta3 != 0`).
+**Aggregation summary.** `aggregate_results()` gives one row per `scenario_id` × `method` (plus
+`engine` when `include_engine = TRUE`), with these columns in this order:
+
+| Group | Columns |
+|---|---|
+| Keys | `scenario_id`, `method` (`engine`) |
+| Design | `n`, `n_measures`, `beta0`..`beta3`, `d11`, `d22`, `d12`, `sigma2`, `dropout_mechanism`, `dropout_rate` (other scenario columns such as `seed_base` are left out) |
+| Convergence | `n_total`, `prop_converged_ok`, `prop_converged_warning`, `prop_converged_singular`, `prop_not_converged`, `prop_error` |
+| Accuracy | `n_estimated` (rows with an `estimate_beta3`), `mse_beta0`..`mse_beta3` |
+| Coverage | `coverage_beta3`, `n_coverage_beta3` |
+| Testing | `type1_error`, `n_type1_error`, `power`, `n_power` |
+| Time | `time_mean_seconds`, `time_median_seconds` |
+
+`meta` holds `aggregation_schema_version` (v5), `timestamp`, `group_cols` and `alpha`.
+
+- **Shared alpha.** `run_requested_analyses(alpha = 0.05)` passes one significance level to every
+  method; it is part of the analysis hash and is recorded per row as `interaction_alpha`.
+  Coverage of beta3 uses the level 1 − alpha (there is no `ci_level` argument), with alpha read
+  from `interaction_alpha`, and `meta$alpha` records it.
+- **How each method decides.** The parametric methods (`classical_ml`, `multiple_imputation`,
+  `reweighting`) use a two-sided Wald z test on beta3 (`|estimate / se| > qnorm(1 − alpha / 2)`,
+  `wald_interaction_decision()`). `LSPIM` rejects when any Holm-adjusted per-visit p-value is at
+  most alpha. The decision is stored in `interaction_tested`, `interaction_rejected`,
+  `interaction_alpha` and `interaction_test_procedure` (`wald_z` or the LSPIM procedure).
+- **beta3 gate.** The true beta3 of a group decides which rate is computed. With `beta3 == 0`
+  only `type1_error` is computed (`power` is `NA`, `n_power` is 0); with `beta3 != 0` only `power`
+  (`type1_error` is `NA`, `n_type1_error` is 0). MSE and coverage are computed in both cases.
+- **Eligibility.** A row counts towards type I error or power when its `status` is not `failure`
+  and it has a decision (`interaction_rejected` is not `NA`). Singular and non-converged fits
+  count. The rule is the same for every method; `n_type1_error` / `n_power` are the eligible
+  rows.
+- **LSPIM** reports no beta estimates, so its `mse_beta*` and `coverage_beta3` are `NA` and
+  `n_estimated` is 0. Its groups exist only for `n <= lspim_max_n`.
+- **Old artifacts.** Results schema v4 and aggregation schema v5 changed the format. Aggregation
+  stops with a "rerun the analyses" error when a non-failure row has `interaction_tested = NA`
+  (results made before the unified decision), or when the results contain more than one distinct
+  `interaction_alpha`. The changed schema versions change the analysis hash, so a full rerun is
+  needed.
 
 ## What *converged* means
 
@@ -123,8 +156,8 @@ So precedence is `error` > `not_converged` > `converged_singular` > `converged_w
 
 Aggregation summarises this per scenario × method as `prop_error`, `prop_not_converged`,
 `prop_converged_singular`, `prop_converged_warning` and `prop_converged_ok` (together 1), plus
-`n_total` and `n_converged_ok`. `mean_convergence` equals `prop_converged_ok` (share of fully
-clean fits), not the share of rows with `converged = TRUE`.
+`n_total`. `prop_converged_ok` is the share of fully clean fits, not the share of rows with
+`converged = TRUE`.
 
 ## Repository layout
 
@@ -170,6 +203,9 @@ supplementary_material/      CbC derivation (CBCEstimator.tex/.pdf) and papers
    - `n_simulations`: B, the number of replicates per scenario.
    - `analysis_configs`: per-method overrides of the defaults in `build_analysis_registry()`,
      e.g. `set_fit_args(reweighting = TRUE, damping = 0.5)` or `lspim_max_n`.
+   - `alpha` in the `run_requested_analyses()` call: the one significance level shared by all
+     methods (default 0.05). It is part of the analysis hash, so changing it reruns every method.
+     A per-method `analysis_configs$LSPIM$alpha` is an error.
    - `analyses` in the `run_requested_analyses()` call: which methods to run.
 4. Run the whole script (`source("scripts/run_all.R")`). Progress is printed per scenario and
    method; the return value `analysis_outputs` holds the paths and the aggregation summary.
@@ -271,8 +307,9 @@ From the repo root:
 Rscript -e 'testthat::test_dir("tests/testthat")'
 ```
 
-`helper-source.R` sources every file in `scripts/simulation/` and attaches `miceadds`. Two slow
-tests (1e6-draw checks in `test-data-generation.R`) are skipped unless the environment variable
+`helper-source.R` sources every file in `scripts/simulation/` and attaches `miceadds`. Slow
+tests (the 1e6-draw checks in `test-data-generation.R` and the Monte Carlo type I error / power
+check in `test-power-type1-mc.R`, about 90 s) are skipped unless the environment variable
 `RUN_SLOW_TESTS=true` is set:
 
 ```sh

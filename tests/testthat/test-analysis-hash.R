@@ -19,7 +19,7 @@ test_that("omitting a requested method's config matches its registry default exp
   hash_explicit_default <- build_analysis_run_hash(
     generation_manifest = fake_generation_manifest,
     analyses = "LSPIM",
-    analysis_configs = list(LSPIM = list(alpha = 0.05, lspim_max_n = 50))
+    analysis_configs = list(LSPIM = list(lspim_max_n = 50))
   )
 
   expect_identical(hash_omitted, hash_explicit_default)
@@ -59,6 +59,33 @@ test_that("a config for a non-requested analysis does not change the hash", {
   )
 
   expect_identical(hash_without_extra, hash_with_extra)
+})
+
+test_that("a different alpha changes the run hash and every per-method hash", {
+  hash_for <- function(alpha) {
+    build_analysis_run_hash(
+      generation_manifest = fake_generation_manifest,
+      analyses = c("classical_ml", "LSPIM"),
+      analysis_configs = list(),
+      alpha = alpha
+    )
+  }
+
+  expect_identical(hash_for(0.05), hash_for(0.05))
+  expect_false(identical(hash_for(0.05), hash_for(0.1)))
+  expect_identical(hash_for(0.05), build_analysis_run_hash(
+    generation_manifest = fake_generation_manifest,
+    analyses = c("classical_ml", "LSPIM"),
+    analysis_configs = list()
+  ))
+
+  path_for <- function(method, alpha) {
+    basename(build_analysis_scenario_method_path("run", 1L, method, dir = "out", alpha = alpha))
+  }
+  for (method in names(build_analysis_registry())) {
+    expect_identical(path_for(method, 0.05), path_for(method, 0.05))
+    expect_false(identical(path_for(method, 0.05), path_for(method, 0.1)))
+  }
 })
 
 test_that("an unknown requested analysis errors loudly", {
