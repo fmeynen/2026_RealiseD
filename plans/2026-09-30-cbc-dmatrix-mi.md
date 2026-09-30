@@ -107,7 +107,7 @@ Ground rules:
     still has the columns the CbC fit needs.
   - Golden: allowlist the `multiple_imputation` rows and aggregation rows, then regenerate.
 
-- [ ] **4. Fit, then combine (Rubin's rules).**
+- [x] **4. Fit, then combine (Rubin's rules).**
   - Replace the single stacked fit in `fit_mi_closed_form()` with one `fit_closed_form()` per
     imputation (split the long data by `.imp`) and a pooling helper, e.g.
     `pool_rubin(estimates_list, m)`, returning the pooled estimates, SEs, averaged variance

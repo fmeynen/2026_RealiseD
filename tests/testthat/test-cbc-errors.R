@@ -60,7 +60,7 @@ test_that("MI closed-form records the real cbc_estimator error, not a downstream
   )
 
   expect_identical(result$status, "failure")
-  expect_identical(result$error_message, "Lapack routine dgesv: system is exactly singular")
+  expect_identical(result$error_message, "imputation 1: Lapack routine dgesv: system is exactly singular")
   expect_false(is.na(result$elapsed_seconds))
   expect_identical(result$method, "multiple_imputation")
   expect_identical(result$engine, "mice_cbc")

@@ -123,6 +123,8 @@ empty_results <- function() {
     cov_b0b1 = numeric(),
     var_b1 = numeric(),
     sigma2_hat = numeric(),
+    mi_between_var_beta3 = numeric(),
+    mi_lambda_beta3 = numeric(),
     elapsed_seconds = numeric(),
     warning_message = character(),
     error_message = character(),
@@ -168,6 +170,8 @@ build_result_row <- function(
     cov_b0b1 = NA_real_,
     var_b1 = NA_real_,
     sigma2_hat = NA_real_,
+    mi_between_var_beta3 = NA_real_,
+    mi_lambda_beta3 = NA_real_,
     elapsed_seconds = as.numeric(elapsed_seconds),
     warning_message = warning_message,
     error_message = error_message,
@@ -280,9 +284,6 @@ set_impute_args <- function(
 #' @param reweighting Logical. When TRUE, run iterative reweighting instead of standard closed-form.
 #' @param epsilon_B Numeric. Convergence tolerance on beta for reweighting.
 #' @param max_iterations Integer. Maximum number of reweighting iterations.
-#' @param stacked_variance_inflation Logical. Multiple-imputation method only: when TRUE, multiply the
-#'   fixed-effect standard errors by sqrt(m) to account for fitting the m stacked imputations at once.
-#'   Ignored by the reweighting method.
 #' @param damping Numeric in (0, 1]. Dampening factor for the reweighting update:
 #'   beta_new = damping * beta_reweighted + (1 - damping) * beta_previous.
 #'
@@ -293,7 +294,6 @@ set_fit_args <- function(
   formula = build_formula(),
   epsilon_D = 1e-6,
   reweighting = FALSE, epsilon_B = 1e-6, max_iterations = 30,
-  stacked_variance_inflation = FALSE,
   damping = 0.7
 ) {
   if (!is.numeric(damping) || length(damping) != 1L || is.na(damping) ||
@@ -310,7 +310,6 @@ set_fit_args <- function(
     reweighting = reweighting,
     epsilon_B = epsilon_B,
     max_iterations = max_iterations,
-    stacked_variance_inflation = stacked_variance_inflation,
     damping = damping
   )
 }
@@ -809,16 +808,15 @@ cbc_estimator <- function(mats, fit_args) {
 #' Fit the cluster-by-cluster closed-form estimator once on the supplied data.
 #'
 #' Fits the CbC estimator a single time on \code{long_data}, clustering by
-#' \code{fit_args$subject_col}. For the MI path (see \code{fit_mi_closed_form()}),
-#' \code{long_data} is the long-format stack of all \code{m} imputations produced
-#' by \code{impute_data()}, so each subject contributes \code{m * n_visits} rows
-#' to the single fit clustered by \code{subject_id}. On failure of the underlying
+#' \code{fit_args$subject_col}. The reweighting path calls it once on the observed
+#' data; the MI path (see \code{fit_mi_closed_form()}) calls it once per completed
+#' dataset and pools the fits with \code{pool_rubin()}. On failure of the underlying
 #' \code{cbc_estimator()} call, the error propagates to the caller
 #' (\code{fit_mi_closed_form()} / \code{fit_closed_form_reweighting()}), which
 #' catches it and records it in \code{error_message}.
 #'
 #' @param long_data Data frame with one fit's worth of long-format data (for the
-#'   MI path, the stacked imputations from \code{impute_data()}).
+#'   MI path, one completed dataset from \code{impute_data()}).
 #' @param fit_args  List of fit arguments as returned by \code{set_fit_args()}.
 #'
 #' @return List with \code{estimates}, a named numeric vector with elements
@@ -840,22 +838,109 @@ fit_closed_form <- function(
 
 ## Fit MI closed form -------------------------------------------------------------------------------
 
-# Convergence: converged = TRUE whenever the fit succeeds (single closed-form
-# CbC fit; mice has no convergence criterion). A D_tilde PD adjustment is only a warning.
+# The 2x2 random-effects covariance matrix D from a named CbC estimates vector
+# (extract_cbc_result() / pool_rubin()).
+estimates_d_matrix <- function(estimates) {
+  matrix(estimates[c("var_b0", "cov_b0b1", "cov_b0b1", "var_b1")], nrow = 2)
+}
+
+#' Pool per-imputation CbC fits with Rubin's rules.
+#'
+#' @param estimates_list List of m >= 2 named vectors as returned by \code{extract_cbc_result()},
+#'   one per completed dataset.
+#'
+#' @return Named numeric vector with the names of \code{extract_cbc_result()} plus
+#'   \code{mi_between_var_beta3} and \code{mi_lambda_beta3}:
+#'   \itemize{
+#'     \item \code{estimate_betaK}: mean of the m estimates;
+#'     \item \code{se_betaK}: \code{sqrt(U_bar + (1 + 1/m) * B)}, with \code{U_bar} the mean of the
+#'       per-imputation variances \code{se_betaK^2} and \code{B} the variance (denominator m - 1) of
+#'       the m estimates;
+#'     \item \code{sigma2_hat}, \code{var_b0}, \code{cov_b0b1}, \code{var_b1}: means of the
+#'       per-imputation values;
+#'     \item \code{mi_between_var_beta3}: \code{B} for beta3;
+#'     \item \code{mi_lambda_beta3}: \code{(1 + 1/m) * B / T} for beta3, the share of the total
+#'       variance \code{T} due to the missing data.
+#'   }
+
+pool_rubin <- function(estimates_list) {
+  m <- length(estimates_list)
+  if (m < 2L) {
+    stop(
+      "pool_rubin() needs at least 2 imputations to estimate the between-imputation variance; got ",
+      m, "."
+    )
+  }
+  estimates <- do.call(rbind, estimates_list)
+  estimate_names <- paste0("estimate_beta", 0:3)
+  se_names <- paste0("se_beta", 0:3)
+
+  # Means of the estimates and of the variance components; the SEs are replaced below.
+  pooled <- colMeans(estimates)
+  within_var <- colMeans(estimates[, se_names, drop = FALSE]^2)
+  between_var <- apply(estimates[, estimate_names, drop = FALSE], 2, stats::var)
+  total_var <- within_var + (1 + 1 / m) * between_var
+  pooled[se_names] <- sqrt(total_var)
+
+  c(
+    pooled,
+    mi_between_var_beta3 = unname(between_var[4]),
+    mi_lambda_beta3 = unname((1 + 1 / m) * between_var[4] / total_var[4])
+  )
+}
+
+#' Fit the MI closed-form method on one replicate: impute, fit, then combine.
+#'
+#' Imputes the missing outcomes m times with \code{impute_data()}, fits the CbC estimator
+#' separately on each completed dataset (\code{fit_closed_form()}), and pools the m fits with
+#' Rubin's rules (\code{pool_rubin()}).
+#'
+#' Failures: if the imputation or any of the m fits errors, the replicate's result is an error
+#' (\code{fit = NULL}, \code{error_message} set, prefixed with the imputation number for a fit
+#' error); there is no pooling over fewer fits. If any per-imputation D_tilde is singular
+#' (smallest eigenvalue <= 1e-6, which includes a D_tilde repaired for positive definiteness),
+#' \code{singular} is TRUE and classify_fit_status() labels the replicate "singular_fit", even
+#' when the averaged D is not singular.
+#'
+#' Convergence: converged = TRUE whenever the pooled fit succeeds (closed-form CbC fits; mice has
+#' no convergence criterion). A D_tilde PD adjustment is only a warning.
+#'
+#' @param data        Prepared analysis data (missing outcomes as NA).
+#' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
+#' @param fit_args    Named list of fit arguments, as returned by \code{set_fit_args()}.
+#'
+#' @return List with fit (pooled named vector from \code{pool_rubin()}, or NULL), converged,
+#'   singular, elapsed_seconds, warnings, and error_message.
+
 fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args = set_fit_args()) {
   warning_messages <- character(0)
   error_message <- NULL
+  singular <- FALSE
   start_time <- proc.time()[["elapsed"]]
-  # Stacking the m imputations into one long-format fit (clustered by subject_id)
-  # is intentional; see stacked_variance_inflation in set_fit_args() to correct
-  # the resulting fixed-effect SEs for the stacking.
   # impute_data() draws from the current global RNG; fit_mi_closed_form() takes no seed of its
   # own (see analyze_mi_closed_form()'s rng_state argument for reproducible direct calls).
   fit <- withCallingHandlers(
     tryCatch(
       {
         imputed_data <- impute_data(data, impute_args)
-        fit_closed_form(long_data = imputed_data, fit_args = fit_args)$estimates
+        # .imp == 0 is the incomplete original data (include_original = TRUE); it is not fitted.
+        imputed_data <- imputed_data[imputed_data$.imp > 0, , drop = FALSE]
+        imputations <- split(imputed_data, imputed_data$.imp)
+        per_imputation <- lapply(seq_along(imputations), function(k) {
+          tryCatch(
+            fit_closed_form(long_data = imputations[[k]], fit_args = fit_args)$estimates,
+            error = function(error) {
+              stop(paste0("imputation ", k, ": ", conditionMessage(error)), call. = FALSE)
+            }
+          )
+        })
+        # Same tolerance as classify_fit_status()'s singular_tol default.
+        singular <- any(vapply(
+          per_imputation,
+          function(estimates) is_singular(estimates_d_matrix(estimates), tol = 1e-06),
+          logical(1)
+        ))
+        pool_rubin(per_imputation)
       },
       error = function(error) {
         error_message <<- conditionMessage(error)
@@ -867,15 +952,12 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
       invokeRestart("muffleWarning")
     }
   )
-  if (!is.null(fit) && isTRUE(fit_args$stacked_variance_inflation)) {
-    se_names <- c("se_beta0", "se_beta1", "se_beta2", "se_beta3")
-    fit[se_names] <- fit[se_names] * sqrt(impute_args$m)
-  }
   elapsed_seconds <- proc.time()[["elapsed"]] - start_time
 
   list(
     fit = fit,
     converged = !is.null(fit),
+    singular = !is.null(fit) && singular,
     elapsed_seconds = as.numeric(elapsed_seconds),
     warnings = unique(warning_messages),
     error_message = error_message
@@ -999,7 +1081,8 @@ is_singular <- function(cov_matrix, tol) {
 
 #' Classify the classical ML fit status for downstream simulation results.
 #'
-#' @param fit_result   List returned by fit_classical_ml_model().
+#' @param fit_result   List returned by fit_classical_ml_model() or another fit_* function. For
+#'   multiple_imputation, a TRUE fit_result$singular (see fit_mi_closed_form()) gives "singular_fit".
 #' @param singular_tol Numeric tolerance passed to `lme4::isSingular()`.
 #' @param method       Analysis registry key identifying the fit's method.
 #'
@@ -1016,11 +1099,14 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
       return("singular_fit")
     }
   }
+  # Averaging D over the imputations can hide a singular per-imputation D; fit_mi_closed_form()
+  # flags that case in fit_result$singular.
+  if (method == "multiple_imputation" && isTRUE(fit_result$singular)) {
+    return("singular_fit")
+  }
   # only works ad hoc; TODO generalize for any RE covariance matrix
   if (method == "multiple_imputation" || method == "reweighting") {
-    if (is_singular(matrix(fit_result$fit[c("var_b0", "cov_b0b1", "cov_b0b1", "var_b1")], nrow = 2),
-      tol = singular_tol
-    )) {
+    if (is_singular(estimates_d_matrix(fit_result$fit), tol = singular_tol)) {
       return("singular_fit")
     }
   }
