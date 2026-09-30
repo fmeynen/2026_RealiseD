@@ -486,8 +486,6 @@ calls are fine; for anything longer, put the code in a file and run `Rscript fil
 ## Known issues and roadmap
 
 Open items are tracked in [BACKLOG.md](BACKLOG.md); agreed work plans are in [plans/](plans/).
-The largest open item is reweighting fit quality: in a B = 3 smoke run
-only 13 of 48 reweighting fits were `converged_ok` (measured before the consistency and
-efficiency passes, when non-convergence and `D_tilde` repairs still showed as
-`converged_warning`). The likely cause, the `D`-matrix correction term, was fixed on
-2026-09-30; the next smoke run should confirm that `D_tilde` repairs have become rare.
+Reweighting fit quality, previously the largest open item, was resolved by the `D`-matrix fix of
+2026-09-30: in the B = 3 smoke run of the 16 linear scenarios, reweighting was
+`converged_singular` in 1 of 48 fits after the fix, against 34 of 48 before it.

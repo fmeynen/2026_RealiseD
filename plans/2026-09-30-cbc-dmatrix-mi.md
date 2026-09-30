@@ -150,7 +150,7 @@ Ground rules:
     t-quantile item (in the validation: 6.1% vs 7.5% type I error at n = 50, `m = 3`).
   - Run the full test suite and lint.
 
-- [ ] **7. Verification and close-out.**
+- [x] **7. Verification and close-out.**
   - Run the B = 3 smoke run (estimate the duration first and ask the user; MI now does `m`
     CbC fits per replicate). Check the convergence status counts per method, in particular that
     `reweighting` is no longer mostly `converged_singular`.
@@ -158,3 +158,10 @@ Ground rules:
     from BACKLOG.md; otherwise report the counts to the user.
   - Draft the PR description. The user reruns B = 5000 afterwards; the schema bumps force a full
     rerun of the analyses.
+  - Result (2026-09-30, B = 3, the 16 linear scenarios only as agreed with the user, serial,
+    6.9 min): no failures in 180 result rows. Reweighting was `converged_singular` in 1 of 48
+    fits (34 of 48 before the fix), `converged_warning` in 1 and `converged_ok` in 46;
+    multiple_imputation 47 ok and 1 singular; one `D_tilde` repair each for reweighting and
+    multiple_imputation. `mi_lambda_beta3` ranged from 0.004 to 0.64 (median 0.25). The
+    reweighting fit-quality item was removed from BACKLOG.md. Full test suite: 674 passed,
+    0 failed, 4 slow tests skipped.
