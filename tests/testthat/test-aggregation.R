@@ -5,7 +5,8 @@
 # rule (failures out, singular / non-converged fits in), hand-computed MSE,
 # coverage at the alpha found in the data, the two hard errors for old or
 # inconsistent results, the design-only merge of the scenario columns, and the
-# time_trend rule (NA MSE and coverage for "log" scenarios, testing unchanged).
+# time_trend rule (NA MSE and coverage for "log" scenarios, testing unchanged),
+# and the mean of mi_lambda_beta3 (multiple_imputation only).
 
 # Scenario 1 has beta3 == 0 (null), scenario 2 beta3 == 0.5 (alternative). The
 # scenarios carry non-design columns (seed_base, scenario_note) that must not
@@ -137,6 +138,7 @@ test_that("the summary has exactly the documented columns in the documented orde
       "n_estimated", "mse_beta0", "mse_beta1", "mse_beta2", "mse_beta3",
       "coverage_beta3", "n_coverage_beta3",
       "type1_error", "n_type1_error", "power", "n_power",
+      "mean_mi_lambda_beta3",
       "time_mean_seconds", "time_median_seconds"
     )
   )
@@ -308,10 +310,10 @@ test_that("results with more than one distinct interaction_alpha stop", {
   expect_error(aggregate_results(artifact), "more than one distinct interaction_alpha")
 })
 
-test_that("meta records alpha and the v6 schema version, and ci_level is gone", {
+test_that("meta records alpha and the v7 schema version, and ci_level is gone", {
   agg <- aggregate_results(build_agg_artifact())
 
-  expect_identical(agg$meta$aggregation_schema_version, "v6")
+  expect_identical(agg$meta$aggregation_schema_version, "v7")
   expect_identical(agg$meta$group_cols, c("scenario_id", "method"))
   expect_identical(agg$meta$alpha, 0.05)
   expect_s3_class(agg$meta$timestamp, "POSIXct")
@@ -461,4 +463,46 @@ test_that("n_power + n_type1_error equals the hand-counted eligible rows and the
     expect_identical(is.na(row$type1_error), row$beta3 != 0)
     expect_identical(is.na(row$power), row$beta3 == 0)
   }
+})
+
+# The linear artifact plus multiple_imputation replicates for scenario 1, with an mi_lambda_beta3 column that is
+# NA for the other methods. The failure row's lambda (0.9) must be ignored, as must the success row without one.
+build_agg_mi_artifact <- function() {
+  artifact <- build_agg_artifact()
+  artifact$results$mi_lambda_beta3 <- NA_real_
+
+  mi <- agg_rows(
+    1L, "multiple_imputation",
+    status = c("success", "success", "failure", "success", "success"),
+    convergence_status = c("converged_ok", "converged_singular", "error", "converged_ok", "converged_ok"),
+    rejected = c(FALSE, TRUE, NA, FALSE, FALSE),
+    estimate_beta3 = 0.1, se_beta3 = 0.1
+  )
+  mi$mi_lambda_beta3 <- c(0.1, 0.2, 0.9, 0.3, NA)
+
+  artifact$results <- rbind(artifact$results, mi)
+  artifact
+}
+
+test_that("mean_mi_lambda_beta3 averages the non-failure, non-missing lambdas of multiple_imputation", {
+  agg <- aggregate_results(build_agg_mi_artifact())
+
+  expect_equal(agg_row(agg, 1L, "multiple_imputation")$mean_mi_lambda_beta3, (0.1 + 0.2 + 0.3) / 3)
+})
+
+test_that("mean_mi_lambda_beta3 is NA for the methods without a lambda", {
+  agg <- aggregate_results(build_agg_mi_artifact())
+  other <- agg$summary[agg$summary$method != "multiple_imputation", ]
+
+  expect_identical(nrow(other), 4L)
+  expect_true(all(is.na(other$mean_mi_lambda_beta3)))
+  expect_type(other$mean_mi_lambda_beta3, "double")
+})
+
+test_that("results without an mi_lambda_beta3 column give NA, not an error", {
+  artifact <- build_agg_artifact()
+  expect_false("mi_lambda_beta3" %in% names(artifact$results))
+
+  agg <- aggregate_results(artifact)
+  expect_true(all(is.na(agg$summary$mean_mi_lambda_beta3)))
 })

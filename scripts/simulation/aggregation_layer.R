@@ -14,6 +14,8 @@
 #     reported as for the linear scenarios
 #   - Type I error (true beta3 == 0) or power (true beta3 != 0) of the interaction test, computed the
 #     same way for every method; the metric that does not apply to a group is NA with a count of 0
+#   - Mean share of the variance of beta3 due to missing data (mi_lambda_beta3) for multiple_imputation;
+#     NA for the other methods
 #   - Mean and median computation time
 #
 # Relative efficiency is deferred until multiple analysis methods exist.
@@ -31,6 +33,7 @@
 #     compute_coverage_summary
 #       is_log_trend_group
 #     compute_testing_summary
+#     compute_mi_summary
 #     merge_aggregation_summaries
 
 
@@ -459,6 +462,42 @@ compute_testing_summary <- function(results_df, group_cols) {
 }
 
 
+## Multiple imputation summary -------------------------------------------------------------------------------------
+
+#' Compute the per-group mean of mi_lambda_beta3.
+#'
+#' mi_lambda_beta3 = (1 + 1/m) B / T is the share of the total variance of
+#' beta3 due to missing data (see pool_rubin() in analysis_layer.R); it is NA
+#' for every method except multiple_imputation. The mean is taken over rows
+#' whose status is not "failure" and whose mi_lambda_beta3 is non-missing, and
+#' is NA when there are none (the other methods). Results without an
+#' mi_lambda_beta3 column give NA.
+#'
+#' @param results_df Data frame of simulation results (validated).
+#' @param group_cols Character vector of grouping column names.
+#'
+#' @return Data frame with one row per group and columns:
+#'   group columns, mean_mi_lambda_beta3.
+
+compute_mi_summary <- function(results_df, group_cols) {
+  groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
+
+  rows <- lapply(groups, function(grp) {
+    lambda <- column_or_na(grp, "mi_lambda_beta3")
+    eligible <- grp$status != "failure" & !is.na(lambda)
+
+    c(
+      as.list(grp[1L, group_cols, drop = FALSE]),
+      list(
+        mean_mi_lambda_beta3 = if (any(eligible)) mean(lambda[eligible]) else NA_real_
+      )
+    )
+  })
+
+  bind_group_rows(rows)
+}
+
+
 ## Merge all summaries ---------------------------------------------------------------------------------------------
 
 #' Merge the per-group summaries into one table.
@@ -466,23 +505,25 @@ compute_testing_summary <- function(results_df, group_cols) {
 #' All data frames must share the same set of group key columns and the same
 #' set of groups (one row per group each). Merge is performed sequentially on
 #' the group columns; columns come out as convergence, accuracy, coverage,
-#' testing, time.
+#' testing, multiple imputation (mean_mi_lambda_beta3), time.
 #'
 #' @param convergence_df Data frame returned by compute_convergence_summary().
 #' @param accuracy_df    Data frame returned by compute_accuracy_summary().
 #' @param coverage_df    Data frame returned by compute_coverage_summary().
 #' @param testing_df     Data frame returned by compute_testing_summary().
+#' @param mi_df          Data frame returned by compute_mi_summary().
 #' @param time_df        Data frame returned by compute_time_summary().
 #' @param group_cols     Character vector of grouping column names (merge keys).
 #'
 #' @return Single merged data frame with one row per group.
 
 merge_aggregation_summaries <- function(
-  convergence_df, accuracy_df, coverage_df, testing_df, time_df, group_cols
+  convergence_df, accuracy_df, coverage_df, testing_df, mi_df, time_df, group_cols
 ) {
   out <- merge(convergence_df, accuracy_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out, coverage_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out, testing_df, by = group_cols, all = TRUE, sort = FALSE)
+  out <- merge(out, mi_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- merge(out, time_df, by = group_cols, all = TRUE, sort = FALSE)
   out <- out[do.call(order, unname(out[group_cols])), , drop = FALSE]
   rownames(out) <- NULL
@@ -500,8 +541,8 @@ merge_aggregation_summaries <- function(
 #'   1. Extract results and (optionally) scenarios from the input object.
 #'   2. Validate inputs and join true-beta columns and time_trend from
 #'      scenarios when absent.
-#'   3. Compute convergence, accuracy, coverage, testing, and time summaries
-#'      per group.
+#'   3. Compute convergence, accuracy, coverage, testing, multiple
+#'      imputation, and time summaries per group.
 #'   4. Merge summaries into a single tidy table and add the scenario design
 #'      columns.
 #'   5. Return a list with the summary table and provenance metadata.
@@ -521,7 +562,8 @@ merge_aggregation_summaries <- function(
 #' @return Named list:
 #'   \describe{
 #'     \item{summary}{Tidy data frame with one row per group: keys, design
-#'       columns, convergence, accuracy, coverage, testing, and time
+#'       columns, convergence, accuracy, coverage, testing,
+#'       mean_mi_lambda_beta3 (NA except for multiple_imputation), and time
 #'       columns.}
 #'     \item{meta}{List with aggregation_schema_version, timestamp,
 #'       group_cols, and alpha.}
@@ -536,7 +578,7 @@ merge_aggregation_summaries <- function(
 #' # combined <- readRDS(build_analysis_combined_convenience_path(analysis_run_hash))
 #' # agg <- aggregate_results(combined)
 #' # str(agg$summary)
-#' # agg$meta$aggregation_schema_version  # "v6"
+#' # agg$meta$aggregation_schema_version  # "v7"
 #' #
 #' # -- Include engine as an extra grouping column --
 #' # agg_eng <- aggregate_results(combined, include_engine = TRUE)
@@ -561,6 +603,7 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
   accuracy_df <- compute_accuracy_summary(results_df, group_cols)
   coverage_df <- compute_coverage_summary(results_df, group_cols, alpha = alpha)
   testing_df <- compute_testing_summary(results_df, group_cols)
+  mi_df <- compute_mi_summary(results_df, group_cols)
   time_df <- compute_time_summary(results_df, group_cols)
 
   summary_df <- merge_aggregation_summaries(
@@ -568,6 +611,7 @@ aggregate_results <- function(results_obj, include_engine = FALSE) {
     accuracy_df,
     coverage_df,
     testing_df,
+    mi_df,
     time_df,
     group_cols
   )

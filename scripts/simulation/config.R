@@ -50,4 +50,4 @@ results_schema_version <- "v5"
 convergence_status_version <- "v2"
 
 # Increment this string whenever the aggregation output schema changes.
-aggregation_schema_version <- "v6"
+aggregation_schema_version <- "v7"

@@ -131,7 +131,7 @@ Ground rules:
   - Golden: allowlist the `multiple_imputation` rows (SEs, variance components, convergence,
     interaction decision, new columns) and aggregation rows, then regenerate.
 
-- [ ] **5. Aggregate the mean lambda.**
+- [x] **5. Aggregate the mean lambda.**
   - Add `mean_mi_lambda_beta3` per (scenario, method) to the aggregation summary: the mean over
     non-failure rows with non-NA `mi_lambda_beta3`; NA for the other methods. Decide its place in
     the column order next to the testing columns and document it.
