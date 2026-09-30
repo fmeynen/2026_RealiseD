@@ -10,7 +10,7 @@
 #   (optional diagnostics: y_complete, eta_ij, epsilon_ij, dropout_time)
 #
 # Function hierarchy:
-#   build_scenario_grid, validate_scenario_grid
+#   build_scenario_grid, bind_scenario_grids, validate_scenario_grid
 #   scenario_rng_stream, replicate_rng_states, with_rng_state
 #   simulate_scenario
 #     simulate_one_dataset
@@ -52,6 +52,8 @@
 #'   'half_missing', 'three_obs_minimum', 'fixed_rate', or NA/NULL (default) to derive
 #'   the mechanism from dropout_rate at generation time (see simulate_one_dataset()).
 #' @param dropout_rate_values Numeric vector. Per-visit dropout probabilities.
+#' @param time_trend          String vector. Shape of the time trend: 'linear' (default) or 'log'.
+#'   It is the last factor of the grid, so grids without it keep their scenario ids and row order.
 #' @param seed_base           Integer. Global base seed, stored unchanged on every row. It seeds a
 #'   master L'Ecuyer-CMRG stream from which each scenario derives its own non-overlapping
 #'   streams (one for data generation, one for analysis); replicate b uses substream b of
@@ -73,6 +75,7 @@ build_scenario_grid <- function(
   sigma2_values = 1,
   dropout_mechanism = NULL,
   dropout_rate_values = 0,
+  time_trend = "linear",
   seed_base
 ) {
   if (is.null(dropout_mechanism)) {
@@ -91,11 +94,43 @@ build_scenario_grid <- function(
     sigma2 = sigma2_values,
     dropout_mechanism = dropout_mechanism,
     dropout_rate = dropout_rate_values,
+    time_trend = time_trend,
     stringsAsFactors = FALSE
   )
   grid$scenario_id <- seq_len(nrow(grid))
   grid$seed_base <- rep(as.integer(seed_base), nrow(grid))
   grid[, c("scenario_id", "seed_base", setdiff(names(grid), c("scenario_id", "seed_base")))]
+}
+
+
+## Bind Scenario Grids ---------------------------------------------------------------------------------------------
+
+#' Row-bind scenario grids and renumber the scenario ids.
+#'
+#' Combines two or more grids as returned by build_scenario_grid() in the order given and
+#' renumbers scenario_id to 1..N. The first grid therefore keeps its original ids when they
+#' were 1..n. Stops if the grids differ in their set of columns or do not share one seed_base.
+#'
+#' @param ... Two or more data frames as returned by build_scenario_grid().
+#'
+#' @return Data frame with the rows of all grids, scenario_id running from 1 to N and the
+#'   column order of the first grid.
+
+bind_scenario_grids <- function(...) {
+  grids <- list(...)
+  if (length(grids) < 2) stop("bind_scenario_grids() needs at least two grids.")
+  first_cols <- names(grids[[1]])
+  for (grid in grids[-1]) {
+    if (!setequal(names(grid), first_cols) || anyDuplicated(names(grid))) {
+      stop("All grids must have the same set of columns.")
+    }
+  }
+  seeds <- unique(unlist(lapply(grids, function(grid) grid$seed_base)))
+  if (length(seeds) != 1) stop("All grids must share one single seed_base value.")
+  combined <- do.call(rbind, lapply(grids, function(grid) grid[, first_cols, drop = FALSE]))
+  combined$scenario_id <- seq_len(nrow(combined))
+  rownames(combined) <- NULL
+  combined
 }
 
 
@@ -116,11 +151,20 @@ validate_scenario_grid <- function(scenario_grid) {
     "scenario_id", "seed_base", "n", "n_measures",
     "beta0", "beta1", "beta2", "beta3",
     "d11", "d22", "d12",
-    "sigma2", "dropout_rate"
+    "sigma2", "dropout_rate", "time_trend"
   )
   missing_cols <- setdiff(required_cols, names(scenario_grid))
   if (length(missing_cols) > 0) {
     stop("scenario_grid is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+  allowed_trends <- c("linear", "log")
+  if (anyNA(scenario_grid$time_trend)) stop("time_trend must not contain missing values.")
+  invalid_trends <- setdiff(unique(scenario_grid$time_trend), allowed_trends)
+  if (length(invalid_trends) > 0) {
+    stop(
+      "time_trend must be one of: ", paste(allowed_trends, collapse = ", "),
+      ". Found invalid value(s): ", paste(invalid_trends, collapse = ", ")
+    )
   }
   if (anyNA(scenario_grid$seed_base)) stop("seed_base must not contain missing values.")
   if (!is.numeric(scenario_grid$seed_base) && !is.integer(scenario_grid$seed_base)) {

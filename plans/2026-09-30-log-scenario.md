@@ -71,7 +71,7 @@ Ground rules:
 
 ## Items
 
-- [ ] **1. `time_trend` in the scenario grid.**
+- [x] **1. `time_trend` in the scenario grid.**
   - Add `time_trend = "linear"` to `build_scenario_grid()` as the last `expand.grid()` factor, so
     existing grids keep their scenario ids.
   - Add the column to the required columns and the allowed-values check in
