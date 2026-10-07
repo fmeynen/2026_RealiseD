@@ -7,7 +7,8 @@
 #   - Design columns of the scenario (n, n_measures, beta0..beta3, d11, d22, d12, sigma2, time_trend, dropout_*)
 #   - Convergence status counts and proportions
 #   - MSE for beta0..beta3 (NA for methods that do not estimate them) and the number of estimated fits
-#   - Wald CI coverage for beta3 at level 1 - alpha, where alpha is read from interaction_alpha
+#   - Wald t CI coverage for beta3 at level 1 - alpha (alpha read from interaction_alpha, df from the per-replicate
+#     df_beta3, the df of the interaction test)
 #   - MSE and coverage are NA (n_coverage_beta3 = 0) for scenarios with time_trend == "log": the parametric
 #     methods fit a model linear in time, so their estimates have no true value to be compared with (the
 #     scenario's beta2 / beta3 are coefficients on log(1 + t)). Type I error and power are decisions and are
@@ -96,7 +97,7 @@ validate_aggregation_inputs <- function(results_df, scenarios_df = NULL, include
     "scenario_id", "sim_id", "method",
     "status", "convergence_status",
     "elapsed_seconds",
-    "interaction_tested", "interaction_rejected", "interaction_alpha"
+    "interaction_tested", "interaction_rejected", "interaction_alpha", "df_beta3"
   )
   if (include_engine) {
     required_cols <- c(required_cols, "engine")
@@ -368,12 +369,14 @@ compute_time_summary <- function(results_df, group_cols) {
 
 ## Coverage summary ------------------------------------------------------------------------------------------------
 
-#' Compute per-group Wald CI coverage for beta3.
+#' Compute per-group Wald t CI coverage for beta3.
 #'
 #' Coverage indicator per replicate: 1 if true beta3 lies within
-#' estimate_beta3 +/- z * se_beta3, 0 otherwise, where
-#' z = qnorm(1 - alpha / 2) gives a Wald interval at level 1 - alpha. Replicates
-#' with a missing estimate, standard error or true value are not eligible.
+#' estimate_beta3 +/- t * se_beta3, 0 otherwise, where
+#' t = qt(1 - alpha / 2, df_beta3) gives a Wald t interval at level 1 - alpha with
+#' the same df as the interaction test. Replicates with a missing estimate,
+#' standard error or true value, or with a missing or non-positive df_beta3, are
+#' not eligible.
 #'
 #' For a group with time_trend == "log" no replicate is eligible: coverage_beta3
 #' is NA and n_coverage_beta3 is 0, because the beta3 of a model linear in time
@@ -389,17 +392,17 @@ compute_time_summary <- function(results_df, group_cols) {
 #'   group columns, coverage_beta3, n_coverage_beta3.
 
 compute_coverage_summary <- function(results_df, group_cols, alpha) {
-  z <- stats::qnorm(1 - alpha / 2)
-
   groups <- split(results_df, results_df[, group_cols, drop = FALSE], drop = TRUE)
 
   rows <- lapply(groups, function(grp) {
     est <- column_or_na(grp, "estimate_beta3")
     se <- column_or_na(grp, "se_beta3")
     true <- grp$beta3
+    df <- column_or_na(grp, "df_beta3")
 
-    eligible <- !is_log_trend_group(grp) & !is.na(est) & !is.na(se) & !is.na(true) & !is.na(z)
-    covered <- abs(est[eligible] - true[eligible]) <= z * se[eligible]
+    eligible <- !is_log_trend_group(grp) & !is.na(est) & !is.na(se) & !is.na(true) & !is.na(alpha) &
+      is.finite(df) & df > 0
+    covered <- abs(est[eligible] - true[eligible]) <= stats::qt(1 - alpha / 2, df[eligible]) * se[eligible]
     n_coverage <- sum(eligible)
 
     c(

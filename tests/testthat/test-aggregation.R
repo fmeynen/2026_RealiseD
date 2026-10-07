@@ -54,7 +54,7 @@ build_agg_log_artifact <- function() {
 # One method's replicates for one scenario. Estimate columns not supplied are NA.
 agg_rows <- function(scenario_id, method, status, convergence_status, rejected,
                      estimate_beta0 = NA_real_, estimate_beta3 = NA_real_, se_beta3 = NA_real_,
-                     alpha = 0.05) {
+                     df_beta3 = NA_real_, alpha = 0.05) {
   n <- length(status)
   data.frame(
     scenario_id = scenario_id,
@@ -65,6 +65,7 @@ agg_rows <- function(scenario_id, method, status, convergence_status, rejected,
     estimate_beta0 = rep_len(estimate_beta0, n),
     estimate_beta3 = rep_len(estimate_beta3, n),
     se_beta3 = rep_len(se_beta3, n),
+    df_beta3 = rep_len(df_beta3, n),
     elapsed_seconds = seq_len(n) / 10,
     interaction_tested = ifelse(status == "failure", NA, TRUE),
     interaction_rejected = rejected,
@@ -86,6 +87,7 @@ build_agg_results <- function(alpha = 0.05) {
       estimate_beta0 = c(1, 2, 3, NA, 0, 1),
       estimate_beta3 = c(0.1, -0.1, 0.18, NA, 0, 0.05),
       se_beta3 = c(0.1, 0.1, 0.1, NA, 0.1, NA),
+      df_beta3 = 18,
       alpha = alpha
     ),
     # classical_ml, alternative scenario.
@@ -97,6 +99,7 @@ build_agg_results <- function(alpha = 0.05) {
       estimate_beta0 = c(1, 1, 1, 1),
       estimate_beta3 = c(0.6, 0.4, 0.5, 0.9),
       se_beta3 = 0.1,
+      df_beta3 = 18,
       alpha = alpha
     ),
     # LSPIM: a decision but no estimates.
@@ -264,8 +267,8 @@ test_that("LSPIM gets NA MSE and coverage and zero estimated / coverage counts",
 })
 
 test_that("coverage uses the quantile of the alpha found in the data", {
-  # Errors 0.1, 0.1, 0.18, 0 with se 0.1 (the row without an SE is not eligible): the 0.18 error is inside
-  # the 95% half-width 0.196 but outside the 90% half-width 0.1645.
+  # Errors 0.1, 0.1, 0.18, 0 with se 0.1 and df 18 (the row without an SE is not eligible): the 0.18 error is
+  # inside the 95% half-width 0.2101 but outside the 90% half-width 0.1734.
   agg05 <- aggregate_results(build_agg_artifact(alpha = 0.05))
   agg10 <- aggregate_results(build_agg_artifact(alpha = 0.10))
 
@@ -278,6 +281,50 @@ test_that("coverage uses the quantile of the alpha found in the data", {
 
   expect_identical(agg05$meta$alpha, 0.05)
   expect_identical(agg10$meta$alpha, 0.10)
+})
+
+test_that("a replicate covered by the t interval but not by the z interval counts as covered", {
+  # df = 4: the 95% t half-width is 2.776 * se, the z half-width 1.96 * se; the error is 2.2 * se.
+  results <- agg_rows(
+    1L, "classical_ml",
+    status = "success", convergence_status = "converged_ok", rejected = FALSE,
+    estimate_beta3 = 0.22, se_beta3 = 0.1, df_beta3 = 4
+  )
+  row <- agg_row(aggregate_results(list(results = results, scenarios = build_agg_scenarios())), 1L, "classical_ml")
+
+  expect_gt(0.22, stats::qnorm(0.975) * 0.1)
+  expect_lte(0.22, stats::qt(0.975, 4) * 0.1)
+  expect_equal(row$coverage_beta3, 1)
+  expect_identical(row$n_coverage_beta3, 1L)
+})
+
+test_that("a missing or non-positive df_beta3 makes a replicate ineligible for coverage", {
+  results <- agg_rows(
+    1L, "classical_ml",
+    status = rep("success", 5L), convergence_status = rep("converged_ok", 5L), rejected = FALSE,
+    estimate_beta3 = c(0, 0, 0, 0, 0.5), se_beta3 = 0.1, df_beta3 = c(18, NA, 0, -3, 18)
+  )
+  row <- agg_row(aggregate_results(list(results = results, scenarios = build_agg_scenarios())), 1L, "classical_ml")
+
+  expect_identical(row$n_coverage_beta3, 2L)
+  expect_equal(row$coverage_beta3, 1 / 2)
+})
+
+test_that("coverage equals the hand-computed share inside the t interval with per-row df", {
+  df <- c(2, 5, 10, 30, 200, 4, 18)
+  error <- c(0.3, 0.3, 0.22, 0.21, 0.2, 0.5, 0.1)
+  results <- agg_rows(
+    2L, "classical_ml",
+    status = rep("success", 7L), convergence_status = rep("converged_ok", 7L), rejected = FALSE,
+    estimate_beta3 = 0.5 + error, se_beta3 = 0.1, df_beta3 = df
+  )
+  row <- agg_row(aggregate_results(list(results = results, scenarios = build_agg_scenarios())), 2L, "classical_ml")
+
+  expected <- mean(abs(error) <= stats::qt(1 - 0.05 / 2, df) * 0.1)
+  expect_gt(expected, 0)
+  expect_lt(expected, 1)
+  expect_equal(row$coverage_beta3, expected)
+  expect_identical(row$n_coverage_beta3, 7L)
 })
 
 test_that("coverage and testing are NA / zero when every replicate failed (no alpha in the data)", {
@@ -476,7 +523,7 @@ build_agg_mi_artifact <- function() {
     status = c("success", "success", "failure", "success", "success"),
     convergence_status = c("converged_ok", "converged_singular", "error", "converged_ok", "converged_ok"),
     rejected = c(FALSE, TRUE, NA, FALSE, FALSE),
-    estimate_beta3 = 0.1, se_beta3 = 0.1
+    estimate_beta3 = 0.1, se_beta3 = 0.1, df_beta3 = 18
   )
   mi$mi_lambda_beta3 <- c(0.1, 0.2, 0.9, 0.3, NA)
 
