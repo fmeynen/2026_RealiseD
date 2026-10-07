@@ -119,6 +119,7 @@ empty_results <- function() {
     se_beta1 = numeric(),
     se_beta2 = numeric(),
     se_beta3 = numeric(),
+    df_beta3 = numeric(),
     var_b0 = numeric(),
     cov_b0b1 = numeric(),
     var_b1 = numeric(),
@@ -166,6 +167,7 @@ build_result_row <- function(
     se_beta1 = NA_real_,
     se_beta2 = NA_real_,
     se_beta3 = NA_real_,
+    df_beta3 = NA_real_,
     var_b0 = NA_real_,
     cov_b0b1 = NA_real_,
     var_b1 = NA_real_,
@@ -844,13 +846,37 @@ estimates_d_matrix <- function(estimates) {
   matrix(estimates[c("var_b0", "cov_b0b1", "cov_b0b1", "var_b1")], nrow = 2)
 }
 
+#' Barnard-Rubin degrees of freedom for a pooled multiple-imputation estimate.
+#'
+#' With \code{lambda} the share of the total variance due to the missing data and \code{nu_com}
+#' the complete-data degrees of freedom (Barnard & Rubin, 1999, Biometrika 86(4)):
+#' \code{nu_old = (m - 1) / lambda^2} (Inf when \code{lambda = 0}),
+#' \code{nu_obs = (nu_com + 1) / (nu_com + 3) * nu_com * (1 - lambda)}, and
+#' \code{df = 1 / (1 / nu_old + 1 / nu_obs)}. The result never exceeds \code{nu_com}.
+#'
+#' @param lambda  Share of the total variance due to the missing data, in [0, 1].
+#' @param m       Number of imputations.
+#' @param nu_com  Complete-data degrees of freedom.
+#'
+#' @return Numeric scalar; NA_real_ when \code{nu_com} is not a single finite number > 0.
+
+barnard_rubin_df <- function(lambda, m, nu_com) {
+  if (length(nu_com) != 1L || !is.finite(nu_com) || nu_com <= 0) {
+    return(NA_real_)
+  }
+  nu_old <- (m - 1) / lambda^2
+  nu_obs <- (nu_com + 1) / (nu_com + 3) * nu_com * (1 - lambda)
+  1 / (1 / nu_old + 1 / nu_obs)
+}
+
 #' Pool per-imputation CbC fits with Rubin's rules.
 #'
 #' @param estimates_list List of m >= 2 named vectors as returned by \code{extract_cbc_result()},
 #'   one per completed dataset.
+#' @param nu_com Complete-data degrees of freedom for beta3 (number of subjects - 2).
 #'
 #' @return Named numeric vector with the names of \code{extract_cbc_result()} plus
-#'   \code{mi_between_var_beta3} and \code{mi_lambda_beta3}:
+#'   \code{mi_between_var_beta3}, \code{mi_lambda_beta3} and \code{df_beta3}:
 #'   \itemize{
 #'     \item \code{estimate_betaK}: mean of the m estimates;
 #'     \item \code{se_betaK}: \code{sqrt(U_bar + (1 + 1/m) * B)}, with \code{U_bar} the mean of the
@@ -860,10 +886,13 @@ estimates_d_matrix <- function(estimates) {
 #'       per-imputation values;
 #'     \item \code{mi_between_var_beta3}: \code{B} for beta3;
 #'     \item \code{mi_lambda_beta3}: \code{(1 + 1/m) * B / T} for beta3, the share of the total
-#'       variance \code{T} due to the missing data.
+#'       variance \code{T} due to the missing data;
+#'     \item \code{df_beta3}: Barnard-Rubin degrees of freedom for beta3 from \code{lambda},
+#'       \code{m} and \code{nu_com} (see \code{barnard_rubin_df()}); NA when \code{nu_com} is
+#'       not usable.
 #'   }
 
-pool_rubin <- function(estimates_list) {
+pool_rubin <- function(estimates_list, nu_com) {
   m <- length(estimates_list)
   if (m < 2L) {
     stop(
@@ -882,10 +911,12 @@ pool_rubin <- function(estimates_list) {
   total_var <- within_var + (1 + 1 / m) * between_var
   pooled[se_names] <- sqrt(total_var)
 
+  lambda <- unname((1 + 1 / m) * between_var[4] / total_var[4])
   c(
     pooled,
     mi_between_var_beta3 = unname(between_var[4]),
-    mi_lambda_beta3 = unname((1 + 1 / m) * between_var[4] / total_var[4])
+    mi_lambda_beta3 = lambda,
+    df_beta3 = barnard_rubin_df(lambda, m, nu_com)
   )
 }
 
@@ -941,7 +972,8 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
           function(estimates) is_singular(estimates_d_matrix(estimates), tol = 1e-06),
           logical(1)
         ))
-        pool_rubin(per_imputation)
+        nu_com <- length(unique(data[[fit_args$subject_col]])) - 2
+        pool_rubin(per_imputation, nu_com)
       },
       error = function(error) {
         error_message <<- conditionMessage(error)
@@ -1117,30 +1149,33 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
 
 # Results extraction ------------------------------------------------------------------------------------------------
 
-# Wald z decision on beta3, shared by the parametric methods (classical_ml, multiple_imputation, reweighting).
-# For classical_ml a t-test with Satterthwaite df (lmerTest) might be more accurate at small n; not implemented,
-# see BACKLOG.md.
+# Wald t decision on beta3, shared by the parametric methods (classical_ml, multiple_imputation, reweighting).
+# The df is stored per replicate in df_beta3: N - 2 for classical_ml and reweighting, Barnard-Rubin for
+# multiple_imputation; see plans/2026-10-07-small-sample-df.md.
 
-#' Decide the interaction test with a two-sided Wald z test on beta3.
+#' Decide the interaction test with a two-sided Wald t test on beta3.
 #'
 #' @param estimate Estimate of beta3.
 #' @param se       Standard error of beta3.
+#' @param df       Degrees of freedom of the t reference distribution.
 #' @param alpha    Significance level.
 #'
-#' @return List with the four interaction_* result fields. \code{interaction_rejected} is NA when the estimate
-#'   or standard error is not usable (non-finite, or se <= 0).
-wald_interaction_decision <- function(estimate, se, alpha) {
-  usable <- is.finite(estimate) && is.finite(se) && se > 0
+#' @return List with the four interaction_* result fields. \code{interaction_rejected} is NA when the estimate,
+#'   standard error or df is not usable (non-finite, se <= 0, or df <= 0).
+wald_interaction_decision <- function(estimate, se, df, alpha) {
+  usable <- is.finite(estimate) && is.finite(se) && se > 0 && length(df) == 1L && is.finite(df) && df > 0
   list(
     interaction_tested = TRUE,
-    interaction_rejected = if (usable) abs(estimate / se) > stats::qnorm(1 - alpha / 2) else NA,
+    interaction_rejected = if (usable) abs(estimate / se) > stats::qt(1 - alpha / 2, df) else NA,
     interaction_alpha = alpha,
-    interaction_test_procedure = "wald_z"
+    interaction_test_procedure = "wald_t"
   )
 }
 
 set_interaction_decision <- function(result_row, alpha) {
-  decision <- wald_interaction_decision(result_row$estimate_beta3, result_row$se_beta3, alpha)
+  decision <- wald_interaction_decision(
+    result_row$estimate_beta3, result_row$se_beta3, result_row$df_beta3, alpha
+  )
   result_row[names(decision)] <- decision
   result_row
 }
@@ -1153,7 +1188,7 @@ set_interaction_decision <- function(result_row, alpha) {
 #' @param fit_result    List returned by fit_classical_ml_model().
 #' @param original_data Original canonical long-format dataset for one replicate.
 #' @param analysis_data Prepared observed-data analysis frame.
-#' @param alpha         Significance level of the Wald z interaction decision.
+#' @param alpha         Significance level of the Wald t interaction decision.
 #'
 #' @return One-row data frame for the fitted simulation replicate.
 
@@ -1205,6 +1240,7 @@ extract_classical_ml_results <- function(
   result_row$cov_b0b1 <- extract_varcorr_value(varcorr_df, "subject_id", "(Intercept)", "time_value")
   result_row$var_b1 <- extract_varcorr_value(varcorr_df, "subject_id", "time_value")
   result_row$sigma2_hat <- extract_varcorr_value(varcorr_df, "Residual")
+  result_row$df_beta3 <- length(unique(analysis_data$subject_id)) - 2
   set_interaction_decision(result_row, alpha)
 }
 
@@ -1242,6 +1278,9 @@ extract_closed_form_results <- function(
   }
   common_names <- intersect(names(result_row), names(fit_result$fit))
   result_row[common_names] <- fit_result$fit[common_names]
+  if (method == "reweighting") {
+    result_row$df_beta3 <- length(unique(analysis_data$subject_id)) - 2
+  }
   set_interaction_decision(result_row, alpha)
 }
 
