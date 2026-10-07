@@ -86,3 +86,17 @@ Ground rules:
 
 At the end: full test suite, then draft the PR description (golden differences listed). No smoke
 run unless the user asks; if asked, estimate the duration first.
+
+## Status (2026-10-07)
+
+- [x] 1. build: lock geepack (`92fed7a`)
+- [x] 2. feat: geeglm engine in `fit_lspim()` (`69b2ee4`), golden check clean
+- [x] 3. feat: route by `lspim_geeglm_min_n` and label the engine (`48c78f9`). `engine` is a key
+  column in `compare_golden.R`, so the relabel showed up as row-key changes instead of an
+  allowlistable cell difference. The old fixture with its 4 LSPIM labels set to `"geessbin"` is
+  `all.equal()` to the regenerated one.
+- [x] 4. chore: run_all config (`16672df`)
+- [x] 5. docs: README
+- Full suite: 678 expectations, 14 failures, all in `test-run-all-grid.R`. They were already
+  failing on `main` since `9f8748e` added `beta3 = 0.22` to the `run_all.R` grid; this branch does
+  not touch them.
