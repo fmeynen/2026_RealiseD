@@ -21,9 +21,11 @@ make_deviation_from_mean_l <- function(beta_names, treatment_terms) {
   }
   L
 }
-nearest_psd <- function(V, eps = 1e-8) {
+nearest_psd <- function(V, eps = 1e-8, eig = NULL) {
+  # `eig`: optional eigen(V, symmetric = TRUE) of the already symmetrised V, to skip the
+  # recomputation.
   V <- (V + t(V)) / 2
-  ee <- eigen(V, symmetric = TRUE)
+  ee <- if (is.null(eig)) eigen(V, symmetric = TRUE) else eig
   vals <- pmax(ee$values, eps)
   out <- ee$vectors %*% diag(vals, length(vals)) %*% t(ee$vectors)
   dimnames(out) <- dimnames(V)
@@ -193,13 +195,13 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
         }
         V_for_inference <- V_raw
         V_eig_check <- (V_raw + t(V_raw)) / 2
-        if (min(eigen(V_eig_check, symmetric = TRUE, only.values = TRUE)$values) < -1e-8 ||
-              any(diag(V_raw) <= 0)) {
+        V_eig <- eigen(V_eig_check, symmetric = TRUE)
+        if (min(V_eig$values) < -1e-8 || any(diag(V_raw) <= 0)) {
           warning(
             "Combined V has negative eigenvalues or non-positive variances; ",
             "using nearest PSD matrix for numerical inference."
           )
-          V_for_inference <- nearest_psd(V_raw)
+          V_for_inference <- nearest_psd(V_raw, eig = V_eig)
         }
 
         L_const <- make_deviation_from_mean_l(names(beta), treatment_terms)
