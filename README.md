@@ -40,7 +40,7 @@ are the only method names used anywhere in the code):
 | `classical_ml` | `lme4` | `lme4::lmer()` with `REML = FALSE` on the observed rows. |
 | `multiple_imputation` | `mice_cbc` | Two-level imputation (`mice`, `method_y = "2l.pmm"` via `miceadds`, `m = 3`) of `y`; the imputation model has `treatment`, `time_value` (fixed effect and random slope per subject) and `trt_time` = `treatment * time_value` (fixed effect, derived by `impute_data()`). The closed-form cluster-by-cluster (CbC) estimator is fitted **on each of the `m` completed datasets** and the fits are pooled with Rubin's rules (`pool_rubin()`): estimate = mean of the `m` estimates, SE = sqrt(`U_bar` + (1 + 1/`m`) `B`) with `U_bar` the mean per-imputation variance and `B` the variance of the estimates; `sigma2_hat` and the `D` entries are means of the per-imputation values. |
 | `reweighting` | `cbc` | CbC estimator on the observed data (subjects with fewer than 3 observations excluded), followed by iterative reweighting with optimal weights. Update is damped (`damping`, default 0.7) and stops when the max change in beta is below `epsilon_B` (1e-6) or after `max_iterations` (30). |
-| `LSPIM` | `LSPIM` | Pairwise pseudo-observations (win = 1, tie = 0.5) within subjects and between arms per visit, three GEE fits (`geessbin`), combined sandwich variance, and a Holm-adjusted test (`multcomp`) that the per-visit treatment effects differ. Reports only an interaction test decision, no beta estimates. Skipped for scenarios with `n > lspim_max_n` (default 50). |
+| `LSPIM` | `geessbin` or `geeglm` | Pairwise pseudo-observations (win = 1, tie = 0.5) within subjects and between arms per visit, three logistic GEE fits (independence; clustered by left subject, right subject and pair), combined sandwich variance, and a Holm-adjusted test (`multcomp`) that the per-visit treatment effects differ. Reports only an interaction test decision, no beta estimates. Engine: scenarios with `n >= lspim_geeglm_min_n` (default `Inf`, i.e. never) use `geepack::geeglm()` (binomial logit, `std.err = "san.se"`); the others `geessbin` with Firth-penalised estimates (`PGEE`) and the Fay-Graubard variance (`FW`), which are slow at large n. Skipped for scenarios with `n > lspim_max_n` (default 50; `Inf` switches the gate off). |
 
 The CbC estimator (`cbc_estimator()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)) is
 a two-stage closed-form estimator: per-subject OLS in stage 1, weighted combination in stage 2.
@@ -184,7 +184,7 @@ The criterion differs per method:
 | `classical_ml` | the optimizer return code is non-zero, or lme4's convergence checks produced any message (e.g. "Model failed to converge with max\|grad\| …", "Model is nearly unidentifiable …"); see `lme4_converged()` | lme4's "boundary (singular) fit" notice is **deliberately ignored** for convergence: singular fits count as converged and appear as `converged_singular` |
 | `multiple_imputation` | never on a successful fit (the `m` CbC fits are closed form; `mice` runs a fixed number of iterations with no convergence test). If the imputation or any of the `m` fits fails, the replicate is an error (message `imputation k: ...` for a failed fit); there is no pooling over fewer fits | `D_tilde` positive-definiteness repair in any of the `m` fits (also makes the fit singular, see below) |
 | `reweighting` | the reweighting loop reached `max_iterations` while the largest change in beta was still above `epsilon_B` (flag `converged` returned by `cbc_estimator()`) | `D_tilde` positive-definiteness repair (also makes the fit singular, see below) |
-| `LSPIM` | any of its three GEE fits (`geessbin`) reports a `convergence` status other than "converged": in geessbin 1.0.2 that is "maximum number of iterations consumed" (iteration limit reached without meeting the tolerance), "convergence failure", "fitted probabilities numerically 0 or 1 occurred." or "infinite scale parameter" (`lspim_gees_converged()`) | replacing the combined covariance `V` by the nearest positive semi-definite matrix (`nearest_psd()`) |
+| `LSPIM` | any of its three GEE fits did not converge (`lspim_gees_converged()`). Engine `geessbin`: a `convergence` status other than "converged"; in geessbin 1.0.2 that is "maximum number of iterations consumed" (iteration limit reached without meeting the tolerance), "convergence failure", "fitted probabilities numerically 0 or 1 occurred." or "infinite scale parameter". Engine `geeglm`: a nonzero (or missing) `geese$error` code. geeglm's "non-integer #successes in a binomial glm!" warning (from the 0.5 tie scores) is expected and not recorded | replacing the combined covariance `V` by the nearest positive semi-definite matrix (`nearest_psd()`) |
 
 **Positive-definiteness repairs (CbC `D_tilde`, LSPIM `V`) never make a fit not converged.** A
 repaired CbC `D_tilde` (`multiple_imputation`, `reweighting`) additionally counts as a singular
@@ -268,7 +268,10 @@ supplementary_material/      CbC derivation (CBCEstimator.tex/.pdf) and papers
      required grid column.
    - `n_simulations`: B, the number of replicates per scenario.
    - `analysis_configs`: per-method overrides of the defaults in `build_analysis_registry()`,
-     e.g. `set_fit_args(reweighting = TRUE, damping = 0.5)` or `lspim_max_n`.
+     e.g. `set_fit_args(reweighting = TRUE, damping = 0.5)`. LSPIM takes `lspim_max_n` (run only
+     for `n <= lspim_max_n`; `Inf` runs every scenario) and `lspim_geeglm_min_n` (use the faster
+     `geeglm` engine for `n >= lspim_geeglm_min_n`; `Inf` keeps `geessbin` everywhere).
+     `run_all.R` sets `lspim_max_n = Inf` and `lspim_geeglm_min_n = 100`.
    - `alpha` in the `run_requested_analyses()` call: the one significance level shared by all
      methods (default 0.05). It is part of the analysis hash, so changing it reruns every method.
      A per-method `analysis_configs$LSPIM$alpha` is an error.
