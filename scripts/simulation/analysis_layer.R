@@ -1149,30 +1149,33 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
 
 # Results extraction ------------------------------------------------------------------------------------------------
 
-# Wald z decision on beta3, shared by the parametric methods (classical_ml, multiple_imputation, reweighting).
-# For classical_ml a t-test with Satterthwaite df (lmerTest) might be more accurate at small n; not implemented,
-# see BACKLOG.md.
+# Wald t decision on beta3, shared by the parametric methods (classical_ml, multiple_imputation, reweighting).
+# The df is stored per replicate in df_beta3: N - 2 for classical_ml and reweighting, Barnard-Rubin for
+# multiple_imputation; see plans/2026-10-07-small-sample-df.md.
 
-#' Decide the interaction test with a two-sided Wald z test on beta3.
+#' Decide the interaction test with a two-sided Wald t test on beta3.
 #'
 #' @param estimate Estimate of beta3.
 #' @param se       Standard error of beta3.
+#' @param df       Degrees of freedom of the t reference distribution.
 #' @param alpha    Significance level.
 #'
-#' @return List with the four interaction_* result fields. \code{interaction_rejected} is NA when the estimate
-#'   or standard error is not usable (non-finite, or se <= 0).
-wald_interaction_decision <- function(estimate, se, alpha) {
-  usable <- is.finite(estimate) && is.finite(se) && se > 0
+#' @return List with the four interaction_* result fields. \code{interaction_rejected} is NA when the estimate,
+#'   standard error or df is not usable (non-finite, se <= 0, or df <= 0).
+wald_interaction_decision <- function(estimate, se, df, alpha) {
+  usable <- is.finite(estimate) && is.finite(se) && se > 0 && length(df) == 1L && is.finite(df) && df > 0
   list(
     interaction_tested = TRUE,
-    interaction_rejected = if (usable) abs(estimate / se) > stats::qnorm(1 - alpha / 2) else NA,
+    interaction_rejected = if (usable) abs(estimate / se) > stats::qt(1 - alpha / 2, df) else NA,
     interaction_alpha = alpha,
-    interaction_test_procedure = "wald_z"
+    interaction_test_procedure = "wald_t"
   )
 }
 
 set_interaction_decision <- function(result_row, alpha) {
-  decision <- wald_interaction_decision(result_row$estimate_beta3, result_row$se_beta3, alpha)
+  decision <- wald_interaction_decision(
+    result_row$estimate_beta3, result_row$se_beta3, result_row$df_beta3, alpha
+  )
   result_row[names(decision)] <- decision
   result_row
 }
@@ -1185,7 +1188,7 @@ set_interaction_decision <- function(result_row, alpha) {
 #' @param fit_result    List returned by fit_classical_ml_model().
 #' @param original_data Original canonical long-format dataset for one replicate.
 #' @param analysis_data Prepared observed-data analysis frame.
-#' @param alpha         Significance level of the Wald z interaction decision.
+#' @param alpha         Significance level of the Wald t interaction decision.
 #'
 #' @return One-row data frame for the fitted simulation replicate.
 
@@ -1237,6 +1240,7 @@ extract_classical_ml_results <- function(
   result_row$cov_b0b1 <- extract_varcorr_value(varcorr_df, "subject_id", "(Intercept)", "time_value")
   result_row$var_b1 <- extract_varcorr_value(varcorr_df, "subject_id", "time_value")
   result_row$sigma2_hat <- extract_varcorr_value(varcorr_df, "Residual")
+  result_row$df_beta3 <- length(unique(analysis_data$subject_id)) - 2
   set_interaction_decision(result_row, alpha)
 }
 
@@ -1274,6 +1278,9 @@ extract_closed_form_results <- function(
   }
   common_names <- intersect(names(result_row), names(fit_result$fit))
   result_row[common_names] <- fit_result$fit[common_names]
+  if (method == "reweighting") {
+    result_row$df_beta3 <- length(unique(analysis_data$subject_id)) - 2
+  }
   set_interaction_decision(result_row, alpha)
 }
 
