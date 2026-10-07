@@ -74,7 +74,8 @@ analysis_configs <- list(
     fit_args = set_fit_args(reweighting = TRUE)
   ),
   LSPIM = list(
-    lspim_max_n = 50
+    lspim_max_n = Inf,
+    lspim_glm_sandwich_min_n = 100
   )
 )
 

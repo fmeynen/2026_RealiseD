@@ -10,7 +10,7 @@
 #     analyze_reweighting, analyze_lspim
 #   analyze_generated_data_classical_ml, analyze_generated_data_mi_closed_form,
 #     analyze_generated_data_reweighting, analyze_generated_data_lspim
-#   build_analysis_registry, resolve_analysis_config, run_single_analysis_method
+#   validate_lspim_config, build_analysis_registry, resolve_analysis_config, run_single_analysis_method
 
 # Analyze Single Dataset ---------------------------------------------------------------------------------------
 
@@ -169,19 +169,28 @@ analyze_reweighting <- function(data, fit_args = set_fit_args(), alpha = 0.05) {
   )
 }
 
-analyze_lspim <- function(data, alpha = 0.05) {
+#' Run the LSPIM analysis for one simulation replicate.
+#'
+#' @param data   Long-format data frame for one simulation replicate.
+#' @param alpha  Significance level shared by all methods.
+#' @param engine LSPIM engine, "geessbin" or "glm_sandwich" (see fit_lspim()). Recorded in the result's
+#'   \code{engine} column, also on failure rows. The \code{method} stays "LSPIM".
+#'
+#' @return One-row data frame with standardized LSPIM analysis results.
+
+analyze_lspim <- function(data, alpha = 0.05, engine = "geessbin") {
   run_method(
     data,
     method = "LSPIM",
-    engine = "LSPIM",
-    fit = function(analysis_data) fit_lspim(analysis_data, alpha = alpha),
+    engine = engine,
+    fit = function(analysis_data) fit_lspim(analysis_data, alpha = alpha, engine = engine),
     extract = function(fit_result, original_data, analysis_data) {
       extract_lspim_results(
         fit_result = fit_result,
         original_data = original_data,
         analysis_data = analysis_data,
         method = "LSPIM",
-        engine = "LSPIM"
+        engine = engine
       )
     }
   )
@@ -297,12 +306,19 @@ analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
   )
 }
 
+#' Run the LSPIM analysis across generated simulation datasets.
+#'
+#' @param engine LSPIM engine for every replicate, "geessbin" or "glm_sandwich". The registry runner
+#'   chooses it per scenario from the \code{lspim_glm_sandwich_min_n} config key.
+#' @inheritParams analyze_generated_data_classical_ml
+
 analyze_generated_data_lspim <- function(
   data,
   scenarios = NULL,
   alpha = 0.05,
   parallel = FALSE,
-  n_cores = default_n_cores()
+  n_cores = default_n_cores(),
+  engine = "geessbin"
 ) {
   run_analysis_over_groups(
     data = data,
@@ -310,10 +326,25 @@ analyze_generated_data_lspim <- function(
     analyzer_fn = analyze_lspim,
     parallel = parallel,
     n_cores = n_cores,
-    alpha = alpha
+    alpha = alpha,
+    engine = engine
   )
 }
 
+
+# Stops unless the LSPIM config holds single, non-missing numbers for 'lspim_max_n' and
+# 'lspim_glm_sandwich_min_n'.
+validate_lspim_config <- function(config) {
+  for (key in c("lspim_max_n", "lspim_glm_sandwich_min_n")) {
+    value <- config[[key]]
+    if (!is.numeric(value) || length(value) != 1L || is.na(value)) {
+      stop(
+        "LSPIM config '", key, "' must be a single number; ",
+        "set it in analysis_configs$LSPIM"
+      )
+    }
+  }
+}
 
 build_analysis_registry <- function() {
   list(
@@ -361,29 +392,32 @@ build_analysis_registry <- function() {
         )
       }
     ),
+    # lspim_max_n: LSPIM only runs on scenarios with n <= lspim_max_n (Inf switches the gate off).
+    # lspim_glm_sandwich_min_n: scenarios with n >= this use the glm_sandwich engine, the others
+    # geessbin (Inf, the default, keeps geessbin everywhere).
     LSPIM = list(
-      default_config = list(lspim_max_n = 50),
+      default_config = list(lspim_max_n = 50, lspim_glm_sandwich_min_n = Inf),
       applies_to = function(scenario_row, config) {
-        if (!is.numeric(config$lspim_max_n) ||
-              length(config$lspim_max_n) != 1L ||
-              is.na(config$lspim_max_n)) {
-          stop(
-            "LSPIM config 'lspim_max_n' must be a single number; ",
-            "set it in analysis_configs$LSPIM"
-          )
-        }
+        validate_lspim_config(config)
         if (is.null(scenario_row$n) || is.na(scenario_row$n)) {
           stop("scenario metadata has no 'n' column")
         }
         scenario_row$n <= config$lspim_max_n
       },
       runner = function(scenario_data, scenarios, config, parallel, n_cores, alpha) {
+        validate_lspim_config(config)
+        n_scenario <- unique(scenarios$n)
+        if (length(n_scenario) != 1L || is.na(n_scenario)) {
+          stop("LSPIM runner needs scenario metadata with exactly one non-missing 'n' value")
+        }
+        engine <- if (n_scenario >= config$lspim_glm_sandwich_min_n) "glm_sandwich" else "geessbin"
         analyze_generated_data_lspim(
           data = scenario_data,
           scenarios = scenarios,
           alpha = alpha,
           parallel = parallel,
-          n_cores = n_cores
+          n_cores = n_cores,
+          engine = engine
         )
       }
     )

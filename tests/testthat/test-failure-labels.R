@@ -47,5 +47,5 @@ test_that("analyze_lspim failure row matches success labels", {
 
   expect_equal(result$status, "failure")
   expect_equal(result$method, "LSPIM")
-  expect_equal(result$engine, "LSPIM")
+  expect_equal(result$engine, "geessbin")
 })
