@@ -142,7 +142,9 @@ Ground rules:
      numeric and take values in {0, 1}"), so the replicate fails with that error message. The
      `glm_sandwich` engine accepts 0.5 (its non-integer warning is muffled). Ties are unlikely
      with continuous outcomes but possible after rounding. Decide whether to handle ties (e.g.
-     split the pair into two half-weighted 0/1 rows, which gives the same estimating equations)
+     split the pair into two half-weighted 0/1 rows; this keeps the ordinary score and the
+     cluster sums, but geessbin has no weights argument and the PGEE penalty and FW leverages
+     would change)
      or document the restriction.
    - Remove the clarity item "pass the estimates to `multcomp` with `parm()`": it is already done
      ([lspim.R](../scripts/simulation/lspim.R), the `glht(parm(...))` call).
@@ -157,3 +159,37 @@ Ground rules:
   that beta, V, Holm p, `converged` and the warnings are identical.
 - PR description: list the four cleanups, the note and the backlog changes, and state that the
   goldens show no differences.
+
+## Implementation status (2026-10-07)
+
+All six items are done on `refactor/lspim-efficiency`:
+
+- [x] 1. Pairs in one pass (`7c07ce1`).
+- [x] 2. No `dplyr::bind_rows()`; `pair_type` dropped (`4696d49`). `dplyr` stays in `renv.lock`
+  (used by `scripts/reference/alvaro_cbc/rework_paper_alvaro.R`).
+- [x] 3. Only the needed columns; `L`/`R` are now lists of the left/right columns (`104ed31`).
+- [x] 4. One eigendecomposition: `nearest_psd(V, eps, eig = NULL)` (`777aa6e`). On 200 random
+  6 x 6 matrices the eigenvalues with and without vectors differ by at most 6e-14, far from the
+  `-1e-8` threshold; `nearest_psd()` results are identical.
+- [x] 5. Note `supplementary_material/lspim-pgee-fw-in-house.md`.
+- [x] 6. Backlog updated (including the ties item and two items made stale by item 3).
+
+Verification: `compare_golden.R` showed no differences after each of items 1-4; the scratch
+before/after check (two `glm_sandwich` fits at n = 100, with and without dropout, and two
+geessbin fits) was `identical()` after each item. Fast suite: 197 tests, 5 failures, all in
+`test-run-all-grid.R` (the scenario-grid design checks, known to fail on `main`; they do not call
+LSPIM).
+
+Corrections to the Facts section, found while writing the note (the note has the details):
+
+- Convergence labels also include "maximum number of iterations consumed"; "convergence failure"
+  is unreachable in practice.
+- Cluster sizes: visits x n/2 + choose(visits, 2) holds only for control subjects in C1 and
+  treated subjects in C2; the other subjects' clusters have choose(visits, 2) rows. C3 has about
+  n^2/4 + n small clusters, which makes geessbin's per-cluster subsetting O(n^4).
+- The outcome check also fails when all pseudo-scores are 0 or all are 1.
+- `sqrtmat()` uses the symmetric eigen routine when its argument is exactly symmetric.
+- A cluster leverage of 1 does occur with dropout (e.g. one control subject observed at a visit);
+  an in-house version should then compute that cluster literally as geessbin does.
+- geessbin's update is Fisher scoring with the unpenalised information, not a Newton step for the
+  penalised equation; an in-house version must copy it.
