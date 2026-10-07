@@ -75,7 +75,7 @@ analysis_configs <- list(
   ),
   LSPIM = list(
     lspim_max_n = Inf,
-    lspim_geeglm_min_n = 100
+    lspim_glm_sandwich_min_n = 100
   )
 )
 
