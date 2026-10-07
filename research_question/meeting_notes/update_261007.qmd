@@ -150,24 +150,6 @@ convergence_plot <- function(df) {
     theme(legend.position = "bottom", axis.text.x = element_text(size = 7))
 }
 
-convergence_table <- function(df, caption) {
-  df |>
-    group_by(method, drop_short, n) |>
-    summarise(
-      singular = mean(prop_converged_singular),
-      not_conv = mean(prop_not_converged),
-      .groups = "drop"
-    ) |>
-    pivot_longer(c(singular, not_conv), names_to = "what", values_to = "value") |>
-    mutate(col = paste(drop_short, ifelse(what == "singular", "singular", "not conv."), sep = ": "), value = fmt3_trim(value)) |>
-    arrange(drop_short != "HM") |>
-    select(n, method, col, value) |>
-    pivot_wider(names_from = col, values_from = value) |>
-    arrange(n, method) |>
-    rename(Method = method) |>
-    knitr::kable(caption = caption, align = "l")
-}
-
 lambda_table <- function(df, caption) {
   df |>
     filter(method == "MI + closed form") |>
@@ -182,16 +164,38 @@ lambda_table <- function(df, caption) {
 
 # Overview methods
 
-| Method | Configuration | "Not converged" when |
-|----|----|----|
-| Classical ML | `lme4::lmer`, ML (REML = FALSE); Wald $z$ test on $\beta_3$ | optimizer code $\neq 0$ or an lme4 convergence message |
-| MI + closed form | `mice` `2l.pmm`, 3 imputations, `maxit` = 10; closed form (CbC) per imputation, pooled with Rubin's rules; Wald $z$ test | never, if all fits succeed (any failed imputation fit = error) |
-| Closed form + iterative reweighting | Reweighting until max $\Delta\beta < 10^{-6}$, at most 30 iterations; Wald $z$ test | the loop hits 30 iterations |
-| LSPIM | Pseudo-score GEE model, Holm-adjusted interaction test; only run for $n \leq 50$ | any of its GEEs does not converge |
+| Method | Configuration |
+|-------|-----------------------------------------|
+| Classical ML | `lme4::lmer`, ML (REML = FALSE); Wald $z$ test on $\beta_3$ |
+| MI + closed form | `mice` `2l.pmm`, 3 imputations, `maxit` = 10; closed form (CbC) per imputation, pooled with Rubin's rules; Wald $z$ test on $\beta_3$ |
+| Reweighting | Closed form, reweighted until max $\Delta\beta < 10^{-6}$, at most 30 iterations; Wald $z$ test on $\beta_3$ |
+| LSPIM | Pseudo-score GEE model, Holm-adjusted interaction test; only run for $n \leq 50$ |
+
+: Configuration of the methods. {tbl-colwidths="[20,80]"}
+
+| Method | "Not converged" when |
+|-------|-----------------------------------------|
+| Classical ML | optimizer code $\neq 0$ or an lme4 convergence message (e.g. max\|grad\| $> 0.002$) |
+| MI + closed form | never; a failed fit in any imputation counts as an error |
+| Reweighting | the loop reaches 30 iterations without meeting the $\Delta\beta$ criterion |
+| LSPIM | any of its GEEs does not converge |
+
+: Definition of "not converged" per method. {tbl-colwidths="[20,80]"}
+
+Each replicate gets exactly one of five convergence statuses, checked in this order:
+
+| Status | Meaning |
+|-------|-----------------------------------------|
+| Error | The fit failed (no estimates); excluded from all metrics. |
+| Not converged | Fit returned estimates, but the method's convergence criterion (table above) was not met. |
+| Converged (singular) | Converged, but the random-effects covariance is at the boundary (smallest eigenvalue $\leq 10^{-6}$, or $D$ repaired to positive definite). |
+| Converged (warning) | Converged and not singular, but a warning was raised (e.g. lme4's boundary message at its looser tolerance; for reweighting a $D$ repair or NaNs in an intermediate iteration). |
+| Converged | Converged, not singular, no warning. |
+
+: Convergence statuses. {tbl-colwidths="[24,76]"}
 
 -   All tests at $\alpha = 0.05$; coverage of the 95% Wald interval.
--   Singular fits (boundary random-effects covariance, or a repaired $D$ for the closed-form methods) are kept in all metrics and shown as a separate status.
--   Only replicates that end in an error are excluded from the metrics.
+-   All statuses except "error" are kept in all metrics.
 
 ```{r}
 #| label: failed-note
@@ -214,20 +218,24 @@ if (nrow(failed) > 0) {
 
 # Simulation setup
 
-Linear model: $$ y_{ij} = \beta_0 + \beta_1 Treatment_i + \beta_2 Time_j + \beta_3 Treatment_i \times Time_j + b_{0i} + b_{1i} Time_j + \varepsilon_{ij}, \quad Time_j = j = 0, \dots, 11 $$
+Linear model, $t_j = j = 0, \dots, 11$: $$ y_{ij} = \beta_0 + \beta_1 Treatment_i + \beta_2 t_j + \beta_3 Treatment_i \times t_j + b_{0i} + b_{1i} t_j + \varepsilon_{ij} $$
 
-Log model: the same, with $Time_j$ replaced by $\log(1 + j)$ in both the mean and the random slope.
+Log model, $t_j = j = 0, \dots, 11$: $$ y_{ij} = \beta_0 + \beta_1 Treatment_i + \beta_2 \log(1 + t_j) + \beta_3 Treatment_i \times \log(1 + t_j) + b_{0i} + b_{1i} \log(1 + t_j) + \varepsilon_{ij} $$
 
-| Effect | Parameter | Linear | Log |
-|----|----|----|----|
+In both models $(b_{0i}, b_{1i})^\top \sim N(0, D)$ with $D = \begin{pmatrix} d_{11} & d_{12} \\ d_{12} & d_{22} \end{pmatrix}$ and $\varepsilon_{ij} \sim N(0, \sigma^2)$.
+
+| Effect | Symbol | Linear | Log |
+|---------------|------|-------------|--------------------------|
 | Intercept | $\beta_0$ | 2.4562 | 2.4562 |
-| Treatment effect | $\beta_1$ | 0 | $-2.42$ (large), $-0.385$ (small), 0 (null) |
+| Treatment effect | $\beta_1$ | 0 | $-2.42$ / $-0.385$ / 0 |
 | Time effect | $\beta_2$ | 0.2792 | 1.2359 |
-| Treatment $\times$ time | $\beta_3$ | 0.22, 0.035, 0 (null) | 1.948 (large), 0.310 (small), 0 (null) |
+| Treatment $\times$ time | $\beta_3$ | 0.22 / 0.035 / 0 | 1.948 / 0.310 / 0 |
 | Random intercept variance | $d_{11}$ | 7.3174 | 7.3174 |
 | Random slope variance | $d_{22}$ | 0.2239 | 4.3875 |
 | Random effects covariance | $d_{12}$ | $-0.4985$ | $-2.2067$ |
 | Residual variance | $\sigma^2$ | 3.1508 | 3.1508 |
+
+: Data-generating parameters; a / b / c gives the values of the large, small and null effect. {tbl-colwidths="[36,10,24,30]"}
 
 -   Linear parameters taken from the toenail data ($\beta_3 = 0.035$); $\beta_3 = 0.22$ added as a larger effect.
 -   Log parameters: $\beta_2$, $d_{22}$ and $d_{12}$ rescaled by $11 / \log 12$, so the rise and the slope variance at $t = 11$ match the linear scenario.
@@ -235,12 +243,43 @@ Log model: the same, with $Time_j$ replaced by $\log(1 + j)$ in both the mean an
 -   Log null: identical arms ($\beta_1 = \beta_3 = 0$).
 
 | Variable | Value |
-|----|----|
+|---------------|---------------------------------------------|
 | Number of clusters | 10, 20, 50, 100, 1000 |
 | Number of repeated measures | 12 |
 | Missingness pattern | "Half-missing" (HM): half of the clusters have no missingness, the other half have a uniform probability to keep 1--11 observations; dropout is monotone. |
 | | "Three observations minimum" (3O): as half-missing, but with at least three observations per cluster. |
-| Number of simulations per scenario | 5000 |
+| Simulations per scenario | 5000 |
+
+: Simulation design. {tbl-colwidths="[31,69]"}
+
+```{r}
+#| label: fig-log-profiles
+#| fig-cap: "Mean profiles per arm for the log time trend, from the simulation parameters."
+#| fig-height: 3
+#| fig-pos: "H"
+log_par <- data.frame(
+  effect = factor(
+    c("large (beta1 = -2.42, beta3 = 1.95)", "small (beta1 = -0.385, beta3 = 0.31)", "null (identical arms)"),
+    levels = c("large (beta1 = -2.42, beta3 = 1.95)", "small (beta1 = -0.385, beta3 = 0.31)", "null (identical arms)")
+  ),
+  beta1 = c(-2.42, -0.385, 0),
+  beta3 = c(2 * 0.22 * 11 / log(12), 2 * 0.035 * 11 / log(12), 0)
+)
+beta0 <- 2.4562
+beta2 <- 0.2792 * 11 / log(12)
+profiles <- merge(log_par, expand.grid(t = 0:11, arm = c("Control", "Treatment"))) |>
+  mutate(mean_y = beta0 + beta2 * log1p(t) + (arm == "Treatment") * (beta1 + beta3 * log1p(t)))
+
+ggplot(profiles, aes(x = t, y = mean_y, colour = arm)) +
+  geom_line() +
+  geom_point(size = 1.2) +
+  facet_wrap(~effect, labeller = label_wrap_gen(40)) +
+  scale_x_continuous(breaks = seq(0, 11, by = 2)) +
+  scale_colour_manual(values = c(Control = "#555555", Treatment = "#D55E00")) +
+  labs(x = "Time (t)", y = "Mean outcome", colour = NULL) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
 
 \newpage
 
@@ -255,7 +294,7 @@ metric_table(lin, "mse_beta3", "MSE of beta3 (HM = half-missing, 3O = three obse
 
 ```{r}
 #| label: fig-lin-mse
-#| fig-cap: "MSE of beta3 (log scale)."
+#| fig-cap: "MSE of beta3 for the linear time trend (log scale)."
 metric_plot(lin, "mse_beta3", "MSE (beta3)", log_y = TRUE)
 ```
 
@@ -273,7 +312,7 @@ metric_table(filter(lin, beta3 == 0), "type1_error", "Type I error rate of the i
 
 ```{r}
 #| label: fig-lin-t1e
-#| fig-cap: "Type I error rate (dotted line: nominal 0.05)."
+#| fig-cap: "Type I error rate for the linear time trend (dotted line: nominal 0.05)."
 metric_plot(filter(lin, beta3 == 0), "type1_error", "Type I error rate", hline = 0.05)
 ```
 
@@ -291,7 +330,7 @@ metric_table(filter(lin, beta3 != 0), "power", "Power of the interaction test.")
 
 ```{r}
 #| label: fig-lin-power
-#| fig-cap: "Power."
+#| fig-cap: "Power for the linear time trend."
 metric_plot(filter(lin, beta3 != 0), "power", "Power")
 ```
 
@@ -309,7 +348,7 @@ metric_table(lin, "coverage_beta3", "Coverage of the 95% Wald interval for beta3
 
 ```{r}
 #| label: fig-lin-cov
-#| fig-cap: "Coverage of the 95% interval for beta3 (dotted line: 0.95)."
+#| fig-cap: "Coverage of the 95% interval for beta3 for the linear time trend (dotted line: 0.95)."
 metric_plot(lin, "coverage_beta3", "Coverage (beta3)", hline = 0.95)
 ```
 
@@ -321,13 +360,8 @@ metric_plot(lin, "coverage_beta3", "Coverage (beta3)", hline = 0.95)
 ## Convergence
 
 ```{r}
-#| label: tbl-lin-conv
-convergence_table(lin, "Proportion of singular and not-converged replicates (pooled over effect sizes).")
-```
-
-```{r}
 #| label: fig-lin-conv
-#| fig-cap: "Convergence status, pooled over effect sizes."
+#| fig-cap: "Convergence status for the linear time trend, pooled over effect sizes."
 #| fig-height: 5
 convergence_plot(lin)
 ```
@@ -347,7 +381,7 @@ metric_table(lin, "time_median_seconds", "Median computation time per replicate 
 
 ```{r}
 #| label: fig-lin-time
-#| fig-cap: "Median computation time per replicate (log scale)."
+#| fig-cap: "Median computation time per replicate for the linear time trend (log scale)."
 metric_plot(lin, "time_median_seconds", "Median time (seconds)", log_y = TRUE)
 ```
 
@@ -381,7 +415,7 @@ metric_table(filter(logt, beta3 == 0), "type1_error", "Type I error rate of the 
 
 ```{r}
 #| label: fig-log-t1e
-#| fig-cap: "Type I error rate (dotted line: nominal 0.05)."
+#| fig-cap: "Type I error rate for the log time trend (dotted line: nominal 0.05)."
 metric_plot(filter(logt, beta3 == 0), "type1_error", "Type I error rate", hline = 0.05)
 ```
 
@@ -399,7 +433,7 @@ metric_table(filter(logt, beta3 != 0), "power", "Power of the interaction test."
 
 ```{r}
 #| label: fig-log-power
-#| fig-cap: "Power."
+#| fig-cap: "Power for the log time trend."
 metric_plot(filter(logt, beta3 != 0), "power", "Power")
 ```
 
@@ -411,13 +445,8 @@ metric_plot(filter(logt, beta3 != 0), "power", "Power")
 ## Convergence
 
 ```{r}
-#| label: tbl-log-conv
-convergence_table(logt, "Proportion of singular and not-converged replicates (pooled over effect sizes).")
-```
-
-```{r}
 #| label: fig-log-conv
-#| fig-cap: "Convergence status, pooled over effect sizes."
+#| fig-cap: "Convergence status for the log time trend, pooled over effect sizes."
 #| fig-height: 5
 convergence_plot(logt)
 ```
@@ -436,7 +465,7 @@ metric_table(logt, "time_median_seconds", "Median computation time per replicate
 
 ```{r}
 #| label: fig-log-time
-#| fig-cap: "Median computation time per replicate (log scale)."
+#| fig-cap: "Median computation time per replicate for the log time trend (log scale)."
 metric_plot(logt, "time_median_seconds", "Median time (seconds)", log_y = TRUE)
 ```
 
