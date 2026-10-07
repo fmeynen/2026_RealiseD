@@ -8,13 +8,6 @@ see the plans in [plans/](plans/) and the git history for what was done.
 
 ## Statistical methods
 
-- [ ] **[statistics] Accuracy target for the log scenarios.**
-  For `time_trend = "log"` the aggregation reports `NA` for MSE and coverage, because the linear
-  fits have no true beta ([aggregation_layer.R](scripts/simulation/aggregation_layer.R)). Options
-  if accuracy is wanted there: a pseudo-true beta (least-squares projection of the log curve on
-  linear time, which depends on the dropout pattern), or an extra correctly specified fit on
-  `log(1 + t)`.
-
 - [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
   Coverage uses a normal quantile at level 1 - alpha (alpha is the shared
   `interaction_alpha`, `compute_coverage_summary()` in
