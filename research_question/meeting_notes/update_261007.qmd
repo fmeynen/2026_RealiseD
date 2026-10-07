@@ -1,0 +1,491 @@
+---
+title: "Update Joint Modeling 07/10"
+format:
+  pdf:
+    papersize: a4
+    geometry: margin=2cm
+    fig-width: 7
+    fig-height: 4
+editor: visual
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(here)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+knitr::opts_chunk$set(dev = "png", dpi = 300)
+
+res_all <- readRDS(here::here(
+  "results", "data", "1aad8238bd68a72a", "aggregation_summary_default.rds"
+))$aggregation$summary
+
+# Method x scenario rows where every replicate errored carry no information; they are dropped and named below.
+failed <- res_all |> filter(prop_error == 1)
+res <- res_all |> filter(prop_error < 1)
+
+method_labels <- c(
+  classical_ml = "Classical ML",
+  multiple_imputation = "MI + closed form",
+  reweighting = "Reweighting",
+  LSPIM = "LSPIM"
+)
+method_colours <- c(
+  "Classical ML" = "#0072B2",
+  "MI + closed form" = "#E69F00",
+  "Reweighting" = "#009E73",
+  "LSPIM" = "#CC79A7"
+)
+dropout_labels <- c(half_missing = "Half-missing", three_obs_minimum = "Three observations minimum")
+
+# Log scenarios: only the large (-2.42, 1.95) and small (-0.385, 0.31) crossing pairs and the null are reported.
+is_pair <- function(b1, b3, p1, p3) abs(b1 - p1) < 1e-6 & abs(b3 - p3) < 0.005
+res <- res |>
+  mutate(
+    log_effect = case_when(
+      time_trend != "log" ~ NA_character_,
+      beta1 == 0 & beta3 == 0 ~ "null",
+      is_pair(beta1, beta3, -2.42, 1.948) ~ "large",
+      is_pair(beta1, beta3, -0.385, 0.310) ~ "small",
+      TRUE ~ "excluded"
+    )
+  ) |>
+  filter(is.na(log_effect) | log_effect != "excluded") |>
+  mutate(
+    method = factor(method_labels[method], levels = method_labels),
+    dropout = factor(dropout_labels[dropout_mechanism], levels = dropout_labels),
+    n = factor(n),
+    effect = case_when(
+      time_trend == "linear" & beta3 == 0 ~ "null (beta3 = 0)",
+      time_trend == "linear" ~ paste0("beta3 = ", signif(beta3, 3)),
+      log_effect == "null" ~ "null (identical arms)",
+      log_effect == "large" ~ "large (beta1 = -2.42, beta3 = 1.95)",
+      log_effect == "small" ~ "small (beta1 = -0.385, beta3 = 0.31)"
+    ),
+    effect = factor(effect, levels = c(
+      "beta3 = 0.22", "beta3 = 0.035", "null (beta3 = 0)",
+      "large (beta1 = -2.42, beta3 = 1.95)", "small (beta1 = -0.385, beta3 = 0.31)", "null (identical arms)"
+    )),
+    # Short column labels for the tables
+    eff_short = case_when(
+      beta3 == 0 ~ "0",
+      log_effect == "large" ~ "large",
+      log_effect == "small" ~ "small",
+      TRUE ~ as.character(signif(beta3, 3))
+    ),
+    eff_short = factor(eff_short, levels = c("0.22", "0.035", "large", "small", "0")),
+    drop_short = ifelse(dropout_mechanism == "half_missing", "HM", "3O")
+  )
+
+lin <- res |> filter(time_trend == "linear")
+logt <- res |> filter(time_trend == "log")
+
+# Three significant digits, keeping trailing zeros; NA as a dash.
+fmt3 <- function(x) ifelse(is.na(x), "-", formatC(signif(x, 3), format = "fg", digits = 3, flag = "#"))
+fmt3 <- Vectorize(fmt3)
+fmt3_trim <- function(x) sub("\\.$", "", fmt3(x))
+
+# Wide table: rows n x method, columns dropout x effect.
+metric_table <- function(df, metric, caption) {
+  df |>
+    mutate(value = fmt3_trim(.data[[metric]]), col = paste(drop_short, eff_short, sep = ": ")) |>
+    arrange(drop_short != "HM", eff_short) |>
+    select(n, method, col, value) |>
+    pivot_wider(names_from = col, values_from = value) |>
+    arrange(n, method) |>
+    rename(Method = method) |>
+    knitr::kable(caption = caption, align = "l")
+}
+
+metric_plot <- function(df, metric, ylab, hline = NULL, log_y = FALSE) {
+  p <- ggplot(df, aes(
+    x = n, y = .data[[metric]], colour = method, shape = effect, linetype = effect,
+    group = interaction(method, effect)
+  )) +
+    geom_line() +
+    geom_point(size = 2) +
+    facet_wrap(~dropout) +
+    scale_colour_manual(values = method_colours, drop = TRUE) +
+    labs(x = "Number of clusters", y = ylab, colour = "Method", shape = "Effect", linetype = "Effect") +
+    theme_minimal() +
+    theme(legend.position = "bottom", legend.box = "vertical")
+  if (n_distinct(df$effect) == 1) p <- p + guides(shape = "none", linetype = "none")
+  if (!is.null(hline)) p <- p + geom_hline(yintercept = hline, linetype = "dotted")
+  if (log_y) p <- p + scale_y_log10()
+  p
+}
+
+status_levels <- c(
+  prop_converged_ok = "Converged",
+  prop_converged_warning = "Converged (warning)",
+  prop_converged_singular = "Converged (singular)",
+  prop_not_converged = "Not converged",
+  prop_error = "Error"
+)
+
+# Convergence pooled over effect sizes: convergence barely depends on beta3.
+convergence_long <- function(df) {
+  df |>
+    group_by(method, dropout, n) |>
+    summarise(across(all_of(names(status_levels)), mean), .groups = "drop") |>
+    pivot_longer(all_of(names(status_levels)), names_to = "status", values_to = "prop") |>
+    mutate(status = factor(status_levels[status], levels = status_levels))
+}
+
+convergence_plot <- function(df) {
+  ggplot(convergence_long(df), aes(x = n, y = prop, fill = status)) +
+    geom_col(width = 0.75) +
+    facet_grid(dropout ~ method, labeller = label_wrap_gen(18)) +
+    scale_fill_manual(values = c("#009E73", "#56B4E9", "#F0E442", "#D55E00", "#999999"), drop = FALSE) +
+    labs(x = "Number of clusters", y = "Proportion of replicates", fill = NULL) +
+    theme_minimal() +
+    theme(legend.position = "bottom", axis.text.x = element_text(size = 7))
+}
+
+lambda_table <- function(df, caption) {
+  df |>
+    filter(method == "MI + closed form") |>
+    mutate(value = fmt3_trim(mean_mi_lambda_beta3), col = paste(drop_short, eff_short, sep = ": ")) |>
+    arrange(drop_short != "HM", eff_short) |>
+    select(n, col, value) |>
+    pivot_wider(names_from = col, values_from = value) |>
+    arrange(n) |>
+    knitr::kable(caption = caption, align = "l")
+}
+```
+
+# Overview methods
+
+| Method | Configuration |
+|-------|-----------------------------------------|
+| Classical ML | `lme4::lmer`, ML (REML = FALSE); Wald $z$ test on $\beta_3$ |
+| MI + closed form | `mice` `2l.pmm`, 3 imputations, `maxit` = 10; closed form (CbC) per imputation, pooled with Rubin's rules; Wald $z$ test on $\beta_3$ |
+| Reweighting | Closed form, reweighted until max $\Delta\beta < 10^{-6}$, at most 30 iterations; Wald $z$ test on $\beta_3$ |
+| LSPIM | Pseudo-score GEE model, Holm-adjusted interaction test; only run for $n \leq 50$ |
+
+: Configuration of the methods. {tbl-colwidths="[20,80]"}
+
+| Method | "Not converged" when |
+|-------|-----------------------------------------|
+| Classical ML | optimizer code $\neq 0$ or an lme4 convergence message (e.g. max\|grad\| $> 0.002$) |
+| MI + closed form | never; a failed fit in any imputation counts as an error |
+| Reweighting | the loop reaches 30 iterations without meeting the $\Delta\beta$ criterion |
+| LSPIM | any of its GEEs does not converge |
+
+: Definition of "not converged" per method. {tbl-colwidths="[20,80]"}
+
+Each replicate gets exactly one of five convergence statuses, checked in this order:
+
+| Status | Meaning |
+|-------|-----------------------------------------|
+| Error | The fit failed (no estimates); excluded from all metrics. |
+| Not converged | Fit returned estimates, but the method's convergence criterion (table above) was not met. |
+| Converged (singular) | Converged, but the random-effects covariance is at the boundary (smallest eigenvalue $\leq 10^{-6}$, or $D$ repaired to positive definite). |
+| Converged (warning) | Converged and not singular, but a warning was raised (e.g. lme4's boundary message at its looser tolerance; for reweighting a $D$ repair or NaNs in an intermediate iteration). |
+| Converged | Converged, not singular, no warning. |
+
+: Convergence statuses. {tbl-colwidths="[24,76]"}
+
+-   All tests at $\alpha = 0.05$; coverage of the 95% Wald interval.
+-   All statuses except "error" are kept in all metrics.
+
+```{r}
+#| label: failed-note
+#| results: asis
+
+if (nrow(failed) > 0) {
+  cat(
+    "::: callout-warning\n## Missing results\n\n",
+    "All replicates errored for: ",
+    paste(unique(method_labels[failed$method]), collapse = ", "),
+    " (", nrow(failed), " scenarios). ",
+    "These rows are left out of all tables and plots.\n\n",
+    "LSPIM: package `geessbin` was not installed on the computer that ran the simulation; a rerun is pending.\n:::\n",
+    sep = ""
+  )
+}
+```
+
+\newpage
+
+# Simulation setup
+
+Linear model, $t_j = j = 0, \dots, 11$: $$ y_{ij} = \beta_0 + \beta_1 Treatment_i + \beta_2 t_j + \beta_3 Treatment_i \times t_j + b_{0i} + b_{1i} t_j + \varepsilon_{ij} $$
+
+Log model, $t_j = j = 0, \dots, 11$: $$ y_{ij} = \beta_0 + \beta_1 Treatment_i + \beta_2 \log(1 + t_j) + \beta_3 Treatment_i \times \log(1 + t_j) + b_{0i} + b_{1i} \log(1 + t_j) + \varepsilon_{ij} $$
+
+In both models $(b_{0i}, b_{1i})^\top \sim N(0, D)$ with $D = \begin{pmatrix} d_{11} & d_{12} \\ d_{12} & d_{22} \end{pmatrix}$ and $\varepsilon_{ij} \sim N(0, \sigma^2)$.
+
+| Effect | Symbol | Linear | Log |
+|---------------|------|-------------|--------------------------|
+| Intercept | $\beta_0$ | 2.4562 | 2.4562 |
+| Treatment effect | $\beta_1$ | 0 | $-2.42$ / $-0.385$ / 0 |
+| Time effect | $\beta_2$ | 0.2792 | 1.2359 |
+| Treatment $\times$ time | $\beta_3$ | 0.22 / 0.035 / 0 | 1.948 / 0.310 / 0 |
+| Random intercept variance | $d_{11}$ | 7.3174 | 7.3174 |
+| Random slope variance | $d_{22}$ | 0.2239 | 4.3875 |
+| Random effects covariance | $d_{12}$ | $-0.4985$ | $-2.2067$ |
+| Residual variance | $\sigma^2$ | 3.1508 | 3.1508 |
+
+: Data-generating parameters; a / b / c gives the values of the large, small and null effect. {tbl-colwidths="[36,10,24,30]"}
+
+-   Linear parameters taken from the toenail data ($\beta_3 = 0.035$); $\beta_3 = 0.22$ added as a larger effect.
+-   Log parameters: $\beta_2$, $d_{22}$ and $d_{12}$ rescaled by $11 / \log 12$, so the rise and the slope variance at $t = 11$ match the linear scenario.
+-   Log crossing: arms cross at $t \approx 2.5$; the treatment difference at $t = 11$ equals that of the linear scenario with $\beta_3 = 0.22$ (large) or $0.035$ (small).
+-   Log null: identical arms ($\beta_1 = \beta_3 = 0$).
+
+| Variable | Value |
+|---------------|---------------------------------------------|
+| Number of clusters | 10, 20, 50, 100, 1000 |
+| Number of repeated measures | 12 |
+| Missingness pattern | "Half-missing" (HM): half of the clusters have no missingness, the other half have a uniform probability to keep 1--11 observations; dropout is monotone. |
+| | "Three observations minimum" (3O): as half-missing, but with at least three observations per cluster. |
+| Simulations per scenario | 5000 |
+
+: Simulation design. {tbl-colwidths="[31,69]"}
+
+```{r}
+#| label: fig-log-profiles
+#| fig-cap: "Mean profiles per arm for the log time trend, from the simulation parameters."
+#| fig-height: 3
+#| fig-pos: "H"
+log_par <- data.frame(
+  effect = factor(
+    c("large (beta1 = -2.42, beta3 = 1.95)", "small (beta1 = -0.385, beta3 = 0.31)", "null (identical arms)"),
+    levels = c("large (beta1 = -2.42, beta3 = 1.95)", "small (beta1 = -0.385, beta3 = 0.31)", "null (identical arms)")
+  ),
+  beta1 = c(-2.42, -0.385, 0),
+  beta3 = c(2 * 0.22 * 11 / log(12), 2 * 0.035 * 11 / log(12), 0)
+)
+beta0 <- 2.4562
+beta2 <- 0.2792 * 11 / log(12)
+profiles <- merge(log_par, expand.grid(t = 0:11, arm = c("Control", "Treatment"))) |>
+  mutate(mean_y = beta0 + beta2 * log1p(t) + (arm == "Treatment") * (beta1 + beta3 * log1p(t)))
+
+ggplot(profiles, aes(x = t, y = mean_y, colour = arm)) +
+  geom_line() +
+  geom_point(size = 1.2) +
+  facet_wrap(~effect, labeller = label_wrap_gen(40)) +
+  scale_x_continuous(breaks = seq(0, 11, by = 2)) +
+  scale_colour_manual(values = c(Control = "#555555", Treatment = "#D55E00")) +
+  labs(x = "Time (t)", y = "Mean outcome", colour = NULL) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+\newpage
+
+# Results - linear time trend
+
+## Mean squared error of $\beta_3$
+
+```{r}
+#| label: tbl-lin-mse
+metric_table(lin, "mse_beta3", "MSE of beta3 (HM = half-missing, 3O = three observations minimum; columns = true beta3).")
+```
+
+```{r}
+#| label: fig-lin-mse
+#| fig-cap: "MSE of beta3 for the linear time trend (log scale)."
+metric_plot(lin, "mse_beta3", "MSE (beta3)", log_y = TRUE)
+```
+
+-   MSE falls with the number of clusters at the same rate for all methods; the effect size and dropout mechanism hardly matter.
+-   MI has the lowest MSE at small $n$; from $n = 50$ onwards classical ML and reweighting are slightly better and similar to each other.
+
+\newpage
+
+## Type I error
+
+```{r}
+#| label: tbl-lin-t1e
+metric_table(filter(lin, beta3 == 0), "type1_error", "Type I error rate of the interaction test (beta3 = 0).")
+```
+
+```{r}
+#| label: fig-lin-t1e
+#| fig-cap: "Type I error rate for the linear time trend (dotted line: nominal 0.05)."
+metric_plot(filter(lin, beta3 == 0), "type1_error", "Type I error rate", hline = 0.05)
+```
+
+-   All methods are anti-conservative at small $n$; classical ML is inflated the most, MI and reweighting are similar.
+-   From $n = 100$ onwards all methods are close to nominal.
+
+\newpage
+
+## Power
+
+```{r}
+#| label: tbl-lin-power
+metric_table(filter(lin, beta3 != 0), "power", "Power of the interaction test.")
+```
+
+```{r}
+#| label: fig-lin-power
+#| fig-cap: "Power for the linear time trend."
+metric_plot(filter(lin, beta3 != 0), "power", "Power")
+```
+
+-   Classical ML has the highest power, then reweighting, then MI; at small $n$ this ordering partly mirrors the type I error inflation.
+-   For $\beta_3 = 0.035$ power stays low even at $n = 1000$; for $\beta_3 = 0.22$ all methods reach full power at $n = 1000$.
+
+\newpage
+
+## Coverage of $\beta_3$
+
+```{r}
+#| label: tbl-lin-cov
+metric_table(lin, "coverage_beta3", "Coverage of the 95% Wald interval for beta3.")
+```
+
+```{r}
+#| label: fig-lin-cov
+#| fig-cap: "Coverage of the 95% interval for beta3 for the linear time trend (dotted line: 0.95)."
+metric_plot(lin, "coverage_beta3", "Coverage (beta3)", hline = 0.95)
+```
+
+-   Undercoverage at small $n$ for all methods; classical ML is worst, MI and reweighting are similar.
+-   Coverage is close to nominal from $n = 50$ onwards.
+
+\newpage
+
+## Convergence
+
+```{r}
+#| label: fig-lin-conv
+#| fig-cap: "Convergence status for the linear time trend, pooled over effect sizes."
+#| fig-height: 5
+convergence_plot(lin)
+```
+
+-   Singular fits occur at $n = 10$ for all methods at a similar rate and almost vanish from $n = 20$.
+-   Reweighting and MI essentially always converge; classical ML has a small "not converged" share at every $n$, which grows sharply at $n = 1000$.
+-   This is a false positive of lme4's absolute gradient check, which scales with the sample size: the flagged fits give the same estimates, coverage and power as the other fits and are kept in all metrics.
+
+\newpage
+
+## Computation time
+
+```{r}
+#| label: tbl-lin-time
+metric_table(lin, "time_median_seconds", "Median computation time per replicate (seconds).")
+```
+
+```{r}
+#| label: fig-lin-time
+#| fig-cap: "Median computation time per replicate for the linear time trend (log scale)."
+metric_plot(lin, "time_median_seconds", "Median time (seconds)", log_y = TRUE)
+```
+
+-   Classical ML is fastest by far at every $n$.
+-   MI is slowest up to $n = 100$; at $n = 1000$ MI and reweighting are similar.
+
+\newpage
+
+## Fraction of missing information (MI)
+
+```{r}
+#| label: tbl-lin-lambda
+lambda_table(lin, "Mean fraction of missing information for beta3 (MI only).")
+```
+
+-   The fraction of missing information is higher under half-missing than under three observations minimum, and increases slightly with $n$.
+
+\newpage
+
+# Results - log time trend
+
+-   MSE and coverage are not reported: the linear methods estimate a linear slope, which has no true value under the log trend.
+-   Effect sizes: large ($\beta_1 = -2.42$, $\beta_3 = 1.95$), small ($\beta_1 = -0.385$, $\beta_3 = 0.31$).
+
+## Type I error
+
+```{r}
+#| label: tbl-log-t1e
+metric_table(filter(logt, beta3 == 0), "type1_error", "Type I error rate of the interaction test (identical arms).")
+```
+
+```{r}
+#| label: fig-log-t1e
+#| fig-cap: "Type I error rate for the log time trend (dotted line: nominal 0.05)."
+metric_plot(filter(logt, beta3 == 0), "type1_error", "Type I error rate", hline = 0.05)
+```
+
+-   Small-$n$ inflation as in the linear scenarios; classical ML is again the most inflated.
+-   Reweighting becomes conservative from $n = 50$ onwards and stays below nominal at $n = 1000$; classical ML and MI approach nominal.
+
+\newpage
+
+## Power
+
+```{r}
+#| label: tbl-log-power
+metric_table(filter(logt, beta3 != 0), "power", "Power of the interaction test.")
+```
+
+```{r}
+#| label: fig-log-power
+#| fig-cap: "Power for the log time trend."
+metric_plot(filter(logt, beta3 != 0), "power", "Power")
+```
+
+-   The linear methods still detect the crossing well: power is higher than in the linear scenarios with the same end-of-study difference (large vs. $\beta_3 = 0.22$, small vs. $\beta_3 = 0.035$).
+-   Classical ML has the highest power; MI and reweighting are similar.
+
+\newpage
+
+## Convergence
+
+```{r}
+#| label: fig-log-conv
+#| fig-cap: "Convergence status for the log time trend, pooled over effect sizes."
+#| fig-height: 5
+convergence_plot(logt)
+```
+
+-   Same pattern as the linear scenarios, with more singular fits at $n = 10$.
+-   Classical ML's "not converged" share at $n = 1000$ is again the lme4 gradient false positive.
+
+\newpage
+
+## Computation time
+
+```{r}
+#| label: tbl-log-time
+metric_table(logt, "time_median_seconds", "Median computation time per replicate (seconds).")
+```
+
+```{r}
+#| label: fig-log-time
+#| fig-cap: "Median computation time per replicate for the log time trend (log scale)."
+metric_plot(logt, "time_median_seconds", "Median time (seconds)", log_y = TRUE)
+```
+
+-   Same ordering as the linear scenarios.
+
+\newpage
+
+## Fraction of missing information (MI)
+
+```{r}
+#| label: tbl-log-lambda
+lambda_table(logt, "Mean fraction of missing information for beta3 (MI only).")
+```
+
+-   Slightly higher than in the linear scenarios; same pattern over dropout mechanism and $n$.
+
+\newpage
+
+# Suggested improvements
+
+1.  LSPIM: make it scale beyond 50 clusters.
+2.  Small-sample degrees of freedom: Satterthwaite for the classical ML test, Barnard-Rubin for the Rubin-pooled MI test; this targets the type I error inflation at small $n$.
+3.  Classical ML convergence: replace lme4's absolute gradient flag with a relative gradient check, to remove the false "not converged" at large $n$.
