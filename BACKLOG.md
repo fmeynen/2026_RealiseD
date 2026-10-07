@@ -61,37 +61,20 @@ see the plans in [plans/](plans/) and the git history for what was done.
   It draws per subject in a `vapply`; vectorising it must keep the draw order so the generated
   data stay bit-identical.
 
-- [ ] **[efficiency] LSPIM: fit the GEE once and compute the three sandwich covariances directly.**
-  `fit_lspim()` fits the same pair-level GEE three times, clustered by `C1`, `C2` and `C3`, only
-  to get three covariance matrices ([lspim.R](scripts/simulation/lspim.R)). With the independence
-  working correlation the coefficients are identical (checked 2026-09-30: max difference about
-  6e-16), and the three fits took about 1.1 s of 2.06 s for 40 subjects, 4 visits (1,370 pairs);
-  the pair count grows with the square of the sample size. Fitting once and computing the
-  sandwiches in-house requires reimplementing the Fay-Graubard (`SE.method = "FW"`)
-  correction, would change results slightly (regenerate goldens), and must keep the
+- [ ] **[efficiency] LSPIM: fit the PGEE once and compute the three FW sandwiches in-house.**
+  `fit_lspim()` fits the same pair-level PGEE three times with geessbin, clustered by `C1`, `C2`
+  and `C3`, only to get three covariance matrices ([lspim.R](scripts/simulation/lspim.R)); at
+  n = 50 the three fits are about 95% of the LSPIM time, and geessbin's start value builds a dense
+  pairs x pairs matrix. `SE.method = "FW"` is the Ford-Westgate correction (the average of the
+  Kauermann-Carroll and Mancl-DeRouen corrections), not Fay-Graubard (`"FG"`). The derivation,
+  the equivalence proof, the geessbin behaviour to copy (labels, update rule, leverage-1 clusters)
+  and a verification checklist are in
+  [lspim-pgee-fw-in-house.md](supplementary_material/lspim-pgee-fw-in-house.md). Must keep the
   `fit_lspim_gee()` stub point used by [test-convergence.R](tests/testthat/test-convergence.R).
 
 - [ ] **[efficiency] LSPIM: use `coef(mod1)` instead of averaging three identical coefficient sets.**
   `colMeans(rbind(coef(mod1), coef(mod2), coef(mod3)), na.rm = TRUE)` returns `coef(mod1)`, and
   `na.rm = TRUE` would silently hide an NA from one fit.
-
-- [ ] **[efficiency] LSPIM: build the within-subject pairs in one pass.**
-  The loop runs `which(dat$subject_id == ii)` for every subject, scanning all rows each time;
-  `split(seq_len(nrow(dat)), dat$subject_id)` does it once. The `idx[order(...)]` step is
-  redundant because `dat` is already sorted by subject and time.
-
-- [ ] **[efficiency] LSPIM: drop `dplyr::bind_rows()` when building the pairs.**
-  It is the only `dplyr::` call in `scripts/simulation/`; the pairs can be built as integer
-  `left`/`right` vectors plus `pair_type` in base R.
-
-- [ ] **[efficiency] LSPIM: index only the needed columns for the pairs.**
-  `dat[compare$Var1, , drop = FALSE]` copies every column (`sim_id`, `scenario_id`, `observed`,
-  ...) when only `subject_id`, `treatment`, `time_value` and `y` are used; `C1`/`C2` then repeat
-  the left/right `subject_id`.
-
-- [ ] **[efficiency] LSPIM: compute the eigendecomposition of V once.**
-  When V is repaired, the PSD check symmetrises V and computes its eigenvalues, then
-  `nearest_psd()` does both again.
 
 ## Pipeline robustness
 
@@ -104,6 +87,16 @@ see the plans in [plans/](plans/) and the git history for what was done.
   `any(holm_p <= alpha, na.rm = TRUE)` then drops the NAs, so a partly NA result counts as a
   success with no warning ([lspim.R](scripts/simulation/lspim.R)). Decide whether this should
   warn or fail.
+
+- [ ] **[robustness] LSPIM: geessbin stops on tied outcomes.**
+  A tie in y gives a pseudo-score of 0.5, and `geessbin()` stops unless
+  `setequal(unique(y), 0:1)` ("outcome vector must be numeric and take values in {0, 1}"), so the
+  replicate fails with that error message; the same check also fails when all pseudo-scores are 0
+  or all are 1. The `glm_sandwich` engine accepts 0.5 (its non-integer warning is muffled). Ties
+  are unlikely with continuous outcomes but possible after rounding. Decide whether to handle ties
+  (e.g. split the pair into two half-weighted 0/1 rows; this keeps the ordinary score and the
+  cluster sums, but geessbin has no weights argument and the PGEE penalty and FW leverages would
+  change) or document the restriction.
 
 ## Code structure
 
@@ -118,8 +111,8 @@ see the plans in [plans/](plans/) and the git history for what was done.
   `nearest_psd()` have no header and no blank lines between them.
 
 - [ ] **[consistency] LSPIM: align naming with the rest of the analysis layer.**
-  `dat` (siblings use `data`), mixed-case `dat_GEE`, `id_fac`/`id_nonfac` for the control and
-  treatment rows, and the `expand.grid()` defaults `Var1`/`Var2` for the left/right rows.
+  `dat` (siblings use `data`), mixed-case `dat_GEE`, and `id_fac`/`id_nonfac` for the control and
+  treatment rows.
 
 - [ ] **[consistency] LSPIM: one convention for input checks and package checks.**
   The `alpha` check throws outside the `tryCatch`, while the column and visit checks inside it
@@ -129,15 +122,10 @@ see the plans in [plans/](plans/) and the git history for what was done.
 - [ ] **[consistency] LSPIM: expose or drop `pseudo_score(higher_is_better = )`.**
   It is only ever called with `TRUE`.
 
-- [ ] **[clarity] LSPIM: rename the left-row data frame `L`.**
-  `L` holds the left-hand rows of the pairs, while `L_const` is the contrast matrix; in a file
-  about linear hypotheses the shared name is confusing (e.g. `left`/`right`).
-
-- [ ] **[clarity] LSPIM: pass the estimates to `multcomp` with `parm()`.**
-  A copy of `mod1` gets new `coefficients` and `covb` so that `glht()` picks them up through
-  geessbin's `coef()`/`vcov()` methods.
-  `multcomp::glht(multcomp::parm(beta, V_for_inference), linfct = L_const)` states this
-  directly; confirm the p-values are identical (normal reference, df = 0).
+- [ ] **[clarity] LSPIM: rename the left-row list `L`.**
+  `L` holds the left-hand columns of the pairs, while `L_const` is the contrast matrix; in a file
+  about linear hypotheses the shared name is confusing (e.g. `left_obs`/`right_obs`, since
+  `left`/`right` now hold the row indices).
 
 - [ ] **[clarity] LSPIM: write the GEE formula out.**
   `y ~ . - 1 - C1 - C2 - C3` in `fit_lspim_gee()` depends on which columns `dat_gee` holds;
