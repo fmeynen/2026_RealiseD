@@ -71,7 +71,7 @@ test_that("run_requested_analyses skips oversized scenarios as skipped_by_config
   withr::defer(assign("fit_lspim", original_fit_LSPIM, envir = globalenv()))
   assign(
     "fit_lspim",
-    function(dat, alpha = 0.05) {
+    function(dat, alpha = 0.05, ...) {
       list(
         fit = list(
           interaction_rejected = FALSE,
@@ -139,7 +139,7 @@ test_that("run_requested_analyses fails loudly when lspim_max_n is malformed", {
   withr::defer(assign("fit_lspim", original_fit_LSPIM, envir = globalenv()))
   assign(
     "fit_lspim",
-    function(dat, alpha = 0.05) {
+    function(dat, alpha = 0.05, ...) {
       list(
         fit = list(
           interaction_rejected = FALSE,
@@ -198,7 +198,7 @@ test_that("LSPIM receives the shared alpha and a per-method alpha config errors"
   withr::defer(assign("fit_lspim", original_fit_LSPIM, envir = globalenv()))
   assign(
     "fit_lspim",
-    function(dat, alpha = 0.05) {
+    function(dat, alpha = 0.05, ...) {
       list(
         fit = list(
           interaction_rejected = FALSE,
