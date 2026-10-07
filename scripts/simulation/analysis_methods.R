@@ -173,7 +173,7 @@ analyze_reweighting <- function(data, fit_args = set_fit_args(), alpha = 0.05) {
 #'
 #' @param data   Long-format data frame for one simulation replicate.
 #' @param alpha  Significance level shared by all methods.
-#' @param engine GEE engine, "geessbin" or "geeglm" (see fit_lspim()). Recorded in the result's
+#' @param engine LSPIM engine, "geessbin" or "glm_sandwich" (see fit_lspim()). Recorded in the result's
 #'   \code{engine} column, also on failure rows. The \code{method} stays "LSPIM".
 #'
 #' @return One-row data frame with standardized LSPIM analysis results.
@@ -308,8 +308,8 @@ analyze_generated_data_reweighting <- function( # nolint: object_length_linter.
 
 #' Run the LSPIM analysis across generated simulation datasets.
 #'
-#' @param engine GEE engine for every replicate, "geessbin" or "geeglm". The registry runner chooses it
-#'   per scenario from the \code{lspim_geeglm_min_n} config key.
+#' @param engine LSPIM engine for every replicate, "geessbin" or "glm_sandwich". The registry runner
+#'   chooses it per scenario from the \code{lspim_glm_sandwich_min_n} config key.
 #' @inheritParams analyze_generated_data_classical_ml
 
 analyze_generated_data_lspim <- function(
@@ -333,9 +333,9 @@ analyze_generated_data_lspim <- function(
 
 
 # Stops unless the LSPIM config holds single, non-missing numbers for 'lspim_max_n' and
-# 'lspim_geeglm_min_n'.
+# 'lspim_glm_sandwich_min_n'.
 validate_lspim_config <- function(config) {
-  for (key in c("lspim_max_n", "lspim_geeglm_min_n")) {
+  for (key in c("lspim_max_n", "lspim_glm_sandwich_min_n")) {
     value <- config[[key]]
     if (!is.numeric(value) || length(value) != 1L || is.na(value)) {
       stop(
@@ -393,10 +393,10 @@ build_analysis_registry <- function() {
       }
     ),
     # lspim_max_n: LSPIM only runs on scenarios with n <= lspim_max_n (Inf switches the gate off).
-    # lspim_geeglm_min_n: scenarios with n >= this use the geeglm engine, the others geessbin
-    # (Inf, the default, keeps geessbin everywhere).
+    # lspim_glm_sandwich_min_n: scenarios with n >= this use the glm_sandwich engine, the others
+    # geessbin (Inf, the default, keeps geessbin everywhere).
     LSPIM = list(
-      default_config = list(lspim_max_n = 50, lspim_geeglm_min_n = Inf),
+      default_config = list(lspim_max_n = 50, lspim_glm_sandwich_min_n = Inf),
       applies_to = function(scenario_row, config) {
         validate_lspim_config(config)
         if (is.null(scenario_row$n) || is.na(scenario_row$n)) {
@@ -410,7 +410,7 @@ build_analysis_registry <- function() {
         if (length(n_scenario) != 1L || is.na(n_scenario)) {
           stop("LSPIM runner needs scenario metadata with exactly one non-missing 'n' value")
         }
-        engine <- if (n_scenario >= config$lspim_geeglm_min_n) "geeglm" else "geessbin"
+        engine <- if (n_scenario >= config$lspim_glm_sandwich_min_n) "glm_sandwich" else "geessbin"
         analyze_generated_data_lspim(
           data = scenario_data,
           scenarios = scenarios,
