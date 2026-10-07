@@ -148,9 +148,16 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
           stop("LSPIM could not construct any comparable observation pairs.")
         }
 
-        compare <- data.frame(Var1 = unlist(pairs_left), Var2 = unlist(pairs_right))
-        L <- dat[compare$Var1, , drop = FALSE]
-        R <- dat[compare$Var2, , drop = FALSE]
+        left <- unlist(pairs_left)
+        right <- unlist(pairs_right)
+        L <- list(
+          subject_id = dat$subject_id[left], treatment = dat$treatment[left],
+          time_value = dat$time_value[left], y = dat$y[left]
+        )
+        R <- list(
+          subject_id = dat$subject_id[right], treatment = dat$treatment[right],
+          time_value = dat$time_value[right], y = dat$y[right]
+        )
         y <- pseudo_score(L$y, R$y, higher_is_better = TRUE)
 
         X <- data.frame(
@@ -163,8 +170,8 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
         }
 
         treatment_terms <- grep("^trt_visit", names(X), value = TRUE)
-        C1 <- as.vector(dat[compare$Var1, "subject_id"])
-        C2 <- as.vector(dat[compare$Var2, "subject_id"])
+        C1 <- as.vector(L$subject_id)
+        C2 <- as.vector(R$subject_id)
         dat_GEE <- data.frame(y = y, X, C1 = C1, C2 = C2)
         dat_GEE$C3 <- paste(dat_GEE$C1, dat_GEE$C2, sep = "_")
 
