@@ -134,9 +134,8 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
           }
         }
 
-        for (ii in sort(unique(dat$subject_id))) {
-          idx <- which(dat$subject_id == ii)
-          idx <- idx[order(dat$time_value[idx])]
+        # dat is sorted by subject and time, so each subject's rows are already in time order.
+        for (idx in split(seq_len(nrow(dat)), dat$subject_id)) {
           if (length(idx) >= 2L) {
             tmp <- t(utils::combn(idx, 2L))
             tmp <- data.frame(Var1 = tmp[, 1L], Var2 = tmp[, 2L])
