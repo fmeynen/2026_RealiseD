@@ -123,31 +123,32 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
           stop("LSPIM requires both treatment groups coded as 0 and 1.")
         }
 
-        all_pairs <- list()
+        # Row indices of dat for the left/right observation of each pair. The pair order matters:
+        # geessbin sorts stably by cluster, so it fixes the floating-point sums.
+        pairs_left <- list()
+        pairs_right <- list()
         for (tt in times) {
           id_fac <- which(dat$treatment == 0 & dat$time_value == tt)
           id_nonfac <- which(dat$treatment == 1 & dat$time_value == tt)
           if (length(id_fac) > 0L && length(id_nonfac) > 0L) {
-            tmp <- expand.grid(Var1 = id_fac, Var2 = id_nonfac)
-            tmp$pair_type <- "between"
-            all_pairs[[length(all_pairs) + 1L]] <- tmp
+            pairs_left[[length(pairs_left) + 1L]] <- rep(id_fac, times = length(id_nonfac))
+            pairs_right[[length(pairs_right) + 1L]] <- rep(id_nonfac, each = length(id_fac))
           }
         }
 
         # dat is sorted by subject and time, so each subject's rows are already in time order.
         for (idx in split(seq_len(nrow(dat)), dat$subject_id)) {
           if (length(idx) >= 2L) {
-            tmp <- t(utils::combn(idx, 2L))
-            tmp <- data.frame(Var1 = tmp[, 1L], Var2 = tmp[, 2L])
-            tmp$pair_type <- "within"
-            all_pairs[[length(all_pairs) + 1L]] <- tmp
+            tmp <- utils::combn(idx, 2L)
+            pairs_left[[length(pairs_left) + 1L]] <- tmp[1L, ]
+            pairs_right[[length(pairs_right) + 1L]] <- tmp[2L, ]
           }
         }
-        if (length(all_pairs) == 0L) {
+        if (length(pairs_left) == 0L) {
           stop("LSPIM could not construct any comparable observation pairs.")
         }
 
-        compare <- dplyr::bind_rows(all_pairs)
+        compare <- data.frame(Var1 = unlist(pairs_left), Var2 = unlist(pairs_right))
         L <- dat[compare$Var1, , drop = FALSE]
         R <- dat[compare$Var2, , drop = FALSE]
         y <- pseudo_score(L$y, R$y, higher_is_better = TRUE)
