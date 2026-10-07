@@ -162,3 +162,18 @@ work lands as follow-up commits on top of the geeglm commits above.
 At the end: run the full test suite (the known `test-run-all-grid.R` failures from `main` are
 expected), update the PR description draft, and update the memory note. No smoke run unless the
 user asks; if asked, estimate the duration first.
+
+### Revision status (2026-10-07)
+
+- [x] 6. docs: plan rename and revision (`a11aad9`)
+- [x] 7. feat: glm_sandwich replaces geeglm (`23898bc`). One-off check against geeglm (12 visits,
+  n = 20/40/60, both dropout mechanisms): max |dbeta| 7.7e-13, max |dV| 2.4e-13, max |dHolm_p|
+  3.1e-13; converged, decisions and warnings identical. n = 60 took 0.05-0.07 s, against 9.4 s
+  for geeglm. Golden check: no differences.
+- [x] 8. feat: `lspim_glm_sandwich_min_n` routing and label (`7089e86`). Golden check: no
+  differences.
+- [x] 9. build: drop geepack (`4bc59e0`)
+- [x] 10. chore: run_all key (`132b71b`)
+- [x] 11. docs: README (`8da4b88`)
+- Full suite: 678 expectations; the only failures are the 14 in `test-run-all-grid.R` that
+  were already failing on `main`.
