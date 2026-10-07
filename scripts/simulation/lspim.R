@@ -30,77 +30,70 @@ nearest_psd <- function(V, eps = 1e-8) {
   out
 }
 
-# Fit one of the three LSPIM GEEs (clustered by `id`, a column of dat_gee).
-# engine "geessbin" is the small-sample PGEE + FW fit; "geeglm" is geepack's
-# binomial-logit GEE with independence working correlation and sandwich SEs,
-# which scales to large n. Kept as a separate top-level function so tests can
-# stub it.
-fit_lspim_gee <- function(dat_gee, id, engine = c("geessbin", "geeglm")) {
-  engine <- match.arg(engine)
+# Fit one of the three LSPIM GEEs (clustered by `id`, a column of dat_gee): the small-sample
+# PGEE + FW fit of geessbin. Kept as a separate top-level function so tests can stub it.
+fit_lspim_gee <- function(dat_gee, id) {
   ord <- order(dat_gee[[id]])
   dat_sorted <- dat_gee[ord, , drop = FALSE]
-  if (engine == "geessbin") {
-    return(geessbin::geessbin(
-      y ~ . - 1 - C1 - C2 - C3,
-      data = dat_sorted,
-      id = dat_gee[[id]][ord],
-      corstr = "independence",
-      beta.method = "PGEE",
-      SE.method = "FW"
-    ))
-  }
-  # Local variable, not a column: `y ~ .` would otherwise treat it as a predictor.
-  cluster_id <- as.integer(factor(dat_sorted[[id]], levels = unique(dat_sorted[[id]])))
+  geessbin::geessbin(
+    y ~ . - 1 - C1 - C2 - C3,
+    data = dat_sorted,
+    id = dat_gee[[id]][ord],
+    corstr = "independence",
+    beta.method = "PGEE",
+    SE.method = "FW"
+  )
+}
+
+# Whether all LSPIM GEE fits converged: FALSE if any fit reports a `convergence` other than
+# "converged".
+lspim_gees_converged <- function(gee_fits) {
+  all(vapply(gee_fits, function(mod) identical(mod$convergence, "converged"), logical(1)))
+}
+
+# One logistic regression plus three clustered sandwich variances, for large n.
+# With an independence working correlation a binomial-logit GEE solves the ordinary
+# logistic-regression score equations, so the point estimate is the glm estimate for every
+# clustering (the three GEE estimates coincide, so no averaging is needed); only the sandwich
+# "meat" depends on the clustering. The sandwich below equals a geepack binomial GEE with
+# `std.err = "san.se"` (no small-sample or df scaling). Returns beta, the combined
+# V = V_C1 + V_C2 - V_C3 and whether glm.fit() converged.
+lspim_glm_sandwich <- function(dat_gee) {
+  # Same columns, in the same order, as the GEE formula `y ~ . - 1 - C1 - C2 - C3`.
+  X <- as.matrix(dat_gee[, setdiff(names(dat_gee), c("y", "C1", "C2", "C3")), drop = FALSE])
   # Pseudo-scores of 0.5 are not integer successes; glm's warning is expected.
-  withCallingHandlers(
-    geepack::geeglm(
-      y ~ . - 1 - C1 - C2 - C3,
-      data = dat_sorted,
-      id = cluster_id,
-      family = stats::binomial(link = "logit"),
-      corstr = "independence",
-      std.err = "san.se"
-    ),
+  fit <- withCallingHandlers(
+    stats::glm.fit(X, dat_gee$y, family = stats::binomial()),
     warning = function(w) {
       if (identical(conditionMessage(w), "non-integer #successes in a binomial glm!")) {
         invokeRestart("muffleWarning")
       }
     }
   )
-}
-
-# Whether all LSPIM GEE fits converged. geessbin: FALSE if any fit reports a
-# `convergence` other than "converged". geeglm: FALSE if any fit has a nonzero
-# (or missing) `geese$error` code.
-lspim_gees_converged <- function(gee_fits, engine = "geessbin") {
-  if (engine == "geeglm") {
-    return(all(vapply(gee_fits, function(mod) {
-      err <- mod$geese$error
-      !is.null(err) && length(err) == 1L && !is.na(err) && err == 0
-    }, logical(1))))
-  }
-  all(vapply(gee_fits, function(mod) identical(mod$convergence, "converged"), logical(1)))
-}
-
-# Robust (sandwich) covariance matrix of a fitted LSPIM GEE.
-lspim_gee_vcov <- function(mod, engine = "geessbin") {
-  if (engine == "geeglm") stats::vcov(mod) else mod$covb
+  beta <- fit$coefficients
+  mu <- fit$fitted.values
+  bread <- solve(crossprod(X * sqrt(mu * (1 - mu))))
+  scores <- X * (dat_gee$y - mu)
+  sandwich <- function(id) bread %*% crossprod(rowsum(scores, dat_gee[[id]])) %*% bread
+  V_raw <- sandwich("C1") + sandwich("C2") - sandwich("C3")
+  dimnames(V_raw) <- list(names(beta), names(beta))
+  list(beta = beta, V_raw = V_raw, converged = isTRUE(fit$converged))
 }
 
 #' Fit the LSPIM model for one dataset.
 #'
 #' Convergence: converged = FALSE if any of the three GEE fits did not converge
-#' (engine "geessbin": `convergence` other than "converged"; engine "geeglm":
-#' nonzero `geese$error`); replacing the combined V via nearest_psd() is only a
+#' (engine "geessbin": `convergence` other than "converged"; engine "glm_sandwich":
+#' `glm.fit()$converged` is FALSE); replacing the combined V via nearest_psd() is only a
 #' warning.
 #'
-#' @param engine GEE engine: "geessbin" (PGEE + FW, default) or "geeglm".
+#' @param engine "geessbin" (three PGEE + FW GEE fits, default) or "glm_sandwich" (one logistic
+#'   regression with three clustered sandwich variances, which scales to large n).
 #' @return A list with fit, converged, elapsed_seconds, warnings, and error_message.
-fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "geeglm")) {
+fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich")) {
   engine <- match.arg(engine)
-  engine_pkg <- if (engine == "geeglm") "geepack" else "geessbin"
-  if (!requireNamespace(engine_pkg, quietly = TRUE)) {
-    stop("Package '", engine_pkg, "' is required for LSPIM with engine '", engine, "'.")
+  if (engine == "geessbin" && !requireNamespace("geessbin", quietly = TRUE)) {
+    stop("Package 'geessbin' is required for LSPIM with engine 'geessbin'.")
   }
   if (!requireNamespace("multcomp", quietly = TRUE)) {
     stop("Package 'multcomp' is required for LSPIM.")
@@ -175,13 +168,19 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "geeglm")) {
         dat_GEE <- data.frame(y = y, X, C1 = C1, C2 = C2)
         dat_GEE$C3 <- paste(dat_GEE$C1, dat_GEE$C2, sep = "_")
 
-        mod1 <- fit_lspim_gee(dat_GEE, "C1", engine = engine)
-        mod2 <- fit_lspim_gee(dat_GEE, "C2", engine = engine)
-        mod3 <- fit_lspim_gee(dat_GEE, "C3", engine = engine)
-        converged <- lspim_gees_converged(list(mod1, mod2, mod3), engine = engine)
-
-        V_raw <- lspim_gee_vcov(mod1, engine) + lspim_gee_vcov(mod2, engine) - lspim_gee_vcov(mod3, engine)
-        beta <- colMeans(rbind(stats::coef(mod1), stats::coef(mod2), stats::coef(mod3)), na.rm = TRUE)
+        if (engine == "glm_sandwich") {
+          sw <- lspim_glm_sandwich(dat_GEE)
+          beta <- sw$beta
+          V_raw <- sw$V_raw
+          converged <- sw$converged
+        } else {
+          mod1 <- fit_lspim_gee(dat_GEE, "C1")
+          mod2 <- fit_lspim_gee(dat_GEE, "C2")
+          mod3 <- fit_lspim_gee(dat_GEE, "C3")
+          converged <- lspim_gees_converged(list(mod1, mod2, mod3))
+          V_raw <- mod1$covb + mod2$covb - mod3$covb
+          beta <- colMeans(rbind(stats::coef(mod1), stats::coef(mod2), stats::coef(mod3)), na.rm = TRUE)
+        }
         if (any(!is.finite(beta))) {
           stop("LSPIM produced non-finite visit-effect coefficients.")
         }
