@@ -448,8 +448,8 @@ Check with `lintr::lint_dir("scripts/simulation")`, or just run the test suite.
 ## Dependencies
 
 Dependencies are pinned with [renv](https://rstudio.github.io/renv/) in `renv.lock`
-(R 4.6.1; e.g. lme4 2.0-6, mice 3.19.0, miceadds 3.20-10, geessbin 1.0.2, geepack 1.3.13,
-multcomp 1.4-32, testthat 3.3.2, lintr 3.4.0, renv 1.2.4).
+(R 4.6.1; e.g. lme4 2.0-6, mice 3.19.0, miceadds 3.20-10, geessbin 1.0.2, multcomp 1.4-32,
+testthat 3.3.2, lintr 3.4.0, renv 1.2.4).
 
 - **After cloning**, start R in the repo root and run `renv::restore()` once. `.Rprofile`
   activates the project library automatically in every later R session started there
@@ -468,8 +468,7 @@ multcomp 1.4-32, testthat 3.3.2, lintr 3.4.0, renv 1.2.4).
 | mice | imputation |
 | miceadds | `2l.pmm` imputation method (attached with `library()`) |
 | reformulas | formula parsing |
-| geessbin | LSPIM GEE (small n) |
-| geepack | LSPIM GEE (large n, `geeglm()`) |
+| geessbin | LSPIM GEE (small n; large n uses base R `glm.fit()`) |
 | digest | cache hashes (`xxhash64`) |
 | multcomp | Holm test |
 | dplyr | row binding |
