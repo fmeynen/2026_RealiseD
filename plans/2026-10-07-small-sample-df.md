@@ -40,8 +40,11 @@ Ground rules:
   - `df = 1 / (1 / nu_old + 1 / nu_obs)`.
   When B = 0 (lambda = 0), `nu_old = Inf` and df = `nu_obs`; no fallback is needed. The df never
   exceeds nu_com.
-- **N.** The `n_subjects` of the analysed data, already in each result row's metadata (subjects
-  with at least one observation). Equal to the grid n in all current scenarios.
+- **N.** The number of subjects the method actually fits, counted from its own analysis data
+  (user decision during implementation). For `classical_ml` and `multiple_imputation` this equals
+  the `n_subjects` metadata (counted from the original data). For `reweighting`,
+  `prepare_analysis_data()` drops subjects with fewer than 3 observations, so N can be smaller
+  than `n_subjects`. The `n_subjects` column itself is not changed.
 - **Test.** `interaction_rejected = abs(estimate / se) > qt(1 - alpha / 2, df_beta3)`;
   `interaction_test_procedure = "wald_t"`. A non-finite or non-positive df counts as unusable,
   like an unusable SE (`interaction_rejected = NA`). With N - 2 everywhere this only happens for
@@ -104,6 +107,13 @@ Ground rules:
    SE at n = 100" for classical_ml is outside Monte Carlo error.
    Update the README where it describes the interaction test and coverage (z to t, the df per
    method).
+
+## Status
+
+All six items done on 2026-10-07 (commits 406e73d, 39901e6, 5c9145a, f9a68d2, 05da9ed and the
+docs commit). Slow Monte Carlo file: 23 passed, 0 failed. Full fast suite: 738 passed; the only
+failures (14) are in `test-run-all-grid.R`, which checks the grid in `scripts/run_all.R` and is
+not touched by this branch (pre-existing).
 
 ## After the merge
 

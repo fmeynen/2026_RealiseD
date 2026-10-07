@@ -141,12 +141,26 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
 - **Shared alpha.** `run_requested_analyses(alpha = 0.05)` passes one significance level to every
   method; it is part of the analysis hash and is recorded per row as `interaction_alpha`.
   Coverage of beta3 uses the level 1 − alpha (there is no `ci_level` argument), with alpha read
-  from `interaction_alpha`, and `meta$alpha` records it.
+  from `interaction_alpha`, and `meta$alpha` records it. The interval is
+  `estimate ± qt(1 − alpha / 2, df_beta3) × se` with the per-replicate `df_beta3`, the same df as
+  the interaction test, so test and interval always agree. Rows with `NA` `df_beta3` are not
+  eligible.
 - **How each method decides.** The parametric methods (`classical_ml`, `multiple_imputation`,
-  `reweighting`) use a two-sided Wald z test on beta3 (`|estimate / se| > qnorm(1 − alpha / 2)`,
-  `wald_interaction_decision()`). `LSPIM` rejects when any Holm-adjusted per-visit p-value is at
-  most alpha. The decision is stored in `interaction_tested`, `interaction_rejected`,
-  `interaction_alpha` and `interaction_test_procedure` (`wald_z` or the LSPIM procedure).
+  `reweighting`) use a two-sided Wald t test on beta3
+  (`|estimate / se| > qt(1 − alpha / 2, df_beta3)`, `wald_interaction_decision()`). `LSPIM`
+  rejects when any Holm-adjusted per-visit p-value (normal reference) is at most alpha. The
+  decision is stored in `interaction_tested`, `interaction_rejected`, `interaction_alpha` and
+  `interaction_test_procedure` (`wald_t` or the LSPIM procedure).
+- **Degrees of freedom (`df_beta3`).** With N the number of subjects the method actually fits
+  (all subjects for `classical_ml` and `multiple_imputation`; for `reweighting` only those with at
+  least 3 observations, so N can be below `n_subjects`), `classical_ml` (still fitted with ML,
+  `REML = FALSE`) and `reweighting` use N − 2. With complete, balanced data the (RE)ML Wald statistic for beta3 is a two-sample t test
+  on the per-subject slopes, so t with N − 2 df is exact there (for REML; the ML SE is
+  additionally shrunk by about sqrt((N − 2) / N)); under dropout it is an approximation and
+  somewhat optimistic. `multiple_imputation` uses the Barnard-Rubin df with complete-data df
+  nu_com = N − 2 and m = 3: lambda = (1 + 1/m) B / T, nu_old = (m − 1) / lambda², nu_obs =
+  (nu_com + 1) / (nu_com + 3) × nu_com × (1 − lambda) and df = 1 / (1 / nu_old + 1 / nu_obs)
+  (lambda = 0 gives df = nu_obs). `LSPIM` has `df_beta3 = NA`.
 - **beta3 gate.** The true beta3 of a group decides which rate is computed. With `beta3 == 0`
   only `type1_error` is computed (`power` is `NA`, `n_power` is 0); with `beta3 != 0` only `power`
   (`type1_error` is `NA`, `n_type1_error` is 0). MSE and coverage are computed in both cases,
@@ -162,14 +176,15 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
   rows.
 - **LSPIM** reports no beta estimates, so its `mse_beta*` and `coverage_beta3` are `NA` and
   `n_estimated` is 0. Its groups exist only for `n <= lspim_max_n`.
-- **Old artifacts.** Results schema v5 and aggregation schema v7 are current (v5: the `D`-matrix
-  fix and Rubin-pooled multiple imputation with the two `mi_*` columns; v7:
-  `mean_mi_lambda_beta3`). Aggregation
+- **Old artifacts.** Results schema v6 and aggregation schema v7 are current (v5: the `D`-matrix
+  fix and Rubin-pooled multiple imputation with the two `mi_*` columns; v6: the `df_beta3`
+  column and the t reference (`wald_t`); v7: `mean_mi_lambda_beta3`). Aggregation
   stops with a "rerun the analyses" error when a non-failure row has `interaction_tested = NA`
   (results made before the unified decision), when the scenarios have no `time_trend` column
   (made before the log scenarios), or when the results contain more than one distinct
-  `interaction_alpha`. The changed schema versions change the analysis hash, so a full rerun is
-  needed.
+  `interaction_alpha`. Results made before v6 have no `df_beta3` column and fail validation with
+  "results_df is missing required columns: df_beta3". The changed schema versions change the
+  analysis hash, so a full rerun is needed.
 
 ## What *converged* means
 
@@ -376,6 +391,10 @@ reused, so a full rerun is needed.
 The `D`-matrix fix and Rubin-pooled multiple imputation (2026-09-30) bumped
 `results_schema_version` (v4 to v5) and `aggregation_schema_version` (v6 to v7). Generated data
 are reused, but all analyses are rerun.
+
+The small-sample df change (t reference with per-replicate `df_beta3` for the beta3 test and
+coverage interval) bumped `results_schema_version` (v5 to v6). Results made before it are not
+reused, so a full rerun is needed.
 
 ## Tests
 

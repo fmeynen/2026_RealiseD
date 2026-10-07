@@ -8,36 +8,25 @@ see the plans in [plans/](plans/) and the git history for what was done.
 
 ## Statistical methods
 
-- [ ] **[statistics] Consider a t-quantile for Wald coverage at small N.**
-  Coverage uses a normal quantile at level 1 - alpha (alpha is the shared
-  `interaction_alpha`, `compute_coverage_summary()` in
-  [aggregation_layer.R](scripts/simulation/aggregation_layer.R)); with N = 10
-  subjects a t-quantile (df based on N, e.g. N − p) may be more appropriate. Would change
-  coverage results.
+- [ ] **[statistics] Consider a larger number of imputations m for multiple_imputation.**
+  `m = 3` was kept on 2026-09-30. A larger `m` shrinks the `(1 + 1/m) B` term and its uncertainty,
+  at the cost of `m` CbC fits per replicate ([analysis_layer.R](scripts/simulation/analysis_layer.R)).
+  Would change type I error and power for `multiple_imputation`.
 
-- [ ] **[statistics] Consider a Barnard-Rubin t test for the multiple_imputation interaction decision.**
-  The `multiple_imputation` interaction test uses the shared Wald z test on the Rubin-pooled beta3
-  (`wald_interaction_decision()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)). With
-  `m = 3` the between-imputation variance has only 2 degrees of freedom, so a t reference with
-  Barnard-Rubin degrees of freedom may be more accurate. In the validation (n = 50,
-  `half_missing`, `m = 3`, treatment x time in the imputation model) the type I error was 7.5%
-  with z and 6.1% with Barnard-Rubin df
-  ([report](reports/drafts/2026-09-30-mi-stacking-and-cbc-dmatrix.md)). `m = 3` was kept on
-  2026-09-30; a larger `m` may also be worth considering (it shrinks the `(1 + 1/m) B` term and
-  its uncertainty, at the cost of `m` CbC fits per replicate). Would change type I error and
-  power for `multiple_imputation`.
+- [ ] **[statistics] Small-sample df beyond N - 2.**
+  The parametric methods test beta3 with a t reference on N - 2 df (Barnard-Rubin df for
+  `multiple_imputation`). N - 2 is exact only for complete, balanced data; under dropout (half of
+  the subjects, and with `half_missing` some with a single observation) it is optimistic.
+  classical_ml's ML SE also shrinks by about sqrt((N - 2) / N), so about 7% type I error is still
+  expected at N = 10. Options: Satterthwaite df (`lmerTest` works on ML fits) or REML with
+  Kenward-Roger. Also re-check whether the "empirical SD about 5% larger than the mean SE at
+  n = 100" for classical_ml ([test-power-type1-mc.R](tests/testthat/test-power-type1-mc.R)) is
+  outside Monte Carlo error. Would change type I error, power and coverage.
 
 - [ ] **[statistics] Mice convergence diagnostic for multiple imputation.**
   `multiple_imputation` is always `converged = TRUE` on success because `mice` runs a fixed
   number of iterations with no convergence test. Add a diagnostic, e.g. R-hat across the
   imputation chains, and decide whether it should feed `converged`.
-- [ ] **[statistics] Satterthwaite t-test for the classical_ml interaction decision.**
-  The parametric methods decide the interaction test with a Wald z test on beta3
-  (`wald_interaction_decision()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)). For
-  classical_ml a t-test with Satterthwaite degrees of freedom (`lmerTest`) might be more accurate
-  at small n, where the z test can be anti-conservative. Supporting evidence: in the slow Monte Carlo check
-  (`test-power-type1-mc.R`, n = 100) the empirical SD of the classical_ml beta3 estimate is about
-  5% larger than the mean SE. Would change type I error and power for classical_ml at small N.
 
 - [ ] **[statistics] LSPIM: check and repair only the treatment block of V.**
   `fit_lspim()` checks the whole combined V for positive semi-definiteness and replaces it with
