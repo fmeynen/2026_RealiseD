@@ -31,35 +31,76 @@ nearest_psd <- function(V, eps = 1e-8) {
 }
 
 # Fit one of the three LSPIM GEEs (clustered by `id`, a column of dat_gee).
-# Kept as a separate top-level function so tests can stub it.
-fit_lspim_gee <- function(dat_gee, id) {
+# engine "geessbin" is the small-sample PGEE + FW fit; "geeglm" is geepack's
+# binomial-logit GEE with independence working correlation and sandwich SEs,
+# which scales to large n. Kept as a separate top-level function so tests can
+# stub it.
+fit_lspim_gee <- function(dat_gee, id, engine = c("geessbin", "geeglm")) {
+  engine <- match.arg(engine)
   ord <- order(dat_gee[[id]])
-  geessbin::geessbin(
-    y ~ . - 1 - C1 - C2 - C3,
-    data = dat_gee[ord, , drop = FALSE],
-    id = dat_gee[[id]][ord],
-    corstr = "independence",
-    beta.method = "PGEE",
-    SE.method = "FW"
+  dat_sorted <- dat_gee[ord, , drop = FALSE]
+  if (engine == "geessbin") {
+    return(geessbin::geessbin(
+      y ~ . - 1 - C1 - C2 - C3,
+      data = dat_sorted,
+      id = dat_gee[[id]][ord],
+      corstr = "independence",
+      beta.method = "PGEE",
+      SE.method = "FW"
+    ))
+  }
+  # Local variable, not a column: `y ~ .` would otherwise treat it as a predictor.
+  cluster_id <- as.integer(factor(dat_sorted[[id]], levels = unique(dat_sorted[[id]])))
+  # Pseudo-scores of 0.5 are not integer successes; glm's warning is expected.
+  withCallingHandlers(
+    geepack::geeglm(
+      y ~ . - 1 - C1 - C2 - C3,
+      data = dat_sorted,
+      id = cluster_id,
+      family = stats::binomial(link = "logit"),
+      corstr = "independence",
+      std.err = "san.se"
+    ),
+    warning = function(w) {
+      if (identical(conditionMessage(w), "non-integer #successes in a binomial glm!")) {
+        invokeRestart("muffleWarning")
+      }
+    }
   )
 }
 
-# Whether all LSPIM GEE fits converged: FALSE if any geessbin fit reports a
-# `convergence` other than "converged".
-lspim_gees_converged <- function(gee_fits) {
+# Whether all LSPIM GEE fits converged. geessbin: FALSE if any fit reports a
+# `convergence` other than "converged". geeglm: FALSE if any fit has a nonzero
+# (or missing) `geese$error` code.
+lspim_gees_converged <- function(gee_fits, engine = "geessbin") {
+  if (engine == "geeglm") {
+    return(all(vapply(gee_fits, function(mod) {
+      err <- mod$geese$error
+      !is.null(err) && length(err) == 1L && !is.na(err) && err == 0
+    }, logical(1))))
+  }
   all(vapply(gee_fits, function(mod) identical(mod$convergence, "converged"), logical(1)))
+}
+
+# Robust (sandwich) covariance matrix of a fitted LSPIM GEE.
+lspim_gee_vcov <- function(mod, engine = "geessbin") {
+  if (engine == "geeglm") stats::vcov(mod) else mod$covb
 }
 
 #' Fit the LSPIM model for one dataset.
 #'
-#' Convergence: converged = FALSE if any of the three geessbin fits reports a
-#' `convergence` other than "converged"; replacing the combined V via
-#' nearest_psd() is only a warning.
+#' Convergence: converged = FALSE if any of the three GEE fits did not converge
+#' (engine "geessbin": `convergence` other than "converged"; engine "geeglm":
+#' nonzero `geese$error`); replacing the combined V via nearest_psd() is only a
+#' warning.
 #'
+#' @param engine GEE engine: "geessbin" (PGEE + FW, default) or "geeglm".
 #' @return A list with fit, converged, elapsed_seconds, warnings, and error_message.
-fit_lspim <- function(dat, alpha = 0.05) {
-  if (!requireNamespace("geessbin", quietly = TRUE)) {
-    stop("Package 'geessbin' is required for LSPIM.")
+fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "geeglm")) {
+  engine <- match.arg(engine)
+  engine_pkg <- if (engine == "geeglm") "geepack" else "geessbin"
+  if (!requireNamespace(engine_pkg, quietly = TRUE)) {
+    stop("Package '", engine_pkg, "' is required for LSPIM with engine '", engine, "'.")
   }
   if (!requireNamespace("multcomp", quietly = TRUE)) {
     stop("Package 'multcomp' is required for LSPIM.")
@@ -134,12 +175,12 @@ fit_lspim <- function(dat, alpha = 0.05) {
         dat_GEE <- data.frame(y = y, X, C1 = C1, C2 = C2)
         dat_GEE$C3 <- paste(dat_GEE$C1, dat_GEE$C2, sep = "_")
 
-        mod1 <- fit_lspim_gee(dat_GEE, "C1")
-        mod2 <- fit_lspim_gee(dat_GEE, "C2")
-        mod3 <- fit_lspim_gee(dat_GEE, "C3")
-        converged <- lspim_gees_converged(list(mod1, mod2, mod3))
+        mod1 <- fit_lspim_gee(dat_GEE, "C1", engine = engine)
+        mod2 <- fit_lspim_gee(dat_GEE, "C2", engine = engine)
+        mod3 <- fit_lspim_gee(dat_GEE, "C3", engine = engine)
+        converged <- lspim_gees_converged(list(mod1, mod2, mod3), engine = engine)
 
-        V_raw <- mod1$covb + mod2$covb - mod3$covb
+        V_raw <- lspim_gee_vcov(mod1, engine) + lspim_gee_vcov(mod2, engine) - lspim_gee_vcov(mod3, engine)
         beta <- colMeans(rbind(stats::coef(mod1), stats::coef(mod2), stats::coef(mod3)), na.rm = TRUE)
         if (any(!is.finite(beta))) {
           stop("LSPIM produced non-finite visit-effect coefficients.")
@@ -155,12 +196,9 @@ fit_lspim <- function(dat, alpha = 0.05) {
           V_for_inference <- nearest_psd(V_raw)
         }
 
-        mod_use <- mod1
-        mod_use$coefficients <- beta
-        mod_use$covb <- V_for_inference
         L_const <- make_deviation_from_mean_l(names(beta), treatment_terms)
         holm_p <- summary(
-          multcomp::glht(mod_use, linfct = L_const),
+          multcomp::glht(multcomp::parm(beta, V_for_inference), linfct = L_const),
           test = multcomp::adjusted("holm")
         )$test$pvalues
         if (length(holm_p) == 0L || !any(is.finite(holm_p))) {

@@ -166,8 +166,8 @@ test_that("LSPIM row is not converged when one GEE hits its iteration limit", {
   withr::defer(assign("fit_lspim_gee", original_fit_lspim_gee, envir = globalenv()))
   assign(
     "fit_lspim_gee",
-    function(dat_gee, id) {
-      mod <- original_fit_lspim_gee(dat_gee, id)
+    function(dat_gee, id, ...) {
+      mod <- original_fit_lspim_gee(dat_gee, id, ...)
       if (id == "C2") {
         mod$convergence <- "maximum number of iterations consumed"
       }
