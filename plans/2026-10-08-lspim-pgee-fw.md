@@ -133,7 +133,7 @@ Ground rules:
 ## Implementation status (2026-10-08)
 
 Items 1-4, 6 and 7 are done on `feature/lspim-pgee-fw`; item 5 waits for the user's decision on
-regenerating the goldens.
+regenerating the goldens (done, see item 5).
 
 - `22511f5` item 1: `fit_lspim_pgee_fw()` and engine `pgee_fw` (default); `glm_sandwich` removed.
   Additions beyond the Decisions: errors for N <= p, for a numerically singular information
@@ -155,7 +155,8 @@ regenerating the goldens.
 - Item 5: `compare_golden.R` fails only because the 4 LSPIM rows changed `engine` from
   `geessbin` to `pgee_fw` (a key column, so it cannot be allowlisted). All other values,
   statuses, warnings and decisions are identical; non-LSPIM rows and the aggregation are
-  unchanged. **Not regenerated yet: awaiting the user.**
+  unchanged. Regenerated with the user's agreement; `compare_golden.R` and
+  `test-golden-pipeline.R` pass.
 - `3b3bbad` item 6: README, BACKLOG (Moore-Penrose item added), note status, add_convergence_status
   roxygen.
 - Item 7: fast suite 216 tests; failing only `test-run-all-grid.R` (5, known from `main`) and
