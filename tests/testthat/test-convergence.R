@@ -44,6 +44,24 @@ build_convergence_mats <- function() {
   build_cbc_matrices(ad, "subject_id", build_formula())
 }
 
+build_repair_mats <- function() {
+  ad <- suppressWarnings(prepare_analysis_data(build_repair_data(), type = "reweighting"))
+  build_cbc_matrices(ad, "subject_id", build_formula())
+}
+
+# Run cbc_estimator() and return the fit plus the D_tilde repair warnings it raised.
+fit_collecting_d_warnings <- function(mats, args) {
+  msgs <- character(0)
+  fit <- withCallingHandlers(
+    cbc_estimator(mats, args),
+    warning = function(w) {
+      msgs <<- c(msgs, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  list(fit = fit, d_warnings = grep("D_tilde is not positive semi-definite", msgs, value = TRUE))
+}
+
 # classical_ml -------------------------------------------------------------------------------------------------------
 
 test_that("lme4_converged() is TRUE for a clean fit and FALSE on optimizer code or check messages", {
@@ -122,6 +140,38 @@ test_that("a converged reweighting row with a D_tilde repair stays converged but
   expect_true(row$converged)
   expect_match(row$warning_message, "D_tilde is not positive semi-definite")
   expect_identical(row$convergence_status, "converged_singular")
+})
+
+test_that("cbc_estimator() flags a repaired last D_tilde and warns exactly once", {
+  res <- fit_collecting_d_warnings(build_repair_mats(), set_fit_args(reweighting = TRUE))
+
+  expect_true(res$fit$d_repaired)
+  expect_length(res$d_warnings, 1L)
+  expect_warning(
+    cbc_estimator(build_repair_mats(), set_fit_args(reweighting = TRUE)),
+    "D_tilde is not positive semi-definite"
+  )
+})
+
+test_that("cbc_estimator() reports d_repaired FALSE and no D_tilde warning for a PD D_tilde", {
+  res <- fit_collecting_d_warnings(build_convergence_mats(), set_fit_args(reweighting = TRUE))
+
+  expect_false(res$fit$d_repaired)
+  expect_length(res$d_warnings, 0L)
+})
+
+test_that("cbc_estimator() without reweighting reports the stage-2 D_tilde repair", {
+  res <- fit_collecting_d_warnings(build_repair_mats(), set_fit_args())
+
+  expect_true(res$fit$d_repaired)
+  expect_length(res$d_warnings, 1L)
+})
+
+test_that("fit_closed_form() passes d_repaired through", {
+  ad <- suppressWarnings(prepare_analysis_data(build_repair_data(), type = "reweighting"))
+  fit <- suppressWarnings(fit_closed_form(ad, set_fit_args(reweighting = TRUE)))
+
+  expect_true(fit$d_repaired)
 })
 
 # multiple_imputation ------------------------------------------------------------------------------------------------

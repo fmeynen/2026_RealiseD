@@ -747,8 +747,9 @@ cbc_estimator <- function(mats, fit_args) {
 
     L %*% tcrossprod(E, L)
   }
-  if (min(eigen(D_tilde, only.values = TRUE)$values) < 0) {
-    warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
+  # Only the repair status of the returned (last-pass) D_tilde is reported.
+  d_repaired <- min(eigen(D_tilde, only.values = TRUE)$values) < 0
+  if (d_repaired) {
     D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
   }
   variance_beta_tilde <- calculate_stage2_varbeta(
@@ -775,8 +776,8 @@ cbc_estimator <- function(mats, fit_args) {
       )
       # note: optimal weights are for beta's only, keep original weights for D_tilde
 
-      if (min(eigen(D_tilde, only.values = TRUE)$values) < 0) {
-        warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
+      d_repaired <- min(eigen(D_tilde, only.values = TRUE)$values) < 0
+      if (d_repaired) {
         D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
       }
       variance_beta_tilde <- calculate_stage2_varbeta(
@@ -792,6 +793,10 @@ cbc_estimator <- function(mats, fit_args) {
     }
   }
 
+  if (d_repaired) {
+    warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
+  }
+
   # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma (3) Estimates D,
   # and (4) variance of estimates for fixed effects
   list(
@@ -802,7 +807,10 @@ cbc_estimator <- function(mats, fit_args) {
     iterations = if (reweighting) iterations - 1 else 0,
     # Reweighting converged unless the loop hit max_iterations with the beta
     # change still above epsilon_B; the non-reweighted fit is closed form.
-    converged = if (reweighting) convergence <= epsilon_B else TRUE
+    converged = if (reweighting) convergence <= epsilon_B else TRUE,
+    # TRUE if the returned D_tilde (the last pass) was repaired for positive
+    # definiteness; repairs in earlier reweighting passes are not reported.
+    d_repaired = d_repaired
   )
 }
 
@@ -824,7 +832,8 @@ cbc_estimator <- function(mats, fit_args) {
 #' @return List with \code{estimates}, a named numeric vector with elements
 #'   \code{estimate_beta0..estimate_beta3}, \code{sigma2_hat},
 #'   \code{se_beta0..se_beta3}, \code{var_b0}, \code{cov_b0b1}, \code{var_b1};
-#'   and \code{converged}, the \code{cbc_estimator()} convergence flag.
+#'   \code{converged}, the \code{cbc_estimator()} convergence flag; and \code{d_repaired},
+#'   TRUE if the returned \code{D_tilde} was repaired for positive definiteness.
 
 fit_closed_form <- function(
   long_data,
@@ -834,7 +843,11 @@ fit_closed_form <- function(
     stop("'long_data' must be a data.frame.")
   }
   cbc <- apply_cbc(long_data, fit_args)
-  list(estimates = extract_cbc_result(cbc), converged = cbc$converged)
+  list(
+    estimates = extract_cbc_result(cbc),
+    converged = cbc$converged,
+    d_repaired = cbc$d_repaired
+  )
 }
 
 
