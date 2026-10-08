@@ -36,7 +36,7 @@ scenarios_log_small <- build_scenario_grid(
   d22_values = 0.2239 * (11 / log(12))^2,
   d12_values = -0.4985 * 11 / log(12),
   sigma2_values = 3.1508,
-  dropout_mechanism = "three_obs_minimum",
+  dropout_mechanism = c("half_missing", "three_obs_minimum"),
   time_trend = "log",
   seed_base = 260925
 )
@@ -51,13 +51,13 @@ scenarios_log_large <- build_scenario_grid(
   d22_values = 0.2239 * (11 / log(12))^2,
   d12_values = -0.4985 * 11 / log(12),
   sigma2_values = 3.1508,
-  dropout_mechanism = "three_obs_minimum",
+  dropout_mechanism = c("half_missing", "three_obs_minimum"),
   time_trend = "log",
   seed_base = 260925
 )
 
 scenarios_log_null <- build_scenario_grid(
-  n_values = c(10, 20, 50, 100),
+  n_values = c(10, 20, 50, 100, 1000),
   n_measures = 12,
   beta0_values = 2.4562,
   beta1_values = 0,
@@ -67,7 +67,7 @@ scenarios_log_null <- build_scenario_grid(
   d22_values = 0.2239 * (11 / log(12))^2,
   d12_values = -0.4985 * 11 / log(12),
   sigma2_values = 3.1508,
-  dropout_mechanism = "three_obs_minimum",
+  dropout_mechanism = c("half_missing", "three_obs_minimum"),
   time_trend = "log",
   seed_base = 260925
 )
