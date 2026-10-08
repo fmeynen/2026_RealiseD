@@ -1,7 +1,8 @@
 # test-lspim-config.R
 # Covers the configurable LSPIM max-sample-size gate: registry applies_to()
 # behavior, and an end-to-end run that records an oversized scenario as
-# skipped_by_config rather than a failure.
+# skipped_by_config rather than a failure. Also covers the lspim_engine key:
+# its default, validation, and that the runner passes it through.
 
 test_that("LSPIM applies_to honours the default and overridden lspim_max_n", {
   registry <- build_analysis_registry()
@@ -21,6 +22,80 @@ test_that("LSPIM applies_to honours the default and overridden lspim_max_n", {
   )
   expect_true(lspim_entry$applies_to(data.frame(n = 6), overridden_config))
   expect_false(lspim_entry$applies_to(data.frame(n = 8), overridden_config))
+})
+
+test_that("LSPIM defaults to the pgee_fw engine and validates lspim_engine", {
+  lspim_entry <- build_analysis_registry()$LSPIM
+  default_config <- lspim_entry$default_config
+
+  expect_identical(default_config$lspim_engine, "pgee_fw")
+  expect_null(default_config$lspim_glm_sandwich_min_n)
+  expect_no_error(validate_lspim_config(default_config))
+  expect_no_error(validate_lspim_config(
+    resolve_analysis_config(lspim_entry, list(lspim_engine = "geessbin"))
+  ))
+
+  for (bad_engine in list("glm_sandwich", NA_character_, c("pgee_fw", "geessbin"), NULL, 1)) {
+    config <- default_config
+    config["lspim_engine"] <- list(bad_engine)
+    expect_error(validate_lspim_config(config), "'lspim_engine' must be one of")
+  }
+})
+
+test_that("run_requested_analyses passes lspim_engine through to the LSPIM rows", {
+  output_dir <- withr::local_tempdir()
+  generated_output_dir <- file.path(output_dir, "generated")
+
+  scenarios <- build_scenario_grid(
+    n_values = 6,
+    n_measures = 4,
+    beta2_values = 0.3,
+    dropout_mechanism = "half_missing",
+    seed_base = 1
+  )
+  generation_manifest <- suppressMessages(
+    run_generation(
+      scenarios,
+      2L,
+      output_dir = generated_output_dir,
+      overwrite = FALSE
+    )
+  )
+
+  # See the comment above on why fit_lspim is stubbed by direct assignment.
+  seen_engines <- character(0)
+  original_fit_LSPIM <- fit_lspim
+  withr::defer(assign("fit_lspim", original_fit_LSPIM, envir = globalenv()))
+  assign(
+    "fit_lspim",
+    function(dat, alpha = 0.05, engine = "pgee_fw") {
+      seen_engines <<- c(seen_engines, engine)
+      list(
+        fit = list(
+          interaction_rejected = FALSE,
+          interaction_alpha = alpha,
+          interaction_test_procedure = "mock"
+        ),
+        elapsed_seconds = 0,
+        warnings = character(0),
+        error_message = NULL
+      )
+    },
+    envir = globalenv()
+  )
+
+  analysis_outputs <- suppressMessages(run_requested_analyses(
+    scenarios = scenarios,
+    generation_manifest = generation_manifest,
+    analyses = "LSPIM",
+    analysis_configs = list(LSPIM = list(lspim_engine = "geessbin")),
+    output_dir = output_dir
+  ))
+  results <- analysis_outputs$combined_artifact$results
+
+  expect_identical(nrow(results), 2L)
+  expect_true(all(results$engine == "geessbin"))
+  expect_identical(seen_engines, c("geessbin", "geessbin"))
 })
 
 test_that("LSPIM applies_to errors loudly on malformed config or scenario data", {
