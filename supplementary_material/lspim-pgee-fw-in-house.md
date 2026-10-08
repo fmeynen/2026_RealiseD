@@ -937,10 +937,9 @@ Before anything else, stop with exactly
 if $y$ is not numeric or `!setequal(unique(y), 0:1)`, that is if any pseudo-score is 0.5 (a tie in
 $Y$ between the two members of a pair) **or** if the pseudo-scores are all 0 or all 1. `fit_lspim()`
 turns this into `error_message` with `fit = NULL`. Ties are unlikely with continuous outcomes but
-possible after rounding. The current `glm_sandwich` engine accepts 0.5; an in-house PGEE engine
-could too (the estimating equation (3.6) and the FW formulas are well defined for
-$y_j \in [0, 1]$), but that would be a deliberate behaviour change relative to `geessbin`, not part
-of an identical-results replacement. Keep the check, and treat removing it as a separate decision.
+possible after rounding. The implemented `pgee_fw` engine accepts 0.5 (the estimating equation (3.6) and the FW formulas are well defined for
+$y_j \in [0, 1]$); this is a deliberate deviation from `geessbin` (see the status note at the top),
+not part of an identical-results replacement.
 
 ### 9.2 Convergence labels and warnings
 

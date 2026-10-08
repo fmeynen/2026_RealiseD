@@ -140,7 +140,10 @@ fit_lspim_pgee_fw <- function(dat_gee, stop_rule = c("relative_step", "geessbin_
     }
     stop_if_singular(s)
     phi <- sum((y - s$mu)^2 / s$w) / (N - p)
-    us <- score_step(s, phi)
+    if (!is.finite(phi) || phi <= 0) {
+      stop("LSPIM: Pearson scale parameter is zero; the pseudo-scores are fitted exactly (e.g. all pairs tied).")
+    }
+    us <-score_step(s, phi)
     iterations <- it
     if (is_stopped(us, beta)) {
       converged <- TRUE

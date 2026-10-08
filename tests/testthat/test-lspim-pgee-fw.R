@@ -167,6 +167,23 @@ test_that("pgee_fw rejects pseudo-scores outside {0, 0.5, 1}", {
   )
 })
 
+test_that("pgee_fw stops when every pseudo-score is 0.5 (Pearson scale parameter zero)", {
+  dat <- build_small_lspim_data()
+  dat$y <- 1
+
+  dat_gee <- capture_lspim_dat_gee(dat)
+  expect_true(all(dat_gee$y == 0.5))
+  expect_error(
+    fit_lspim_pgee_fw(dat_gee),
+    "LSPIM: Pearson scale parameter is zero",
+    fixed = TRUE
+  )
+
+  result <- fit_lspim(dat)
+  expect_null(result$fit)
+  expect_match(result$error_message, "Pearson scale parameter is zero", fixed = TRUE)
+})
+
 test_that("pgee_fw returns a not-converged fit with one warning when probabilities hit the bounds", {
   dat_gee <- capture_lspim_dat_gee(build_separated_data())
   expect_true(all(dat_gee$y == 1))
