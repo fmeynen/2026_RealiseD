@@ -142,6 +142,53 @@ test_that("a converged reweighting row with a D_tilde repair stays converged but
   expect_identical(row$convergence_status, "converged_singular")
 })
 
+test_that("a reweighting row whose only D_tilde repair is in an earlier pass stays converged_ok", {
+  # Not a package, so stub calculate_stage2_dmatrix in the global environment and restore it on
+  # exit. Only the first call (the initial, pre-loop D_tilde) is made non-PSD; the final D is
+  # untouched.
+  original_dmatrix <- calculate_stage2_dmatrix
+  withr::defer(assign("calculate_stage2_dmatrix", original_dmatrix, envir = globalenv()))
+  state <- new.env()
+  state$calls <- 0L
+  state$first_d_min_eigenvalue <- NA_real_
+  assign(
+    "calculate_stage2_dmatrix",
+    function(...) {
+      D <- original_dmatrix(...)
+      state$calls <- state$calls + 1L
+      if (state$calls == 1L) {
+        D <- D - (min(eigen(D, symmetric = TRUE, only.values = TRUE)$values) + 1) * diag(nrow(D))
+        state$first_d_min_eigenvalue <- min(eigen(D, symmetric = TRUE, only.values = TRUE)$values)
+      }
+      D
+    },
+    envir = globalenv()
+  )
+
+  row <- add_convergence_status(
+    suppressWarnings(analyze_reweighting(build_convergence_data(), set_fit_args(reweighting = TRUE)))
+  )
+
+  expect_lt(state$first_d_min_eigenvalue, 0)
+  expect_gt(state$calls, 1L)
+  expect_true(row$converged)
+  expect_false(row$singular)
+  expect_true(is.na(row$warning_message) || !grepl("D_tilde", row$warning_message))
+  expect_identical(row$convergence_status, "converged_ok")
+})
+
+test_that("a repaired final D_tilde makes the reweighting row singular whatever epsilon_D is", {
+  args <- set_fit_args(reweighting = TRUE, epsilon_D = 1e-3)
+  ad <- suppressWarnings(prepare_analysis_data(build_repair_data(), type = "reweighting"))
+  expect_true(suppressWarnings(fit_closed_form(ad, args))$d_repaired)
+
+  row <- add_convergence_status(suppressWarnings(analyze_reweighting(build_repair_data(), args)))
+
+  expect_true(row$converged)
+  expect_true(row$singular)
+  expect_identical(row$convergence_status, "converged_singular")
+})
+
 test_that("cbc_estimator() flags a repaired last D_tilde and warns exactly once", {
   res <- fit_collecting_d_warnings(build_repair_mats(), set_fit_args(reweighting = TRUE))
 
