@@ -747,8 +747,9 @@ cbc_estimator <- function(mats, fit_args) {
 
     L %*% tcrossprod(E, L)
   }
-  if (min(eigen(D_tilde, only.values = TRUE)$values) < 0) {
-    warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
+  # Only the repair status of the returned (last-pass) D_tilde is reported.
+  d_repaired <- min(eigen(D_tilde, only.values = TRUE)$values) < 0
+  if (d_repaired) {
     D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
   }
   variance_beta_tilde <- calculate_stage2_varbeta(
@@ -775,8 +776,8 @@ cbc_estimator <- function(mats, fit_args) {
       )
       # note: optimal weights are for beta's only, keep original weights for D_tilde
 
-      if (min(eigen(D_tilde, only.values = TRUE)$values) < 0) {
-        warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
+      d_repaired <- min(eigen(D_tilde, only.values = TRUE)$values) < 0
+      if (d_repaired) {
         D_tilde <- adjust_d_pd(D_tilde, epsilon_D)
       }
       variance_beta_tilde <- calculate_stage2_varbeta(
@@ -792,6 +793,10 @@ cbc_estimator <- function(mats, fit_args) {
     }
   }
 
+  if (d_repaired) {
+    warning("D_tilde is not positive semi-definite. It will be adjusted for positive definiteness.")
+  }
+
   # return a list with: (1) Estimates for fixed effects, (2) Estimates Sigma (3) Estimates D,
   # and (4) variance of estimates for fixed effects
   list(
@@ -802,7 +807,10 @@ cbc_estimator <- function(mats, fit_args) {
     iterations = if (reweighting) iterations - 1 else 0,
     # Reweighting converged unless the loop hit max_iterations with the beta
     # change still above epsilon_B; the non-reweighted fit is closed form.
-    converged = if (reweighting) convergence <= epsilon_B else TRUE
+    converged = if (reweighting) convergence <= epsilon_B else TRUE,
+    # TRUE if the returned D_tilde (the last pass) was repaired for positive
+    # definiteness; repairs in earlier reweighting passes are not reported.
+    d_repaired = d_repaired
   )
 }
 
@@ -824,7 +832,8 @@ cbc_estimator <- function(mats, fit_args) {
 #' @return List with \code{estimates}, a named numeric vector with elements
 #'   \code{estimate_beta0..estimate_beta3}, \code{sigma2_hat},
 #'   \code{se_beta0..se_beta3}, \code{var_b0}, \code{cov_b0b1}, \code{var_b1};
-#'   and \code{converged}, the \code{cbc_estimator()} convergence flag.
+#'   \code{converged}, the \code{cbc_estimator()} convergence flag; and \code{d_repaired},
+#'   TRUE if the returned \code{D_tilde} was repaired for positive definiteness.
 
 fit_closed_form <- function(
   long_data,
@@ -834,7 +843,11 @@ fit_closed_form <- function(
     stop("'long_data' must be a data.frame.")
   }
   cbc <- apply_cbc(long_data, fit_args)
-  list(estimates = extract_cbc_result(cbc), converged = cbc$converged)
+  list(
+    estimates = extract_cbc_result(cbc),
+    converged = cbc$converged,
+    d_repaired = cbc$d_repaired
+  )
 }
 
 
@@ -928,13 +941,13 @@ pool_rubin <- function(estimates_list, nu_com) {
 #'
 #' Failures: if the imputation or any of the m fits errors, the replicate's result is an error
 #' (\code{fit = NULL}, \code{error_message} set, prefixed with the imputation number for a fit
-#' error); there is no pooling over fewer fits. If any per-imputation D_tilde is singular
-#' (smallest eigenvalue <= 1e-6, which includes a D_tilde repaired for positive definiteness),
-#' \code{singular} is TRUE and classify_fit_status() labels the replicate "singular_fit", even
-#' when the averaged D is not singular.
+#' error); there is no pooling over fewer fits. If any per-imputation D_tilde was repaired for
+#' positive definiteness (\code{d_repaired} from \code{fit_closed_form()}) or is singular
+#' (smallest eigenvalue <= 1e-6), \code{singular} is TRUE and classify_fit_status() labels the
+#' replicate "singular_fit", even when the averaged D is not singular.
 #'
 #' Convergence: converged = TRUE whenever the pooled fit succeeds (closed-form CbC fits; mice has
-#' no convergence criterion). A D_tilde PD adjustment does not affect converged; it makes the
+#' no convergence criterion). A repaired D_tilde does not affect converged; it makes the
 #' replicate singular (see above).
 #'
 #' @param data        Prepared analysis data (missing outcomes as NA).
@@ -960,20 +973,23 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
         imputations <- split(imputed_data, imputed_data$.imp)
         per_imputation <- lapply(seq_along(imputations), function(k) {
           tryCatch(
-            fit_closed_form(long_data = imputations[[k]], fit_args = fit_args)$estimates,
+            fit_closed_form(long_data = imputations[[k]], fit_args = fit_args),
             error = function(error) {
               stop(paste0("imputation ", k, ": ", conditionMessage(error)), call. = FALSE)
             }
           )
         })
-        # Same tolerance as classify_fit_status()'s singular_tol default.
+        # The eigenvalue tolerance is classify_fit_status()'s singular_tol default.
         singular <- any(vapply(
           per_imputation,
-          function(estimates) is_singular(estimates_d_matrix(estimates), tol = 1e-06),
+          function(closed_form) {
+            isTRUE(closed_form$d_repaired) ||
+              is_singular(estimates_d_matrix(closed_form$estimates), tol = 1e-06)
+          },
           logical(1)
         ))
         nu_com <- length(unique(data[[fit_args$subject_col]])) - 2
-        pool_rubin(per_imputation, nu_com)
+        pool_rubin(lapply(per_imputation, `[[`, "estimates"), nu_com)
       },
       error = function(error) {
         error_message <<- conditionMessage(error)
@@ -1000,7 +1016,8 @@ fit_mi_closed_form <- function(data, impute_args = set_impute_args(), fit_args =
 ## Fit closed form + reweighting---------------------------------------------------------------------
 
 # Convergence: converged = FALSE only if the reweighting loop reached max_iterations
-# with the beta change still above epsilon_B. A D_tilde PD adjustment is only a warning.
+# with the beta change still above epsilon_B. A repair of the returned (last-pass) D_tilde does not
+# affect converged; it makes the fit singular via d_repaired (repairs in earlier passes are silent).
 fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
   warning_messages <- character(0)
   error_message <- NULL
@@ -1025,6 +1042,7 @@ fit_closed_form_reweighting <- function(data, fit_args = set_fit_args()) {
   list(
     fit = closed_form$estimates,
     converged = isTRUE(closed_form$converged),
+    d_repaired = isTRUE(closed_form$d_repaired),
     elapsed_seconds = as.numeric(elapsed_seconds),
     warnings = unique(warning_messages),
     error_message = error_message
@@ -1104,9 +1122,11 @@ lme4_converged <- function(fit) {
 
 ## Classify fit status ---------------------------------------------------------------------------------------------
 
-# An eigenvalue at the tolerance counts as singular. A D_tilde repaired for positive definiteness has its
-# smallest eigenvalue set to epsilon_D (= tol): a variance component truncated at the boundary, which is a
-# singular fit (as in lme4). The relative slack keeps that from depending on ~1e-17 rounding noise.
+# An eigenvalue at the tolerance counts as singular; the relative slack keeps that from depending on
+# ~1e-17 rounding noise. A D_tilde repaired for positive definiteness is a variance component truncated at
+# the boundary, i.e. a singular fit (as in lme4). The d_repaired flag carries that, independent of
+# epsilon_D; the eigenvalue check is a second route (it also fires when the repair sets the smallest
+# eigenvalue to epsilon_D <= tol).
 is_singular <- function(cov_matrix, tol) {
   evals <- eigen(cov_matrix, symmetric = TRUE, only.values = TRUE)$values
   any(evals <= tol * (1 + 1e-8))
@@ -1115,7 +1135,8 @@ is_singular <- function(cov_matrix, tol) {
 #' Classify the classical ML fit status for downstream simulation results.
 #'
 #' @param fit_result   List returned by fit_classical_ml_model() or another fit_* function. For
-#'   multiple_imputation, a TRUE fit_result$singular (see fit_mi_closed_form()) gives "singular_fit".
+#'   multiple_imputation, a TRUE fit_result$singular (see fit_mi_closed_form()) gives "singular_fit";
+#'   for reweighting, so does a TRUE fit_result$d_repaired (D_tilde of the returned fit repaired).
 #' @param singular_tol Numeric tolerance passed to `lme4::isSingular()`.
 #' @param method       Analysis registry key identifying the fit's method.
 #'
@@ -1135,6 +1156,9 @@ classify_fit_status <- function(fit_result, singular_tol = 1e-06,
   # Averaging D over the imputations can hide a singular per-imputation D; fit_mi_closed_form()
   # flags that case in fit_result$singular.
   if (method == "multiple_imputation" && isTRUE(fit_result$singular)) {
+    return("singular_fit")
+  }
+  if (method == "reweighting" && isTRUE(fit_result$d_repaired)) {
     return("singular_fit")
   }
   # only works ad hoc; TODO generalize for any RE covariance matrix

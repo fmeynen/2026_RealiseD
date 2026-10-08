@@ -229,6 +229,24 @@ test_that("one singular per-imputation D makes the replicate converged_singular"
   expect_identical(row$convergence_status, "converged_singular")
 })
 
+test_that("a repaired per-imputation D makes the replicate singular whatever epsilon_D is", {
+  # The estimated D is far from singular (eigenvalues well above 1e-6): only d_repaired flags it.
+  stub_fit_closed_form(function(k, fit) {
+    fit$estimates[c("var_b0", "cov_b0b1", "var_b1")] <- c(2, 0.1, 1)
+    fit$d_repaired <- k == 2L
+    fit
+  })
+  args <- set_fit_args(epsilon_D = 1e-3)
+
+  set.seed(1)
+  row <- add_convergence_status(
+    suppressWarnings(analyze_mi_closed_form(build_rubin_data(), rubin_impute_args(), args))
+  )
+  expect_true(row$converged)
+  expect_true(row$singular)
+  expect_identical(row$convergence_status, "converged_singular")
+})
+
 test_that("non-singular per-imputation fits leave the singular flag FALSE", {
   stub_fit_closed_form(function(k, fit) {
     fit$estimates[c("var_b0", "cov_b0b1", "var_b1")] <- c(2, 0.1, 1)

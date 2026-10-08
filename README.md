@@ -44,8 +44,9 @@ are the only method names used anywhere in the code):
 
 The CbC estimator (`cbc_estimator()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)) is
 a two-stage closed-form estimator: per-subject OLS in stage 1, weighted combination in stage 2.
-If `D_tilde` has negative eigenvalues they are replaced by `epsilon_D` (with a warning); such a
-repaired `D_tilde` always counts as singular (see [What *converged* means](#what-converged-means)).
+If `D_tilde` has negative eigenvalues they are replaced by `epsilon_D`. Only a repair of the final
+(returned) `D_tilde` counts: it raises a warning and makes the fit singular (see
+[What *converged* means](#what-converged-means)); repairs in earlier reweighting passes are silent.
 The correction term `vec_c` of the `D` estimate counts each subject's sampling-noise term once
 (cross terms weighted by `w_j`, as in the reference code); before 2026-09-30 it counted the cross
 terms once per subject, which pushed `D_tilde` below zero in most fits
@@ -197,19 +198,23 @@ The criterion differs per method:
 | Method | `converged = FALSE` when | Only a warning (still converged) |
 |---|---|---|
 | `classical_ml` | the optimizer return code is non-zero, or lme4's convergence checks produced any message (e.g. "Model failed to converge with max\|grad\| …", "Model is nearly unidentifiable …"); see `lme4_converged()` | lme4's "boundary (singular) fit" notice is **deliberately ignored** for convergence: singular fits count as converged and appear as `converged_singular` |
-| `multiple_imputation` | never on a successful fit (the `m` CbC fits are closed form; `mice` runs a fixed number of iterations with no convergence test). If the imputation or any of the `m` fits fails, the replicate is an error (message `imputation k: ...` for a failed fit); there is no pooling over fewer fits | `D_tilde` positive-definiteness repair in any of the `m` fits (also makes the fit singular, see below) |
-| `reweighting` | the reweighting loop reached `max_iterations` while the largest change in beta was still above `epsilon_B` (flag `converged` returned by `cbc_estimator()`) | `D_tilde` positive-definiteness repair (also makes the fit singular, see below) |
+| `multiple_imputation` | never on a successful fit (the `m` CbC fits are closed form; `mice` runs a fixed number of iterations with no convergence test). If the imputation or any of the `m` fits fails, the replicate is an error (message `imputation k: ...` for a failed fit); there is no pooling over fewer fits | `D_tilde` positive-definiteness repair in any of the `m` fits (each fit is a single pass, so its `D_tilde` is the final one; also makes the fit singular, see below) |
+| `reweighting` | the reweighting loop reached `max_iterations` while the largest change in beta was still above `epsilon_B` (flag `converged` returned by `cbc_estimator()`) | `D_tilde` positive-definiteness repair of the final `D` (also makes the fit singular, see below); repairs in earlier reweighting passes (the stage-2 start or an intermediate iteration) raise no warning |
 | `LSPIM` | engine `geessbin`: any of its three GEE fits reports a `convergence` status other than "converged" (`lspim_gees_converged()`); in geessbin 1.0.2 that is "maximum number of iterations consumed" (iteration limit reached without meeting the tolerance), "convergence failure", "fitted probabilities numerically 0 or 1 occurred." or "infinite scale parameter". Engine `glm_sandwich`: `glm.fit()$converged` is FALSE (IRLS iteration limit reached). Its "non-integer #successes in a binomial glm!" warning (from the 0.5 tie scores) is expected and not recorded | replacing the combined covariance `V` by the nearest positive semi-definite matrix (`nearest_psd()`) |
 
 **Positive-definiteness repairs (CbC `D_tilde`, LSPIM `V`) never make a fit not converged.** A
-repaired CbC `D_tilde` (`multiple_imputation`, `reweighting`) additionally counts as a singular
-fit, because the repair sets its negative eigenvalues to `epsilon_D`: `is_singular()` treats an
-eigenvalue up to `tol * (1 + 1e-8)` as singular, so the outcome no longer depends on rounding
-noise. Such fits are `converged = TRUE` with `singular = TRUE` and show as `converged_singular`
-(with the warning still recorded). For `multiple_imputation` the replicate is
-`converged_singular` when any per-imputation `D_tilde` is singular or repaired, even when the
-averaged `D` is not (`fit_mi_closed_form()`, `classify_fit_status()`). A repaired LSPIM `V`
-remains only a warning (`converged_warning`).
+repair of the final CbC `D_tilde` (`multiple_imputation`, `reweighting`) additionally counts as a
+singular fit: `cbc_estimator()` raises one warning after the fit and sets a `d_repaired` flag. A
+fit is singular when `d_repaired` is set or the smallest eigenvalue of `D_tilde` is at most the
+tolerance (`is_singular()`, which treats an eigenvalue up to `tol * (1 + 1e-8)` as singular, so the
+outcome no longer depends on rounding noise). The label therefore does not depend on `epsilon_D`
+equalling the tolerance. Only the last `D` counts: a repair in an earlier reweighting pass (the
+stage-2 start or an intermediate iteration) is silent, leaves no record, and such a replicate can be
+`converged_ok`. Such singular fits are `converged = TRUE` with `singular = TRUE` and show as
+`converged_singular` (with the warning still recorded). For `multiple_imputation` the replicate is
+`converged_singular` when any per-imputation `D_tilde` is singular (flag or eigenvalue), even when
+the averaged `D` is not (`fit_mi_closed_form()`, `classify_fit_status()`). A repaired LSPIM `V`
+remains only a warning (`converged_warning`) and is never singular.
 
 Each result row then gets one `convergence_status` (`add_convergence_status()` in
 [artifact_store.R](scripts/simulation/artifact_store.R)); the first matching rule wins:
