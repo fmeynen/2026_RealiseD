@@ -11,7 +11,12 @@ and an all-zero design column are errors (the replicate fails) instead of Moore-
 `N <= p` and a numerically singular information matrix are errors; and non-convergence (fitted
 probabilities outside [1e-4, 0.9999] or 50 iterations) gives one warning and keeps the fit, with
 `converged = FALSE`. With the internal argument `stop_rule = "geessbin_score"` it reproduces
-geessbin to floating-point rounding. The derivation below is unchanged: it shows that the three
+geessbin to floating-point rounding. The general sandwich builds an $N \times p^2$ matrix that
+does not fit in memory at $n = 1000$; Section 8.1 explains why, and how the diagonal form of
+Remark 5.7 avoids it. That diagonal path is planned in
+[`plans/2026-10-08-lspim-sparse-fw.md`](../plans/2026-10-08-lspim-sparse-fw.md), with the general
+path kept as the fallback for designs where a row has more than one non-zero entry. The derivation
+below is otherwise unchanged: it shows that the three
 calls can be replaced, without changing the result beyond floating-point rounding, by
 
 1. **one** PGEE fit (Firth-type penalised logistic regression with a Pearson scale parameter),
@@ -97,7 +102,8 @@ $$
 \Pr(Y_R > Y_L) + \tfrac12 \Pr(Y_R = Y_L) = \mu_j(\beta) = \operatorname{expit}(x_j^\top \beta).
 $$
 
-**Structural remark (useful for testing, not needed for the derivations).** With the current
+**Structural remark (not needed for the derivations; used for the memory-light sandwich of
+Section 8.1).** With the current
 column definitions every row of $X$ has exactly one non-zero entry: a between pair at visit $t$ has
 $x_j = e_{\texttt{trt\_visit}t}$ (because $a_{s_R} - a_{s_L} = 1$ and both trend products vanish); a
 within pair of a treated subject has $x_j = (t' - t)\, e_{\texttt{trend\_treat}}$; a within pair of a
@@ -789,9 +795,20 @@ a_{ik} = \frac{g_{ik}}{\sqrt{1 - \kappa_{ik}}},\qquad b_{ik} = \frac{g_{ik}}{1 -
 $$
 
 ($F^{-1}$ diagonal). Likewise $h_j = w_j x_{jk(j)}^2 / F_{k(j)k(j)}$ with $k(j)$ the non-zero column of
-row $j$; the leverages within a column sum to 1. An implementation should still use the general
-$p \times p$ form (it costs nothing extra and does not silently break if a design column is added
-that overlaps others), but the diagonal form is a cheap independent check in tests.
+row $j$; the leverages within a column sum to 1.
+
+The KC vector agrees with Proposition 5.6: with $\Psi_i = I$ and $L^{-1} = F^{-1/2}$,
+$a_{ik} = g_{ik} + (F_i)_{kk} F_{kk}^{-1/2}\, \varphi_{1/2}(\kappa_{ik})\, F_{kk}^{-1/2} g_{ik}
+= g_{ik}\bigl(1 + \kappa_{ik}\varphi_{1/2}(\kappa_{ik})\bigr) = g_{ik}(1 - \kappa_{ik})^{-1/2}$, and
+likewise $b_{ik} = g_{ik}(1 - \kappa_{ik})^{-1}$. The form $g_{ik}/\sqrt{1 - \kappa_{ik}}$ has no
+cancellation for small $\kappa_{ik}$, so it needs no special case. The leverage-1 check of 5.4
+becomes $\max_k \kappa_{ik} \ge 1 - \delta_i$, read off directly.
+
+An earlier version of this note recommended the general $p \times p$ form even for this design,
+because it "costs nothing extra". That holds for time at small $n$, but not for memory at large
+$n$ (Section 8.1). The diagonal form is used only when every row of $X$ has exactly one non-zero
+entry, which is checked at run time; any other design (for example one with a covariate column)
+falls back to the general form.
 
 ---
 
@@ -924,6 +941,88 @@ it is useful as an intermediate check between the literal `geessbin` formulas an
 Route B is the one to implement. For the fallback clusters of 5.4 the cost is that of `geessbin`
 for those clusters only.
 
+### 8.1 Memory of Route B at $n = 1000$, and the diagonal path
+
+The table above counts the sandwich accumulation as $O(Np^2)$ **time** and the whole method as
+$O(Np)$ **memory**. The first implementation of `fit_lspim_pgee_fw()` does not reach that memory
+bound. To get every $F_i$ with one grouped sum it materialises, per pair, the vectorised outer
+product $\operatorname{vec}(x_j x_j^\top)$:
+
+```r
+XX  <- X[, rep(seq_len(p), times = p)] * X[, rep(seq_len(p), each = p)]   # N x p^2
+WXX <- XX * w                                                              # N x p^2
+F_cl <- rowsum(WXX, grp)                                                   # K_C x p^2
+```
+
+That is $O(Np^2)$ memory, and at $n = 1000$ it is too much.
+
+**Size at $n = 1000$.** With 12 visits, $p = 14$ and $p^2 = 196$. One $n = 100$ replicate with
+dropout from a local run has 16,797 between pairs and 4,203 within pairs. Between pairs grow with
+$n^2$ and within pairs with $n$, so at $n = 1000$, $N \approx 1.7$ million (up to about 3.1
+million with complete data, $N = v n^2/4 + n\binom v2$). Then:
+
+| object | size at $N = 1.7 \times 10^6$ |
+|---|---|
+| `X` ($N \times p$) | 0.19 GB |
+| each of the two indexed copies of `X` used to build `XX` | 2.7 GB |
+| `XX` ($N \times p^2$) | 2.7 GB |
+| `WXX` ($N \times p^2$) | 2.7 GB |
+| peak while building `XX` and `WXX` | about 11 GB |
+
+That is per replicate, so per PSOCK worker. With several workers fitting $n = 1000$ replicates at
+the same time, the machine runs out of memory. There is also a time cost: $C_3$ has about
+$n^2/4 + n \approx 251{,}000$ clusters, and the per-cluster loop calls `eigen()` once for each.
+
+**Why the current design does not need any of it.** By the structural remark in 1.3, every row
+of $X$ has exactly one non-zero entry:
+
+| pair | `trend_treat` | `trend_ctrl` | `trt_visit`$t$ | other `trt_visit` |
+|---|---|---|---|---|
+| between, visit $t$ (left control, right treated) | 0 (left is control) | 0 (right is treated) | **1** | 0 |
+| within, treated subject, visits $t < t'$ | $\mathbf{t' - t}$ | 0 | 0 | 0 |
+| within, control subject, visits $t < t'$ | 0 | $\mathbf{t' - t}$ | 0 | 0 |
+
+So row $j$ belongs to exactly one parameter $k(j)$, with value $v_j = x_{j k(j)}$. By
+Remark 5.7 this gives:
+
+1. **$F$ and every $F_i$ are diagonal.** $x_j x_j^\top$ is zero except at $(k(j), k(j))$, where it
+   is $v_j^2$. So the $p^2$ entries per row reduce to $p$, and only one of those is non-zero:
+   $F_{\text{cl}}$ is a grouped sum of the $N \times p$ matrix $X^2 w$ (elementwise), a
+   $K_C \times p$ matrix. `XX` and `WXX` are never built.
+2. **No eigendecompositions.** $L = F^{1/2}$ is diagonal, so $K_i$ is diagonal with eigenvalues
+   $\kappa_{ik} = (F_i)_{kk} / F_{kk}$ (cluster $i$'s share of the information about $\beta_k$) and
+   eigenvectors $\Psi_i = I$.
+3. **The FW corrections are elementwise.** $a_{ik} = g_{ik} / \sqrt{1 - \kappa_{ik}}$ and
+   $b_{ik} = g_{ik} / (1 - \kappa_{ik})$, for all clusters and parameters at once, as
+   $K_C \times p$ matrices $A$ and $B$.
+4. **The meat is one matrix product.** $\sum_i \tfrac12(a_i a_i^\top + b_i b_i^\top) =
+   \tfrac12(A^\top A + B^\top B)$, with no loop over clusters. The meat is **not** diagonal: a
+   cluster holds pairs of several parameters (a control subject's $C_1$ cluster has its between
+   pairs at every visit it was observed and its within pairs), so $g_i$ is a full $p$-vector and
+   $A^\top A$ has off-diagonal entries. These are the covariances between visit effects that the
+   Holm deviation-from-mean contrasts need, so nothing is lost.
+5. **The leverage-1 check** (5.4) is $\max_k \kappa_{ik} \ge 1 - \delta_i$ on the $K_C \times p$ matrix
+   of $\kappa$.
+
+The largest objects are then $N \times p$ (`X`, $X e$, $X^2 w$; about 0.19 GB each at $n = 1000$)
+or length-$N$ vectors, so the peak drops from about 11 GB to a few hundred MB per worker, and the
+per-cluster loop disappears. The result is the same estimator, written differently: Route B and the
+diagonal path differ only by floating-point rounding. (Route B's `eigen()` on a diagonal $K_i$
+with tied $\kappa$ may return any basis of the tied eigenspace, but the corrections are spectral
+functions of $K_i$ and do not depend on that choice, Fact A.1.)
+
+**When the shortcut does not apply.** Everything above depends on how `fit_lspim()` builds the
+design columns. A covariate column (for example baseline) would give rows with more than one
+non-zero entry, and $F$, $F_i$ would no longer be diagonal. The implementation therefore checks
+`all(rowSums(X != 0) == 1)` once per fit and falls back to the general Route B form when it does
+not hold. The fallback still builds `XX`, so it keeps the $O(Np^2)$ memory and is not suitable at
+$n = 1000$; a chunked accumulation of $F_i$ would fix that if such a design is ever needed.
+
+The fit itself (start loop and main PGEE loop) needs only $N \times p$ objects and the $p \times p$
+Cholesky of $F$, so it is unchanged. A smaller memory saving is in the pair construction: `C3` is a
+`paste()` of the two subject labels, about 1.7 million strings at $n = 1000$, which an integer
+code of the (left, right) subject pair replaces.
+
 ---
 
 ## 9. Behaviour to replicate: labels, warnings, errors, ties
@@ -1055,7 +1154,9 @@ the column mean of three identical vectors; whether to keep `colMeans` for bitwi
 detail), and `converged <- label == "converged"`. The per-cluster sums $F_i$ and $g_i$ can be
 accumulated for all clusters at once with a grouped sum over rows (`rowsum()` on the $N \times p$
 matrix of $e_j x_j$ and on the $N \times p^2$ matrix of the vectorised $w_j x_j x_j^\top$; with the
-current design only the $p$ diagonal entries are non-zero, see Remark 5.7).
+current design only the $p$ diagonal entries are non-zero, see Remark 5.7). The $N \times p^2$
+matrix is too large at $n = 1000$; when every row of $X$ has one non-zero entry, use the diagonal
+path of Section 8.1 instead.
 
 ---
 
