@@ -345,7 +345,8 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("pgee_fw", "geessbin")) {
         C1 <- as.vector(L$subject_id)
         C2 <- as.vector(R$subject_id)
         dat_GEE <- data.frame(y = y, X, C1 = C1, C2 = C2)
-        dat_GEE$C3 <- paste(dat_GEE$C1, dat_GEE$C2, sep = "_")
+        ids <- unique(c(C1, C2))
+        dat_GEE$C3 <- (match(C1, ids) - 1) * length(ids) + match(C2, ids)
 
         if (engine == "pgee_fw") {
           pgee <- fit_lspim_pgee_fw(dat_GEE)
