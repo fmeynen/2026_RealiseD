@@ -132,8 +132,8 @@ Ground rules:
 
 ## Implementation status (2026-10-08)
 
-Items 1-4, 6 and 7 are done on `feature/lspim-pgee-fw`; item 5 waits for the user's decision on
-regenerating the goldens (done, see item 5).
+All seven items are done on `feature/lspim-pgee-fw`; the goldens were regenerated after the
+user reviewed the differences (item 5).
 
 - `22511f5` item 1: `fit_lspim_pgee_fw()` and engine `pgee_fw` (default); `glm_sandwich` removed.
   Additions beyond the Decisions: errors for N <= p, for a numerically singular information
