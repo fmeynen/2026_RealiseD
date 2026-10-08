@@ -109,8 +109,9 @@ Ground rules:
    `pgee_fw` (`stop_rule = "geessbin_score"`) against geessbin at n = 10, 20, 50, with and
    without dropout, linear and log scenarios: beta, the three covb and `V_raw` within relative
    1e-8, plus labels/iterations where comparable. One extra comparison with the default
-   `relative_step` rule at 1e-6 to show the real-world difference. Time both engines at n = 10
-   and 20 only (no memory measurement, no larger n). Report results to the user.
+   `relative_step` rule at 1e-6 to show the real-world difference. Time both engines at n = 10,
+   20 and 50 (no memory measurement, no larger n); estimate the run time of the whole check,
+   including the n = 50 timing, and ask before running it. Report results to the user.
 
 5. **Golden comparison.** Run `compare_golden.R`, report the LSPIM differences (label and
    values) to the user, and regenerate the goldens only after the user agrees. Non-LSPIM rows
