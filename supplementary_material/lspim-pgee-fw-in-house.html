@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>lspim-pgee-fw-in-house</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="lspim-pgee-fw-in-house_files/libs/clipboard/clipboard.min.js"></script>
+<script src="lspim-pgee-fw-in-house_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="lspim-pgee-fw-in-house_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="lspim-pgee-fw-in-house_files/libs/quarto-html/popper.min.js"></script>
+<script src="lspim-pgee-fw-in-house_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="lspim-pgee-fw-in-house_files/libs/quarto-html/anchor.min.js"></script>
+<link href="lspim-pgee-fw-in-house_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="lspim-pgee-fw-in-house_files/libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="lspim-pgee-fw-in-house_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="lspim-pgee-fw-in-house_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="lspim-pgee-fw-in-house_files/libs/bootstrap/bootstrap-215b371544c282197b31c8aa00ce3677.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="lspim-one-in-house-pgee-fit-and-three-ford-westgate-sandwiches-in-place-of-three-geessbin-fits" class="level1">
+<h1>LSPIM: one in-house PGEE fit and three Ford-Westgate sandwiches in place of three <code>geessbin</code> fits</h1>
+<p>Status: derivation only. Nothing here is implemented. The LSPIM engine <code>"geessbin"</code> in <a href="../scripts/simulation/lspim.R"><code>scripts/simulation/lspim.R</code></a> still calls <code>geessbin::geessbin()</code> three times (<code>fit_lspim_gee()</code> with <code>id</code> = <code>C1</code>, <code>C2</code>, <code>C3</code>). This note shows that the three calls can be replaced, without changing the result beyond floating-point rounding, by</p>
+<ol type="1">
+<li><strong>one</strong> PGEE fit (Firth-type penalised logistic regression with a Pearson scale parameter), which does not involve any clustering at all, and</li>
+<li><strong>three</strong> Ford-Westgate (FW) sandwich covariance matrices, one per clustering, each computed from <span class="math inline">\(p \times p\)</span> quantities per cluster instead of <span class="math inline">\(n_i \times n_i\)</span> matrices.</li>
+</ol>
+<p>Every statement about <code>geessbin</code> refers to version 1.0.2 (the version in <code>renv.lock</code>) and is based on its source code, which is quoted where it matters. The audience is a statistician who will implement this later; the last two sections give pseudocode and a verification checklist.</p>
+<p>Contents:</p>
+<ol type="1">
+<li><a href="#1-notation-and-the-pair-model">Notation and the pair model</a></li>
+<li><a href="#2-what-geessbin-actually-computes">What <code>geessbin</code> actually computes</a></li>
+<li><a href="#3-the-pgee-fit-under-independence-and-why-it-does-not-depend-on-the-clustering">The PGEE fit under independence, and why it does not depend on the clustering</a></li>
+<li><a href="#4-the-sandwich-is-free-of-the-scale-parameter">The sandwich is free of the scale parameter</a></li>
+<li><a href="#5-the-fw-correction-under-independence">The FW correction under independence</a></li>
+<li><a href="#6-why-one-fit-plus-three-sandwiches-is-equivalent-to-three-fits">Why one fit plus three sandwiches is equivalent to three fits</a></li>
+<li><a href="#7-where-the-time-and-memory-go-in-geessbin">Where the time and memory go in <code>geessbin</code></a></li>
+<li><a href="#8-cost-of-the-in-house-version">Cost of the in-house version</a></li>
+<li><a href="#9-behaviour-to-replicate-labels-warnings-errors-ties">Behaviour to replicate: labels, warnings, errors, ties</a></li>
+<li><a href="#10-pseudocode">Pseudocode</a></li>
+<li><a href="#11-verification-checklist">Verification checklist</a></li>
+<li><a href="#12-appendix-matrix-function-facts-used">Appendix: matrix-function facts used</a></li>
+</ol>
+<hr>
+<section id="notation-and-the-pair-model" class="level2">
+<h2 class="anchored" data-anchor-id="notation-and-the-pair-model">1. Notation and the pair model</h2>
+<section id="data" class="level3">
+<h3 class="anchored" data-anchor-id="data">1.1 Data</h3>
+<ul>
+<li>Subjects <span class="math inline">\(s = 1, \dots, n\)</span> with arm <span class="math inline">\(a_s \in \{0, 1\}\)</span> (0 = control, 1 = treated); <span class="math inline">\(n_0\)</span> and <span class="math inline">\(n_1\)</span> subjects per arm, <span class="math inline">\(n = n_0 + n_1\)</span>. In the simulation <code>n</code> is the <strong>total</strong> number of subjects and <code>allocate_treatment()</code> gives <span class="math inline">\(n_0 = n_1 = n/2\)</span> for even <span class="math inline">\(n\)</span>.</li>
+<li>Visits with time values <span class="math inline">\(t \in \mathcal T = \{t_1 &lt; \dots &lt; t_v\}\)</span>; in the simulation <span class="math inline">\(t_k = k - 1\)</span>, so <span class="math inline">\(\mathcal T = \{0, 1, \dots, v-1\}\)</span> with <span class="math inline">\(v\)</span> = <code>n_measures</code>.</li>
+<li><span class="math inline">\(Y_{st}\)</span> is the observed outcome of subject <span class="math inline">\(s\)</span> at visit <span class="math inline">\(t\)</span>; <span class="math inline">\(m_s\)</span> is the number of observed visits of subject <span class="math inline">\(s\)</span> (<span class="math inline">\(m_s = v\)</span> without dropout). <span class="math inline">\(n_{0t}\)</span> and <span class="math inline">\(n_{1t}\)</span> are the numbers of control and treated subjects observed at visit <span class="math inline">\(t\)</span>.</li>
+</ul>
+</section>
+<section id="pairs-and-pseudo-scores" class="level3">
+<h3 class="anchored" data-anchor-id="pairs-and-pseudo-scores">1.2 Pairs and pseudo-scores</h3>
+<p><code>fit_lspim()</code> sorts the data by subject and time and builds an ordered list of pairs <span class="math inline">\(j = 1, \dots, N\)</span>, each with a left observation <span class="math inline">\(L(j) = (s_L, t_L)\)</span> and a right observation <span class="math inline">\(R(j) = (s_R, t_R)\)</span>:</p>
+<ul>
+<li><strong>Between pairs</strong>, visit by visit: for each visit <span class="math inline">\(t\)</span>, every (control observed at <span class="math inline">\(t\)</span>, treated observed at <span class="math inline">\(t\)</span>) combination, left = control, right = treated (<code>expand.grid(Var1 = id_fac, Var2 = id_nonfac)</code>, so the left index varies fastest). There are <span class="math inline">\(n_{0t} n_{1t}\)</span> of them.</li>
+<li><strong>Within pairs</strong>, subject by subject: every pair of visits <span class="math inline">\(t &lt; t'\)</span> of the same subject, left = earlier visit (<code>combn(idx, 2)</code>). There are <span class="math inline">\(\binom{m_s}{2}\)</span> of them per subject.</li>
+</ul>
+<p>Hence</p>
+<p><span class="math display">\[
+N = \sum_{t \in \mathcal T} n_{0t} n_{1t} + \sum_{s=1}^{n} \binom{m_s}{2},
+\qquad\text{complete data, } n_0 = n_1 = n/2:\quad
+N = \frac{v n^2}{4} + n \binom{v}{2}.
+\]</span></p>
+<p>The pseudo-score (<code>pseudo_score()</code>, higher is better) is</p>
+<p><span class="math display">\[
+y_j = \mathbb 1\{Y_{R(j)} &gt; Y_{L(j)}\} + \tfrac12 \, \mathbb 1\{Y_{R(j)} = Y_{L(j)}\} \in \{0, \tfrac12, 1\}.
+\]</span></p>
+</section>
+<section id="design-columns" class="level3">
+<h3 class="anchored" data-anchor-id="design-columns">1.3 Design columns</h3>
+<p>Row <span class="math inline">\(j\)</span> of the <span class="math inline">\(N \times p\)</span> design matrix <span class="math inline">\(X\)</span> is <span class="math inline">\(x_j^\top\)</span>, with <span class="math inline">\(p = v + 2\)</span> columns, in this order (the GEE formula is <code>y ~ . - 1 - C1 - C2 - C3</code>, so the columns are the non-<code>y</code>, non-cluster columns of <code>dat_GEE</code> in their data-frame order):</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>column</th>
+<th>definition</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>trend_treat</code></td>
+<td><span class="math inline">\((t_R - t_L)\, a_{s_R} a_{s_L}\)</span></td>
+</tr>
+<tr class="even">
+<td><code>trend_ctrl</code></td>
+<td><span class="math inline">\((t_R - t_L)\,(1 - a_{s_R})(1 - a_{s_L})\)</span></td>
+</tr>
+<tr class="odd">
+<td><code>trt_visit</code><span class="math inline">\(t\)</span>, <span class="math inline">\(t \in \mathcal T\)</span></td>
+<td><span class="math inline">\((a_{s_R} - a_{s_L})\, \mathbb 1\{t_R = t\}\, \mathbb 1\{t_L = t\}\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>There is no intercept. The model is the probabilistic index model</p>
+<p><span class="math display">\[
+\Pr(Y_R &gt; Y_L) + \tfrac12 \Pr(Y_R = Y_L) = \mu_j(\beta) = \operatorname{expit}(x_j^\top \beta).
+\]</span></p>
+<p><strong>Structural remark (useful for testing, not needed for the derivations).</strong> With the current column definitions every row of <span class="math inline">\(X\)</span> has exactly one non-zero entry: a between pair at visit <span class="math inline">\(t\)</span> has <span class="math inline">\(x_j = e_{\texttt{trt\_visit}t}\)</span> (because <span class="math inline">\(a_{s_R} - a_{s_L} = 1\)</span> and both trend products vanish); a within pair of a treated subject has <span class="math inline">\(x_j = (t' - t)\, e_{\texttt{trend\_treat}}\)</span>; a within pair of a control subject has <span class="math inline">\(x_j = (t' - t)\, e_{\texttt{trend\_ctrl}}\)</span>. The columns therefore have disjoint supports and <span class="math inline">\(X^\top W X\)</span> is <strong>diagonal</strong> for every diagonal <span class="math inline">\(W\)</span>. Sections 3-5 are derived for a general <span class="math inline">\(X\)</span> (so that they survive a change of design); Remark 5.7 spells out what the diagonal structure gives.</p>
+</section>
+<section id="the-three-clusterings-and-the-combined-covariance" class="level3">
+<h3 class="anchored" data-anchor-id="the-three-clusterings-and-the-combined-covariance">1.4 The three clusterings and the combined covariance</h3>
+<p><code>dat_GEE</code> carries three cluster labels per pair:</p>
+<ul>
+<li><span class="math inline">\(C_1\)</span>: the left subject, <span class="math inline">\(s_L\)</span> (<code>C1 = subject_id[Var1]</code>);</li>
+<li><span class="math inline">\(C_2\)</span>: the right subject, <span class="math inline">\(s_R\)</span> (<code>C2 = subject_id[Var2]</code>);</li>
+<li><span class="math inline">\(C_3\)</span>: the ordered subject pair, the string <code>paste(C1, C2, sep = "_")</code>.</li>
+</ul>
+<p>(<code>subject_id</code> is a factor in the LSPIM analysis data, so <code>as.vector()</code> turns <code>C1</code> and <code>C2</code> into character vectors; this only affects the order in which clusters are visited, see Section 6.3.)</p>
+<p><code>fit_lspim()</code> combines the three <code>geessbin</code> covariance matrices as</p>
+<p><span class="math display">\[
+V = \widehat{\operatorname{cov}}_{C_1}(\hat\beta) + \widehat{\operatorname{cov}}_{C_2}(\hat\beta) - \widehat{\operatorname{cov}}_{C_3}(\hat\beta)
+\]</span></p>
+<p>(<code>V_raw &lt;- mod1$covb + mod2$covb - mod3$covb</code>), and takes the point estimate as <code>colMeans(rbind(coef(mod1), coef(mod2), coef(mod3)), na.rm = TRUE)</code>. The two-way (left subject, right subject) clustering is handled by this inclusion-exclusion: pairs sharing the left subject or the right subject are correlated; pairs sharing both are counted twice and <span class="math inline">\(C_3\)</span> removes them.</p>
+</section>
+<section id="symbols-used-below" class="level3">
+<h3 class="anchored" data-anchor-id="symbols-used-below">1.5 Symbols used below</h3>
+<p>For a coefficient vector <span class="math inline">\(\beta\)</span> and rows <span class="math inline">\(j = 1, \dots, N\)</span>:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>symbol</th>
+<th>meaning</th>
+<th><code>geessbin</code> name</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(\mu_j = \operatorname{expit}(x_j^\top\beta)\)</span></td>
+<td>fitted probability</td>
+<td><code>mu</code></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(w_j = \mu_j(1 - \mu_j)\)</span>, <span class="math inline">\(W = \operatorname{diag}(w)\)</span></td>
+<td>binomial variance</td>
+<td><code>nu</code></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(e_j = y_j - \mu_j\)</span></td>
+<td>raw residual</td>
+<td><code>e</code></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(r_j = e_j / \sqrt{w_j}\)</span></td>
+<td>Pearson residual (unscaled)</td>
+<td><code>r</code></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(\phi = \sum_j r_j^2 / (N - p)\)</span></td>
+<td>Pearson scale parameter</td>
+<td><code>phi</code></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(F = X^\top W X\)</span></td>
+<td>unscaled Fisher information</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(h_j = w_j\, x_j^\top F^{-1} x_j\)</span></td>
+<td>leverage (diagonal of the weighted hat matrix)</td>
+<td></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(\mathcal I = F / \phi\)</span></td>
+<td><code>geessbin</code>’s information</td>
+<td><code>I</code></td>
+</tr>
+</tbody>
+</table>
+<p>For a clustering <span class="math inline">\(C \in \{C_1, C_2, C_3\}\)</span> with clusters <span class="math inline">\(i = 1, \dots, K_C\)</span>, let <span class="math inline">\(\mathcal J_i \subset \{1, \dots, N\}\)</span> be the rows of cluster <span class="math inline">\(i\)</span>, <span class="math inline">\(n_i = |\mathcal J_i|\)</span>, and <span class="math inline">\(X_i\)</span>, <span class="math inline">\(W_i\)</span>, <span class="math inline">\(e_i\)</span>, <span class="math inline">\(r_i\)</span> the corresponding row blocks. Further</p>
+<p><span class="math display">\[
+Z_i = W_i^{1/2} X_i, \qquad
+F_i = X_i^\top W_i X_i = Z_i^\top Z_i, \qquad
+g_i = X_i^\top e_i = Z_i^\top r_i, \qquad
+F_{(i)} = F - F_i,
+\]</span></p>
+<p><span class="math display">\[
+H_i = W_i X_i F^{-1} X_i^\top, \qquad
+S_i = W_i^{1/2} X_i F^{-1} X_i^\top W_i^{1/2} = Z_i F^{-1} Z_i^\top .
+\]</span></p>
+<p><span class="math inline">\(F = \sum_i F_i\)</span> for every clustering, because the clusters partition the rows. <span class="math inline">\(I_m\)</span> is the <span class="math inline">\(m \times m\)</span> identity. Unless stated otherwise, <span class="math inline">\(X\)</span> is assumed to have full column rank <span class="math inline">\(p\)</span> and <span class="math inline">\(0 &lt; \mu_j &lt; 1\)</span> for all <span class="math inline">\(j\)</span> (so <span class="math inline">\(F\)</span> is positive definite and <span class="math inline">\(W\)</span> is invertible); the rank-deficient case is discussed in 9.4.</p>
+<hr>
+</section>
+</section>
+<section id="what-geessbin-actually-computes" class="level2">
+<h2 class="anchored" data-anchor-id="what-geessbin-actually-computes">2. What <code>geessbin</code> actually computes</h2>
+<p><code>fit_lspim_gee()</code> calls, after sorting the rows by the cluster label with <code>order()</code>,</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>geessbin<span class="sc">::</span><span class="fu">geessbin</span>(y <span class="sc">~</span> . <span class="sc">-</span> <span class="dv">1</span> <span class="sc">-</span> C1 <span class="sc">-</span> C2 <span class="sc">-</span> C3, <span class="at">data =</span> dat_sorted, <span class="at">id =</span> dat_gee[[id]][ord],</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">corstr =</span> <span class="st">"independence"</span>, <span class="at">beta.method =</span> <span class="st">"PGEE"</span>, <span class="at">SE.method =</span> <span class="st">"FW"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>so the defaults <code>b = NULL</code>, <code>maxitr = 50</code>, <code>tol = 1e-05</code>, <code>scale.fix = FALSE</code> apply and <code>repeated = NULL</code>.</p>
+<section id="clusters-the-outcome-check-and-the-working-correlation" class="level3">
+<h3 class="anchored" data-anchor-id="clusters-the-outcome-check-and-the-working-correlation">2.1 Clusters, the outcome check and the working correlation</h3>
+<p>With <code>id</code> given and <code>repeated = NULL</code>, clusters are <strong>runs of equal consecutive <code>id</code> values</strong>, so the rows must already be sorted by cluster (which <code>fit_lspim_gee()</code> does); <code>repseq</code> numbers the rows within each cluster <span class="math inline">\(1, \dots, n_i\)</span>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>idval <span class="ot">&lt;-</span> dat[, <span class="st">"(id)"</span>]</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>chg <span class="ot">&lt;-</span> (<span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(idval))[<span class="fu">c</span>(<span class="cn">TRUE</span>, idval[<span class="sc">-</span><span class="fu">length</span>(idval)] <span class="sc">!=</span> idval[<span class="sc">-</span><span class="dv">1</span>])]</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>nidat <span class="ot">&lt;-</span> <span class="fu">c</span>(chg[<span class="sc">-</span><span class="dv">1</span>], <span class="fu">length</span>(idval) <span class="sc">+</span> <span class="dv">1</span>) <span class="sc">-</span> chg</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>idseq <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(nidat), <span class="at">time =</span> nidat)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>repseq <span class="ot">&lt;-</span> <span class="fu">unlist</span>(<span class="fu">tapply</span>(nidat, <span class="fu">unique</span>(idseq), <span class="cf">function</span>(x) <span class="dv">1</span><span class="sc">:</span>x))</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>...</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">unique</span>(repseq))      <span class="co"># = the largest cluster size</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>K <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">unique</span>(idseq))</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>ndat <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(<span class="fu">table</span>(idseq))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The outcome must be exactly <span class="math inline">\(\{0, 1\}\)</span>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.numeric</span>(y) <span class="sc">|</span> <span class="sc">!</span><span class="fu">setequal</span>(<span class="fu">unique</span>(y), <span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>)) {</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">stop</span>(<span class="st">"outcome vector must be numeric and take values in {0, 1}"</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Note that <code>setequal</code> also fails when <strong>all</strong> pseudo-scores are 0 or all are 1, not only when a 0.5 (a tie) occurs.</p>
+<p>With <code>corstr = "independence"</code> the working correlation of the whole data is <code>R &lt;- diag(n)</code> with <code>n</code> the largest cluster size, and each cluster uses the leading block <code>R[replst[[i]], replst[[i]]]</code> <span class="math inline">\(= I_{n_i}\)</span>.</p>
+</section>
+<section id="the-per-cluster-quantities-calc_mat" class="level3">
+<h3 class="anchored" data-anchor-id="the-per-cluster-quantities-calc_mat">2.2 The per-cluster quantities (<code>calc_mat</code>)</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>calc_mat <span class="ot">&lt;-</span> <span class="cf">function</span> (X, y, b, R, phi) {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    mu <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">1</span><span class="sc">/</span>(<span class="dv">1</span> <span class="sc">+</span> <span class="fu">exp</span>(<span class="sc">-</span>X <span class="sc">%*%</span> b)))</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    nu <span class="ot">&lt;-</span> mu <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> mu)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    e <span class="ot">&lt;-</span> y <span class="sc">-</span> mu</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    D <span class="ot">&lt;-</span> nu <span class="sc">*</span> X</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    Vinv <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="dv">1</span><span class="sc">/</span>nu) <span class="sc">*</span> <span class="fu">ginv</span>(R) <span class="sc">*</span> <span class="fu">rep</span>(<span class="fu">sqrt</span>(<span class="dv">1</span><span class="sc">/</span>nu), <span class="at">each =</span> <span class="fu">length</span>(y))<span class="sc">/</span>phi</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">mu =</span> mu, <span class="at">nu =</span> nu, <span class="at">D =</span> D, <span class="at">Vinv =</span> Vinv, <span class="at">VD =</span> Vinv <span class="sc">%*%</span> D, <span class="at">e =</span> e, <span class="at">emat =</span> <span class="fu">tcrossprod</span>(e))</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>ginv</code> is <code>MASS::ginv</code> (a Moore-Penrose inverse through <code>svd()</code>, singular values below <code>sqrt(.Machine$double.eps)</code> times the largest are treated as zero):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ginv <span class="ot">&lt;-</span> <span class="cf">function</span> (X, <span class="at">tol =</span> <span class="fu">sqrt</span>(.Machine<span class="sc">$</span>double.eps)) {</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    ...</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    Xsvd <span class="ot">&lt;-</span> <span class="fu">svd</span>(X)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">is.complex</span>(X)) Xsvd<span class="sc">$</span>u <span class="ot">&lt;-</span> <span class="fu">Conj</span>(Xsvd<span class="sc">$</span>u)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    Positive <span class="ot">&lt;-</span> Xsvd<span class="sc">$</span>d <span class="sc">&gt;</span> <span class="fu">max</span>(tol <span class="sc">*</span> Xsvd<span class="sc">$</span>d[<span class="dv">1</span>L], <span class="dv">0</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">all</span>(Positive)) Xsvd<span class="sc">$</span>v <span class="sc">%*%</span> (<span class="dv">1</span><span class="sc">/</span>Xsvd<span class="sc">$</span>d <span class="sc">*</span> <span class="fu">t</span>(Xsvd<span class="sc">$</span>u))</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span> <span class="cf">if</span> (<span class="sc">!</span><span class="fu">any</span>(Positive)) <span class="fu">array</span>(<span class="dv">0</span>, <span class="fu">dim</span>(X)[<span class="dv">2</span>L<span class="sc">:</span><span class="dv">1</span>L])</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span> Xsvd<span class="sc">$</span>v[, Positive, drop <span class="ot">=</span> <span class="cn">FALSE</span>] <span class="sc">%*%</span> ((<span class="dv">1</span><span class="sc">/</span>Xsvd<span class="sc">$</span>d[Positive]) <span class="sc">*</span> <span class="fu">t</span>(Xsvd<span class="sc">$</span>u[, Positive, <span class="at">drop =</span> <span class="cn">FALSE</span>]))</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>ginv(diag(m))</code> returns exactly <code>diag(m)</code> (bit for bit, checked for <span class="math inline">\(m \le 300\)</span>), but it costs a full SVD of an <span class="math inline">\(m \times m\)</span> matrix.</p>
+</section>
+<section id="the-start-value-b-null-beta.method-pgee" class="level3">
+<h3 class="anchored" data-anchor-id="the-start-value-b-null-beta.method-pgee">2.3 The start value (<code>b = NULL</code>, <code>beta.method = "PGEE"</code>)</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>b <span class="ot">&lt;-</span> <span class="fu">numeric</span>(p)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>del <span class="ot">&lt;-</span> <span class="dv">100</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>nitr <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="cf">while</span> (del <span class="sc">&gt;</span> <span class="fl">1e-05</span>) {</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    mu <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">/</span>(<span class="dv">1</span> <span class="sc">+</span> <span class="fu">exp</span>(<span class="sc">-</span>X <span class="sc">%*%</span> b))</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    I <span class="ot">&lt;-</span> <span class="fu">t</span>(<span class="fu">c</span>(mu <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> mu)) <span class="sc">*</span> X) <span class="sc">%*%</span> X</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    U <span class="ot">&lt;-</span> <span class="fu">t</span>(X) <span class="sc">%*%</span> (y <span class="sc">-</span> mu <span class="sc">+</span> <span class="fu">diag</span>(X <span class="sc">%*%</span> <span class="fu">ginv</span>(I) <span class="sc">%*%</span> <span class="fu">t</span>(X)) <span class="sc">*</span> mu <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> mu) <span class="sc">*</span> (<span class="fl">0.5</span> <span class="sc">-</span> mu))</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    del <span class="ot">&lt;-</span> <span class="fu">max</span>(<span class="fu">abs</span>(U))</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (del <span class="sc">&gt;</span> <span class="fl">1e-05</span>) b <span class="ot">&lt;-</span> b <span class="sc">+</span> <span class="fu">ginv</span>(I) <span class="sc">%*%</span> U</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    nitr <span class="ot">&lt;-</span> nitr <span class="sc">+</span> <span class="dv">1</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (nitr <span class="sc">==</span> <span class="dv">50</span>) <span class="cf">break</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This is Firth’s modified-score Fisher scoring for logistic regression (<span class="math inline">\(\phi = 1\)</span>; see 3.4), from <span class="math inline">\(\beta = 0\)</span>, with a hard-coded tolerance <code>1e-05</code> and at most 50 iterations. Running out of iterations here is <strong>silent</strong> (no warning, no label); the main loop simply starts from wherever the start loop stopped. <code>diag(X %*% ginv(I) %*% t(X))</code> forms the dense <span class="math inline">\(N \times N\)</span> matrix <span class="math inline">\(X F^{-1} X^\top\)</span> only to take its diagonal.</p>
+</section>
+<section id="the-main-loop" class="level3">
+<h3 class="anchored" data-anchor-id="the-main-loop">2.4 The main loop</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>conv <span class="ot">&lt;-</span> <span class="st">"converged"</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>nitr <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>del <span class="ot">&lt;-</span> <span class="dv">100</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="cf">while</span> (del <span class="sc">&gt;</span> tol) {</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    mu <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">/</span>(<span class="dv">1</span> <span class="sc">+</span> <span class="fu">exp</span>(<span class="sc">-</span>X <span class="sc">%*%</span> b))</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    r <span class="ot">&lt;-</span> (y <span class="sc">-</span> mu)<span class="sc">/</span><span class="fu">sqrt</span>(mu <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> mu))</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">min</span>(mu) <span class="sc">&lt;</span> <span class="fl">1e-04</span> <span class="sc">|</span> <span class="fu">max</span>(mu) <span class="sc">&gt;</span> <span class="fl">0.9999</span>) {</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>        conv <span class="ot">&lt;-</span> <span class="st">"fitted probabilities numerically 0 or 1 occurred."</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="fu">warning</span>(conv); <span class="cf">break</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (scale.fix <span class="sc">==</span> <span class="cn">FALSE</span>) phi <span class="ot">&lt;-</span> <span class="fu">sum</span>(r<span class="sc">^</span><span class="dv">2</span>)<span class="sc">/</span>(<span class="fu">sum</span>(ndat) <span class="sc">-</span> p)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">is.infinite</span>(phi)) { conv <span class="ot">&lt;-</span> <span class="st">"infinite scale parameter"</span>; <span class="fu">warning</span>(conv); <span class="cf">break</span> }</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (corstr <span class="sc">==</span> <span class="st">"independence"</span>) R <span class="ot">&lt;-</span> <span class="fu">diag</span>(n)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    U <span class="ot">&lt;-</span> <span class="fu">numeric</span>(p); I <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>, p, p); dI <span class="ot">&lt;-</span> <span class="fu">array</span>(<span class="dv">0</span>, <span class="fu">c</span>(p, p, p))</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>K) {</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        mat <span class="ot">&lt;-</span> <span class="fu">calc_mat</span>(X[idseq <span class="sc">==</span> i, , <span class="at">drop =</span> <span class="cn">FALSE</span>], y[idseq <span class="sc">==</span> i], b, R[replst[[i]], replst[[i]]], phi)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>        U <span class="ot">&lt;-</span> U <span class="sc">+</span> <span class="fu">t</span>(mat<span class="sc">$</span>VD) <span class="sc">%*%</span> mat<span class="sc">$</span>e</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        I <span class="ot">&lt;-</span> I <span class="sc">+</span> <span class="fu">t</span>(mat<span class="sc">$</span>D) <span class="sc">%*%</span> mat<span class="sc">$</span>VD</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> (beta.method <span class="sc">==</span> <span class="st">"PGEE"</span>) {</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>            dI <span class="ot">&lt;-</span> dI <span class="sc">+</span> <span class="fu">array</span>(<span class="fu">apply</span>(X[idseq <span class="sc">==</span> i, , <span class="at">drop =</span> <span class="cn">FALSE</span>], <span class="dv">2</span>, <span class="cf">function</span>(x) {</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>                <span class="fu">t</span>((<span class="fu">c</span>(<span class="dv">1</span> <span class="sc">-</span> <span class="dv">2</span> <span class="sc">*</span> mat<span class="sc">$</span>mu) <span class="sc">*</span> x) <span class="sc">*</span> mat<span class="sc">$</span>D) <span class="sc">%*%</span> mat<span class="sc">$</span>VD</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>            }), <span class="fu">c</span>(p, p, p))</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    Iinv <span class="ot">&lt;-</span> <span class="fu">ginv</span>(I)</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (beta.method <span class="sc">==</span> <span class="st">"PGEE"</span>) U <span class="ot">&lt;-</span> U <span class="sc">+</span> <span class="fl">0.5</span> <span class="sc">*</span> <span class="fu">apply</span>(dI, <span class="dv">3</span>, <span class="cf">function</span>(x) <span class="fu">sum</span>(<span class="fu">diag</span>(Iinv <span class="sc">%*%</span> x)))</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    del <span class="ot">&lt;-</span> <span class="fu">max</span>(<span class="fu">abs</span>(U))</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (del <span class="sc">&gt;</span> tol) b <span class="ot">&lt;-</span> b <span class="sc">+</span> Iinv <span class="sc">%*%</span> U</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    nitr <span class="ot">&lt;-</span> nitr <span class="sc">+</span> <span class="dv">1</span></span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (nitr <span class="sc">==</span> maxitr) {</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> (del <span class="sc">&gt;</span> tol) conv <span class="ot">&lt;-</span> <span class="st">"maximum number of iterations consumed"</span></span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>        <span class="fu">warning</span>(conv); <span class="cf">break</span></span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (conv <span class="sc">==</span> <span class="st">"converged"</span> <span class="sc">&amp;</span> del <span class="sc">&gt;</span> tol) { conv <span class="ot">&lt;-</span> <span class="st">"convergence failure"</span>; <span class="fu">warning</span>(conv) }</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>(Lines for the other <code>corstr</code> values are omitted.) Points to note:</p>
+<ul>
+<li><span class="math inline">\(\phi\)</span> is recomputed at the start of every iteration from the Pearson residuals of <strong>all</strong> <span class="math inline">\(N\)</span> rows, at the current <span class="math inline">\(\beta\)</span>; <span class="math inline">\(\sum\)</span> <code>ndat</code> <span class="math inline">\(= N\)</span>.</li>
+<li>The bounds check on <span class="math inline">\(\mu\)</span> runs at the start of every iteration, i.e.&nbsp;on the current <span class="math inline">\(\beta\)</span>, including the final one.</li>
+<li><code>del</code> is the max-norm of the <strong>penalised score in <code>geessbin</code>’s scaling</strong> (equation (3.5) below).</li>
+<li><code>nitr</code> counts iterations of the main loop only (it is reset after the start loop) and is returned as <code>iterations</code>. The iteration that finds <code>del &lt;= tol</code> counts and makes no update.</li>
+<li>At <code>nitr == maxitr</code> the code calls <code>warning(conv)</code> <strong>whatever <code>del</code> is</strong>: if the 50th iteration happens to converge, the label stays <code>"converged"</code> but a warning with the message <code>"converged"</code> is raised.</li>
+<li><code>"convergence failure"</code> is unreachable in practice: the loop leaves with <code>del &lt;= tol</code> or through one of the three <code>break</code>s, each of which either changes <code>conv</code> or has <code>del &lt;= tol</code>. (A <code>NaN</code> in <code>del</code> would make <code>if (del &gt; tol)</code> throw <code>"missing value where TRUE/FALSE needed"</code> before that line.) <code>"infinite scale parameter"</code> requires <span class="math inline">\(N = p\)</span> (division by zero), since the bounds check keeps the residuals finite.</li>
+</ul>
+</section>
+<section id="the-fw-covariance" class="level3">
+<h3 class="anchored" data-anchor-id="the-fw-covariance">2.5 The FW covariance</h3>
+<p>Only if <code>conv == "converged"</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>J <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>, p, p)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (SE.method <span class="sc">==</span> <span class="st">"FW"</span>) {</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>K) {</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>        mat <span class="ot">&lt;-</span> <span class="fu">calc_mat</span>(X[idseq <span class="sc">==</span> i, , <span class="at">drop =</span> <span class="cn">FALSE</span>], y[idseq <span class="sc">==</span> i], b, R[replst[[i]], replst[[i]]], phi)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>        Hi <span class="ot">&lt;-</span> mat<span class="sc">$</span>D <span class="sc">%*%</span> Iinv <span class="sc">%*%</span> <span class="fu">t</span>(mat<span class="sc">$</span>VD)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>        HKC <span class="ot">&lt;-</span> <span class="fu">sqrtmat</span>(<span class="fu">ginv</span>(<span class="fu">diag</span>(ndat[i]) <span class="sc">-</span> Hi))</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>        HMD <span class="ot">&lt;-</span> <span class="fu">ginv</span>(<span class="fu">diag</span>(ndat[i]) <span class="sc">-</span> Hi)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        J <span class="ot">&lt;-</span> J <span class="sc">+</span> <span class="fl">0.5</span> <span class="sc">*</span> <span class="fu">t</span>(mat<span class="sc">$</span>VD) <span class="sc">%*%</span> (HKC <span class="sc">%*%</span> mat<span class="sc">$</span>emat <span class="sc">%*%</span> <span class="fu">t</span>(HKC) <span class="sc">+</span> HMD <span class="sc">%*%</span> mat<span class="sc">$</span>emat <span class="sc">%*%</span> <span class="fu">t</span>(HMD)) <span class="sc">%*%</span> mat<span class="sc">$</span>VD</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>covb <span class="ot">&lt;-</span> Iinv <span class="sc">%*%</span> J <span class="sc">%*%</span> Iinv</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>and otherwise <code>covb &lt;- matrix(NA, p, p)</code>. <code>b</code>, <code>phi</code> and <code>Iinv</code> are those of the last main-loop iteration (at convergence that iteration made no update, so they are evaluated at the returned <span class="math inline">\(\hat\beta\)</span>). The square root is</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>sqrtmat <span class="ot">&lt;-</span> <span class="cf">function</span> (M) {</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    eig <span class="ot">&lt;-</span> <span class="fu">eigen</span>(M)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    v <span class="ot">&lt;-</span> eig<span class="sc">$</span>values</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.complex</span>(v)) v <span class="ot">&lt;-</span> <span class="fu">complex</span>(<span class="at">real =</span> v, <span class="at">imaginary =</span> <span class="dv">0</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(<span class="fu">Re</span>(eig<span class="sc">$</span>vectors <span class="sc">%*%</span> <span class="fu">diag</span>(<span class="fu">sqrt</span>(v), <span class="at">ncol =</span> <span class="fu">length</span>(v)) <span class="sc">%*%</span> <span class="fu">ginv</span>(eig<span class="sc">$</span>vectors)))</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>eigen(M)</code> is called without <code>symmetric</code>, so it uses the symmetric LAPACK routine when <code>isSymmetric(M)</code> is <code>TRUE</code> (within <code>all.equal</code> tolerance) and the general one otherwise.</p>
+<p><code>SE.method = "FW"</code> is <strong>not</strong> Fay-Graubard (that is <code>"FG"</code>, a different branch). It is the Ford-Westgate estimator: the average of the Kauermann-Carroll (KC, <code>HKC</code>) and Mancl-DeRouen (MD, <code>HMD</code>) bias-corrected sandwiches:</p>
+<p><span class="math display">\[
+\mathrm{covb} = \mathcal I^{-1} J\, \mathcal I^{-1},\qquad
+J = \sum_{i=1}^{K} \tfrac12\, (V_i^{-1}D_i)^\top \bigl( A_i e_i e_i^\top A_i^\top + B_i e_i e_i^\top B_i^\top \bigr) (V_i^{-1}D_i),
+\]</span></p>
+<p><span class="math display">\[
+B_i = \operatorname{ginv}(I_{n_i} - H_i^{\mathrm{g}}),\qquad A_i = \operatorname{sqrtmat}(B_i),\qquad
+H_i^{\mathrm{g}} = D_i\, \mathcal I^{-1} (V_i^{-1}D_i)^\top .
+\]</span></p>
+</section>
+<section id="what-fit_lspim-uses" class="level3">
+<h3 class="anchored" data-anchor-id="what-fit_lspim-uses">2.6 What <code>fit_lspim()</code> uses</h3>
+<p><code>coef()</code> (the final <code>b</code>, also when not converged), <code>covb</code>, and <code>convergence</code> (all three must be <code>"converged"</code> for <code>converged = TRUE</code>). Warnings of the three fits are collected and de-duplicated (<code>unique(warning_messages)</code>); a <code>stop()</code> inside <code>geessbin</code> becomes <code>error_message</code> with <code>fit = NULL</code>. A non-converged fit has an <code>NA</code> <code>covb</code>, so <code>V_raw</code> is <code>NA</code> and the subsequent eigenvalue check on <code>V_raw</code> throws, which ends the replicate with that error message.</p>
+<hr>
+</section>
+</section>
+<section id="the-pgee-fit-under-independence-and-why-it-does-not-depend-on-the-clustering" class="level2">
+<h2 class="anchored" data-anchor-id="the-pgee-fit-under-independence-and-why-it-does-not-depend-on-the-clustering">3. The PGEE fit under independence, and why it does not depend on the clustering</h2>
+<section id="lemma-3.1-the-calc_mat-quantities" class="level3">
+<h3 class="anchored" data-anchor-id="lemma-3.1-the-calc_mat-quantities">Lemma 3.1 (the <code>calc_mat</code> quantities)</h3>
+<p>With <span class="math inline">\(R_i = I_{n_i}\)</span> and <code>ginv(diag(n_i))</code> <span class="math inline">\(= I_{n_i}\)</span>:</p>
+<p><span class="math display">\[
+V_i^{-1} = \tfrac1\phi\, W_i^{-1/2} I_{n_i} W_i^{-1/2} = \tfrac1\phi W_i^{-1},\qquad
+D_i = W_i X_i,\qquad
+V_i^{-1} D_i = \tfrac1\phi X_i .
+\]</span></p>
+<p><em>Proof.</em> <code>sqrt(1/nu) * G</code> multiplies row <span class="math inline">\(k\)</span> of <span class="math inline">\(G\)</span> by <span class="math inline">\(w_k^{-1/2}\)</span> (column-major recycling of a length-<span class="math inline">\(n_i\)</span> vector over an <span class="math inline">\(n_i \times n_i\)</span> matrix); <code>* rep(sqrt(1/nu), each = n_i)</code> multiplies column <span class="math inline">\(l\)</span> by <span class="math inline">\(w_l^{-1/2}\)</span>. Hence <code>Vinv</code> <span class="math inline">\(= W_i^{-1/2} G W_i^{-1/2}/\phi\)</span> with <span class="math inline">\(G = I\)</span>. <code>D &lt;- nu * X</code> scales row <span class="math inline">\(k\)</span> of <span class="math inline">\(X_i\)</span> by <span class="math inline">\(w_k\)</span>. Then <span class="math inline">\(V_i^{-1} D_i = W_i^{-1} W_i X_i / \phi\)</span>. <span class="math inline">\(\square\)</span></p>
+<p>(In floating point <code>VD</code> is <span class="math inline">\(X_i/\phi\)</span> up to rounding of <span class="math inline">\(\sqrt{1/w}^2 w\)</span>; this does not matter at the <span class="math inline">\(10^{-8}\)</span> level.) So <span class="math inline">\(V_i = \phi W_i\)</span> is the usual independence working covariance.</p>
+</section>
+<section id="lemma-3.2-score-information-and-its-derivative-are-sums-over-rows" class="level3">
+<h3 class="anchored" data-anchor-id="lemma-3.2-score-information-and-its-derivative-are-sums-over-rows">Lemma 3.2 (score, information and its derivative are sums over rows)</h3>
+<p>For any clustering,</p>
+<p><span class="math display">\[
+U^{\mathrm{GEE}} = \sum_i (V_i^{-1}D_i)^\top e_i = \tfrac1\phi X^\top e,\qquad
+\mathcal I = \sum_i D_i^\top V_i^{-1} D_i = \tfrac1\phi X^\top W X = \tfrac1\phi F,
+\]</span></p>
+<p><span class="math display">\[
+\texttt{dI[,,u]} = \tfrac1\phi\, X^\top \operatorname{diag}\bigl(w_j (1 - 2\mu_j) x_{ju}\bigr)_{j} X
+= \frac{\partial \mathcal I}{\partial \beta_u}\Big|_{\phi\ \text{fixed}},\qquad u = 1, \dots, p.
+\]</span></p>
+<p><em>Proof.</em> The first two follow from Lemma 3.1 and <span class="math inline">\(\sum_i X_i^\top M_i = X^\top M\)</span> for row blocks of a partition. For <code>dI</code>: <code>apply(X_i, 2, f)</code> returns a <span class="math inline">\(p^2 \times p\)</span> matrix whose column <span class="math inline">\(u\)</span> is <span class="math inline">\(\operatorname{vec} f(X_i[\,,u])\)</span>, and <code>array(., c(p, p, p))</code> refolds column <span class="math inline">\(u\)</span> into slice <code>[,,u]</code>. With $f(x) = $ <code>t((c(1 - 2*mu) * x) * D) %*% VD</code> <span class="math inline">\(= D_i^\top \operatorname{diag}((1-2\mu)\odot x)
+\, V_i^{-1}D_i = X_i^\top W_i \operatorname{diag}((1-2\mu)\odot x) X_i/\phi\)</span>, summing over clusters gives the display. The derivative identity follows from <span class="math inline">\(\partial w_j / \partial \beta_u = w_j(1 - 2\mu_j)x_{ju}\)</span>. <span class="math inline">\(\square\)</span></p>
+<p>So <code>dI</code> is the derivative of <span class="math inline">\(\mathcal I\)</span> with <span class="math inline">\(\phi\)</span> held fixed, and the penalty term <span class="math inline">\(\tfrac12 \operatorname{tr}(\mathcal I^{-1} \partial \mathcal I/\partial\beta_u)\)</span> is the gradient of <span class="math inline">\(\tfrac12 \log\det \mathcal I\)</span>: Firth’s (Jeffreys-prior) penalty.</p>
+</section>
+<section id="proposition-3.3-the-penalty-is-a-leverage-term" class="level3">
+<h3 class="anchored" data-anchor-id="proposition-3.3-the-penalty-is-a-leverage-term">Proposition 3.3 (the penalty is a leverage term)</h3>
+<p><span class="math display">\[
+\tfrac12 \operatorname{tr}\!\bigl(\mathcal I^{-1}\, \texttt{dI[,,u]}\bigr)
+= \sum_{j=1}^N x_{ju}\, h_j \bigl(\tfrac12 - \mu_j\bigr),
+\qquad h_j = w_j\, x_j^\top F^{-1} x_j .
+\]</span></p>
+<p><em>Proof.</em> <span class="math inline">\(\mathcal I^{-1} = \phi F^{-1}\)</span> (for nonsingular <span class="math inline">\(F\)</span>, and <code>ginv</code> <span class="math inline">\(=\)</span> inverse then), and the <span class="math inline">\(1/\phi\)</span> in <code>dI</code> cancels the <span class="math inline">\(\phi\)</span>. Using <span class="math inline">\(\operatorname{tr}(F^{-1} X^\top \operatorname{diag}(c) X) =
+\sum_j c_j\, x_j^\top F^{-1} x_j\)</span> with <span class="math inline">\(c_j = w_j(1-2\mu_j)x_{ju}\)</span>:</p>
+<p><span class="math display">\[
+\tfrac12 \sum_j w_j (1 - 2\mu_j) x_{ju}\, x_j^\top F^{-1}x_j = \sum_j x_{ju}\, h_j\, \tfrac12(1-2\mu_j)
+= \sum_j x_{ju}\, h_j (\tfrac12 - \mu_j). \qquad\square
+\]</span></p>
+<p>The leverage <span class="math inline">\(h_j\)</span> is the <span class="math inline">\(j\)</span>-th diagonal element of the (symmetric, idempotent) weighted hat matrix <span class="math inline">\(P = W^{1/2} X F^{-1} X^\top W^{1/2}\)</span>; it is <strong>free of <span class="math inline">\(\phi\)</span></strong>, <span class="math inline">\(0 \le h_j \le 1\)</span> and <span class="math inline">\(\sum_j h_j = p\)</span>. Note that the factor is exactly one: the <span class="math inline">\(\tfrac12\)</span> of the penalty and the <span class="math inline">\((1 - 2\mu_j) = 2(\tfrac12 - \mu_j)\)</span> combine to <span class="math inline">\(h_j(\tfrac12 - \mu_j)\)</span>, with no extra <span class="math inline">\(\tfrac12\)</span> and no <span class="math inline">\(\phi\)</span>.</p>
+</section>
+<section id="proposition-3.4-the-main-loop-estimating-equation-update-and-stopping-rule" class="level3">
+<h3 class="anchored" data-anchor-id="proposition-3.4-the-main-loop-estimating-equation-update-and-stopping-rule">Proposition 3.4 (the main-loop estimating equation, update and stopping rule)</h3>
+<p>The penalised score that <code>geessbin</code> computes in the main loop is</p>
+<p><span class="math display">\[
+U(\beta) = \tfrac1\phi X^\top (y - \mu) + X^\top \bigl(h \odot (\tfrac12 - \mu)\bigr)
+= \tfrac1\phi\, X^\top \bigl(y - \mu + \phi\, h \odot (\tfrac12 - \mu)\bigr), \tag{3.5}
+\]</span></p>
+<p>with <span class="math inline">\(\phi = \phi(\beta)\)</span>, <span class="math inline">\(\mu = \mu(\beta)\)</span>, <span class="math inline">\(h = h(\beta)\)</span> all evaluated at the current <span class="math inline">\(\beta\)</span>. The PGEE estimate solves</p>
+<p><span class="math display">\[
+X^\top \bigl(y - \mu(\hat\beta) + \hat\phi\, h(\hat\beta) \odot (\tfrac12 - \mu(\hat\beta))\bigr) = 0,\qquad
+\hat\phi = \frac{1}{N - p}\sum_j \frac{(y_j - \hat\mu_j)^2}{\hat w_j}, \tag{3.6}
+\]</span></p>
+<p>up to the stopping tolerance. The update is</p>
+<p><span class="math display">\[
+\beta \leftarrow \beta + \mathcal I^{-1} U = \beta + F^{-1} X^\top \bigl(y - \mu + \phi\, h \odot (\tfrac12 - \mu)\bigr), \tag{3.7}
+\]</span></p>
+<p>and the loop stops when <span class="math inline">\(\max_u |U_u| \le 10^{-5}\)</span> with <span class="math inline">\(U\)</span> in the scaling of (3.5) (that is, the bracketed vector <strong>divided by</strong> <span class="math inline">\(\phi\)</span>; an implementation must not drop the <span class="math inline">\(1/\phi\)</span>).</p>
+<p><em>Proof.</em> (3.5) is Lemma 3.2 plus Proposition 3.3; (3.7) uses <span class="math inline">\(\mathcal I^{-1} = \phi F^{-1}\)</span>. <span class="math inline">\(\square\)</span></p>
+<p>So PGEE with an independence working correlation is Firth-type penalised logistic regression in which the penalty is weighted by <span class="math inline">\(\phi\)</span>: at <span class="math inline">\(\phi = 1\)</span> (3.6) is exactly Firth’s modified score equation <span class="math inline">\(X^\top(y - \mu + h \odot(\tfrac12 - \mu)) = 0\)</span>. Note also that (3.7) is Fisher scoring with the information of the <strong>unpenalised</strong> score (the Jacobian of the penalty term is ignored). An implementation must use this exact update, not a true Newton step for (3.6), otherwise its iterates, iteration counts and failure behaviour differ from <code>geessbin</code>’s (see 9.3 for a case where this matters).</p>
+</section>
+<section id="the-start-value-is-the-same-firth-iteration-with-phi-1" class="level3">
+<h3 class="anchored" data-anchor-id="the-start-value-is-the-same-firth-iteration-with-phi-1">3.4 The start value is the same Firth iteration with <span class="math inline">\(\phi = 1\)</span></h3>
+<p>In the start loop, <code>I</code> <span class="math inline">\(= F\)</span>, <code>diag(X %*% ginv(I) %*% t(X))[j]</code> <span class="math inline">\(= x_j^\top F^{-1} x_j\)</span>, and multiplied by <code>mu * (1 - mu)</code> this is <span class="math inline">\(h_j\)</span>. So <code>U</code> <span class="math inline">\(= X^\top(y - \mu + h \odot (\tfrac12 - \mu))\)</span> and the step is <span class="math inline">\(F^{-1} U\)</span>: equation (3.5) and update (3.7) with <span class="math inline">\(\phi\)</span> fixed at 1, tolerance <code>1e-05</code>, at most 50 iterations. Only <span class="math inline">\(\operatorname{diag}(X F^{-1} X^\top)\)</span> is needed, which costs <span class="math inline">\(O(Np^2)\)</span>:</p>
+<p><span class="math display">\[
+x_j^\top F^{-1} x_j = \lVert L^{-1} x_j \rVert^2 \quad (F = LL^\top \text{ Cholesky}),
+\qquad\text{or}\qquad
+\bigl(\operatorname{rowSums}((X F^{-1}) \odot X)\bigr)_j .
+\]</span></p>
+<p>The <span class="math inline">\(N \times N\)</span> product is never required.</p>
+</section>
+<section id="corollary-3.5-the-fit-does-not-depend-on-the-clustering" class="level3">
+<h3 class="anchored" data-anchor-id="corollary-3.5-the-fit-does-not-depend-on-the-clustering">Corollary 3.5 (the fit does not depend on the clustering)</h3>
+<p>Every quantity entering the start loop and the main loop (<span class="math inline">\(F\)</span>, <span class="math inline">\(h\)</span>, <span class="math inline">\(\mu\)</span>, <span class="math inline">\(\phi\)</span>, <span class="math inline">\(U\)</span>, the update, <code>del</code>, the bounds check) is a function of the multiset of rows <span class="math inline">\(\{(x_j, y_j)\}_{j=1}^N\)</span> and of <span class="math inline">\(\beta\)</span> only. The clustering enters only through (a) the order in which <code>geessbin</code> visits rows (sorted by cluster) and (b) the order in which per-cluster contributions are added. Both are permutations of the same finite sums. Therefore, in exact arithmetic, the three calls (<code>id</code> = <code>C1</code>, <code>C2</code>, <code>C3</code>) produce the same sequence of iterates, the same <code>del</code> sequence, the same <code>iterations</code>, the same <code>convergence</code> label, the same <span class="math inline">\(\hat\beta\)</span> and the same <span class="math inline">\(\hat\phi\)</span>. They can be replaced by a single fit on the unsorted pair data. Floating-point caveats are in Section 6.3.</p>
+<p>(The 2026-09-30 check on simulated LSPIM data found a maximum absolute difference of about <span class="math inline">\(6 \times 10^{-16}\)</span> between the coefficients of the three <code>geessbin</code> fits, which is consistent with summation-order rounding only.)</p>
+<hr>
+</section>
+</section>
+<section id="the-sandwich-is-free-of-the-scale-parameter" class="level2">
+<h2 class="anchored" data-anchor-id="the-sandwich-is-free-of-the-scale-parameter">4. The sandwich is free of the scale parameter</h2>
+<section id="lemma-4.1-h_i-is-free-of-phi" class="level3">
+<h3 class="anchored" data-anchor-id="lemma-4.1-h_i-is-free-of-phi">Lemma 4.1 (<span class="math inline">\(H_i\)</span> is free of <span class="math inline">\(\phi\)</span>)</h3>
+<p><span class="math display">\[
+H_i^{\mathrm g} = D_i\, \mathcal I^{-1} (V_i^{-1}D_i)^\top = W_i X_i \,(\phi F^{-1})\, \tfrac1\phi X_i^\top = W_i X_i F^{-1} X_i^\top = H_i .
+\]</span></p>
+<p>So <code>Hi</code>, and with it <code>HMD</code> <span class="math inline">\(= B_i\)</span> and <code>HKC</code> <span class="math inline">\(= A_i\)</span>, do not depend on <span class="math inline">\(\phi\)</span>.</p>
+</section>
+<section id="proposition-4.2-covb-is-free-of-phi" class="level3">
+<h3 class="anchored" data-anchor-id="proposition-4.2-covb-is-free-of-phi">Proposition 4.2 (<code>covb</code> is free of <span class="math inline">\(\phi\)</span>)</h3>
+<p><span class="math display">\[
+\mathrm{covb}_C = F^{-1} \Bigl[\sum_{i=1}^{K_C} \tfrac12\, X_i^\top \bigl(A_i e_i e_i^\top A_i^\top + B_i e_i e_i^\top B_i^\top\bigr) X_i \Bigr] F^{-1}.
+\]</span></p>
+<p><em>Proof.</em> By Lemma 3.1, <span class="math inline">\(V_i^{-1}D_i = X_i/\phi\)</span>, so <span class="math inline">\(J = \phi^{-2} \sum_i \tfrac12 X_i^\top(\dots)X_i\)</span>; <span class="math inline">\(\mathcal I^{-1} = \phi F^{-1}\)</span> appears twice, contributing <span class="math inline">\(\phi^2\)</span>. <span class="math inline">\(\square\)</span></p>
+<p>Consequently the sandwich only needs <span class="math inline">\(\hat\beta\)</span> (through <span class="math inline">\(\mu\)</span>, <span class="math inline">\(W\)</span>, <span class="math inline">\(e\)</span>), not <span class="math inline">\(\hat\phi\)</span>. The value of <span class="math inline">\(\phi\)</span> matters for the fit (through the penalty weight in (3.6)), not for the variance formula.</p>
+<hr>
+</section>
+</section>
+<section id="the-fw-correction-under-independence" class="level2">
+<h2 class="anchored" data-anchor-id="the-fw-correction-under-independence">5. The FW correction under independence</h2>
+<p>Fix a clustering and a cluster <span class="math inline">\(i\)</span>; drop the index <span class="math inline">\(i\)</span> where unambiguous and write <span class="math inline">\(T = W_i^{1/2}\)</span> (<span class="math inline">\(n_i \times n_i\)</span>, diagonal, positive).</p>
+<section id="lemma-5.1-similarity-to-a-symmetric-matrix" class="level3">
+<h3 class="anchored" data-anchor-id="lemma-5.1-similarity-to-a-symmetric-matrix">Lemma 5.1 (similarity to a symmetric matrix)</h3>
+<p><span class="math display">\[
+H_i = T\, S_i\, T^{-1},\qquad I - H_i = T (I - S_i) T^{-1},
+\]</span></p>
+<p>with <span class="math inline">\(S_i = Z_i F^{-1} Z_i^\top\)</span> symmetric positive semi-definite.</p>
+<p><em>Proof.</em> <span class="math inline">\(T S_i T^{-1} = W_i^{1/2} W_i^{1/2} X_i F^{-1} X_i^\top W_i^{1/2} W_i^{-1/2} = W_i X_i F^{-1} X_i^\top\)</span>. <span class="math inline">\(\square\)</span></p>
+</section>
+<section id="lemma-5.2-the-spectrum-of-s_i-lies-in-0-1" class="level3">
+<h3 class="anchored" data-anchor-id="lemma-5.2-the-spectrum-of-s_i-lies-in-0-1">Lemma 5.2 (the spectrum of <span class="math inline">\(S_i\)</span> lies in <span class="math inline">\([0, 1]\)</span>)</h3>
+<p><span class="math inline">\(S_i\)</span> is the principal submatrix, on the rows <span class="math inline">\(\mathcal J_i\)</span>, of the orthogonal projector <span class="math inline">\(P = Z F^{-1} Z^\top\)</span> (<span class="math inline">\(Z = W^{1/2} X\)</span>, <span class="math inline">\(N \times N\)</span>, <span class="math inline">\(P = P^\top = P^2\)</span>). Hence <span class="math inline">\(0 \preceq S_i \preceq I\)</span>: for <span class="math inline">\(u \in \mathbb R^{n_i}\)</span> and <span class="math inline">\(\tilde u \in \mathbb R^N\)</span> its zero-padded extension, <span class="math inline">\(u^\top S_i u = \tilde u^\top P \tilde u \in [0, \lVert u\rVert^2]\)</span>. Its rank is <span class="math inline">\(\operatorname{rank}(X_i) \le p\)</span>, so it has at most <span class="math inline">\(p\)</span> non-zero eigenvalues and the eigenvalue <span class="math inline">\(0\)</span> with multiplicity at least <span class="math inline">\(n_i - p\)</span>.</p>
+<p><strong>Eigenvalue 1.</strong> <span class="math inline">\(S_i u = u\)</span> with <span class="math inline">\(u \neq 0\)</span> iff <span class="math inline">\(\tilde u^\top P \tilde u = \lVert \tilde u\rVert^2\)</span> iff <span class="math inline">\(P\tilde u = \tilde u\)</span> iff <span class="math inline">\(\tilde u \in \operatorname{col}(Z)\)</span>, i.e.&nbsp;iff there is a <span class="math inline">\(\gamma \ne 0\)</span> with <span class="math inline">\(X\gamma\)</span> non-zero only on the rows of cluster <span class="math inline">\(i\)</span>: some linear combination of the parameters is informed by cluster <span class="math inline">\(i\)</span> alone. Equivalently, <span class="math inline">\(F_{(i)} = F - F_i\)</span> is singular. (Proof of the equivalence: <span class="math inline">\(F_{(i)} = F^{1/2}(I - K_i)F^{1/2}\)</span> with <span class="math inline">\(K_i\)</span> as in 5.5, and <span class="math inline">\(K_i\)</span> has the same non-zero eigenvalues as <span class="math inline">\(S_i\)</span>.) In the LSPIM design this happens, for example, when at some visit <span class="math inline">\(t\)</span> only one control subject is observed (all between pairs at <span class="math inline">\(t\)</span> are in that subject’s <span class="math inline">\(C_1\)</span> cluster, so <code>trt_visit</code><span class="math inline">\(t\)</span> is informed by that cluster alone), when at some visit only one treated subject is observed (the same for <span class="math inline">\(C_2\)</span>), when <span class="math inline">\(n_{0t} = n_{1t} = 1\)</span> (also <span class="math inline">\(C_3\)</span>), or when only one control (or one treated) subject has two or more visits (<code>trend_ctrl</code> or <code>trend_treat</code> is then informed by that subject’s within pairs, which share all three cluster labels). These configurations need heavy dropout and small <span class="math inline">\(n\)</span>, but they are not impossible.</p>
+</section>
+<section id="proposition-5.3-md-and-kc-factors-via-one-symmetric-eigendecomposition" class="level3">
+<h3 class="anchored" data-anchor-id="proposition-5.3-md-and-kc-factors-via-one-symmetric-eigendecomposition">Proposition 5.3 (MD and KC factors via one symmetric eigendecomposition)</h3>
+<p>Let <span class="math inline">\(S_i = Q \Lambda Q^\top\)</span> with <span class="math inline">\(Q\)</span> orthogonal and <span class="math inline">\(\Lambda = \operatorname{diag}(\lambda_1, \dots, \lambda_{n_i})\)</span>, <span class="math inline">\(0 \le \lambda_k &lt; 1\)</span> for all <span class="math inline">\(k\)</span>. Then</p>
+<p><span class="math display">\[
+(I - H_i)^{-1} = T\, Q (I - \Lambda)^{-1} Q^\top T^{-1} = W_i^{1/2} (I - S_i)^{-1} W_i^{-1/2},
+\]</span></p>
+<p><span class="math display">\[
+\bigl[(I - H_i)^{-1}\bigr]^{1/2}_{\text{principal}} = T\, Q (I - \Lambda)^{-1/2} Q^\top T^{-1} = W_i^{1/2} (I - S_i)^{-1/2} W_i^{-1/2},
+\]</span></p>
+<p>and these equal <code>geessbin</code>’s <code>HMD</code> <span class="math inline">\(= B_i\)</span> and <code>HKC</code> <span class="math inline">\(= A_i\)</span> respectively (in exact arithmetic, subject to the conditioning proviso in (iii) below).</p>
+<p><em>Proof.</em></p>
+<ol type="i">
+<li><p><em>Inverse.</em> By Lemma 5.1, <span class="math inline">\(I - H_i = T Q (I - \Lambda) Q^\top T^{-1}\)</span> is a product of invertible matrices when all <span class="math inline">\(\lambda_k &lt; 1\)</span>; its inverse is the display. For an invertible matrix the Moore-Penrose inverse is the inverse, so <code>ginv(diag(n_i) - Hi)</code> <span class="math inline">\(= (I - H_i)^{-1}\)</span>, provided <code>ginv</code> does not truncate a singular value. It truncates only singular values below <span class="math inline">\(\sqrt{\varepsilon_{\text{mach}}} \approx 1.49 \times 10^{-8}\)</span> times the largest. By Fact A.3 the singular values of <span class="math inline">\(I - H_i = T(I - S_i)T^{-1}\)</span> satisfy <span class="math inline">\(\sigma_{\min} \ge (1 - \lambda_{\max}) / \kappa(T)\)</span> and <span class="math inline">\(\sigma_{\max} \le \kappa(T)\,\lVert I - S_i\rVert_2 \le \kappa(T)\)</span>, with <span class="math inline">\(\kappa(T) = \sqrt{\max_k w_k/\min_k w_k}\)</span> over the cluster. So a sufficient condition for no truncation is <span class="math inline">\(1 - \lambda_{\max} &gt; 1.49 \times 10^{-8}\, \kappa(T)^2\)</span>. Since the main loop keeps <span class="math inline">\(10^{-4} &lt; \mu &lt; 0.9999\)</span>, <span class="math inline">\(\kappa(T)^2 &lt; 10^{4}\)</span> at worst, and the condition fails only when <span class="math inline">\(\lambda_{\max}\)</span> is within about <span class="math inline">\(10^{-4}\)</span> of 1 in the most extreme weight configuration (in practice the weights within a cluster are similar and the margin is near <span class="math inline">\(10^{-8}\)</span>); see 5.4.</p></li>
+<li><p><em>Square root.</em> <span class="math inline">\(B_i = (I - H_i)^{-1}\)</span> is diagonalisable with real eigenvalues <span class="math inline">\(\nu_k = 1/(1-\lambda_k) \ge 1\)</span> and eigenvector matrix <span class="math inline">\(T Q\)</span>. For a diagonalisable matrix with positive real eigenvalues the <strong>principal square root</strong> (the unique square root whose eigenvalues have positive real part; Appendix, Fact A.2) is <span class="math inline">\(f(B_i)\)</span> with <span class="math inline">\(f(z) = \sqrt z\)</span>, and <span class="math inline">\(f(B_i) = (TQ) \operatorname{diag}(\sqrt{\nu_k}) (TQ)^{-1} = T Q (I - \Lambda)^{-1/2} Q^\top T^{-1}\)</span>. <code>sqrtmat(B_i)</code> computes <span class="math inline">\(\tilde V \operatorname{diag}(\sqrt{\tilde\nu_k})\, \operatorname{ginv}(\tilde V)\)</span> from whatever eigenvalues <span class="math inline">\(\tilde\nu\)</span> and eigenvector matrix <span class="math inline">\(\tilde V\)</span> <code>eigen()</code> returns. In exact arithmetic <span class="math inline">\(\tilde\nu\)</span> is a permutation of <span class="math inline">\(\nu\)</span> and <span class="math inline">\(\tilde V\)</span> is <em>some</em> eigenbasis, i.e.&nbsp;<span class="math inline">\(\tilde V =
+TQ\,\Pi\,G\)</span> with a permutation <span class="math inline">\(\Pi\)</span> and a block-diagonal invertible <span class="math inline">\(G\)</span> acting within each eigenspace (the eigenvalue <span class="math inline">\(\nu = 1\)</span> has multiplicity <span class="math inline">\(\ge n_i - \operatorname{rank}(X_i)\)</span>, so the basis there is arbitrary). By Fact A.1, <span class="math inline">\(\tilde V \operatorname{diag}(f(\tilde\nu)) \tilde V^{-1} = f(B_i)\)</span> for <strong>every</strong> eigenbasis. With <span class="math inline">\(\operatorname{ginv}(\tilde V) = \tilde V^{-1}\)</span> (see (iii)) and <span class="math inline">\(\operatorname{Re}\)</span> of a real matrix being the identity, <code>sqrtmat</code> returns the principal root.</p></li>
+<li><p><em><code>ginv(eig$vectors)</code>.</em> <span class="math inline">\(\tilde V\)</span> is invertible, so <code>ginv</code> returns <span class="math inline">\(\tilde V^{-1}\)</span> unless <span class="math inline">\(\kappa_2(\tilde V) &gt; 1/1.49\times10^{-8} \approx 6.7 \times 10^{7}\)</span>, in which case <code>ginv</code> truncates and <code>sqrtmat</code> no longer returns a square root at all. Because the eigenvalue 1 of <span class="math inline">\(B_i\)</span> is highly repeated and <span class="math inline">\(B_i\)</span> is not normal (unless <span class="math inline">\(W_i\)</span> is constant on the cluster), the general eigensolver may return a poorly conditioned basis for that eigenspace; <span class="math inline">\(\kappa_2(\tilde V)\)</span> tends to grow with the cluster size. Up to that threshold the in-house formula and <code>geessbin</code> agree mathematically, and the in-house formula is the more accurate of the two numerically (its only decomposition is of a symmetric matrix). This is why the verification (Section 11) should compare at the largest <span class="math inline">\(n\)</span> that will be run. <span class="math inline">\(\square\)</span></p></li>
+</ol>
+<p><strong>Complex eigenvalues.</strong> <code>sqrtmat</code> is written for complex eigenvalues (<code>complex(real = v, ...)</code>, <code>Re(...)</code>), but <span class="math inline">\(B_i\)</span> is similar to the symmetric positive definite <span class="math inline">\((I - S_i)^{-1}\)</span>, so all its eigenvalues are real and <span class="math inline">\(\ge 1\)</span>, and it is diagonalisable. Any complex output of the general eigensolver can only be rounding (tiny imaginary parts, e.g.&nbsp;from the repeated eigenvalue 1), and the final <code>Re()</code> removes the corresponding imaginary rounding of the product. There is no branch-cut issue: all eigenvalues lie on the positive real axis, far from the cut of <span class="math inline">\(\sqrt{\cdot}\)</span>. When <code>isSymmetric(B_i)</code> holds (for example when <span class="math inline">\(w\)</span> is constant on the cluster), <code>eigen()</code> uses the symmetric solver and returns an orthonormal <span class="math inline">\(\tilde V\)</span>; the result is the same matrix.</p>
+</section>
+<section id="the-edge-case-an-eigenvalue-equal-to-1" class="level3">
+<h3 class="anchored" data-anchor-id="the-edge-case-an-eigenvalue-equal-to-1">5.4 The edge case: an eigenvalue equal to 1</h3>
+<p>If <span class="math inline">\(\lambda_{\max}(S_i) = 1\)</span> (Lemma 5.2), <span class="math inline">\(I - H_i\)</span> is singular and <span class="math inline">\((I - H_i)^{-1}\)</span> does not exist. <code>geessbin</code> then returns the Moore-Penrose inverse <span class="math inline">\(B_i = (I - H_i)^{+}\)</span> (in floating point <span class="math inline">\(1 - \lambda_{\max}\)</span> is of order <span class="math inline">\(10^{-16}\)</span>, far below <code>ginv</code>’s threshold), and <code>sqrtmat</code> takes the principal root of that singular matrix (its zero eigenvalues map to <span class="math inline">\(\sqrt0 = 0\)</span>). Write <span class="math inline">\(I - S_i = Q\,\operatorname{diag}(1 - \lambda)\,Q^\top\)</span> and let <span class="math inline">\(\mathcal N = \operatorname{null}(I - S_i)\)</span> be the eigenspace of <span class="math inline">\(\lambda = 1\)</span>, with orthonormal basis <span class="math inline">\(N\)</span>.</p>
+<p><strong>Proposition 5.4.</strong> <span class="math inline">\((I - H_i)^{+} = T (I - S_i)^{+} T^{-1}\)</span> <strong>if and only if</strong> <span class="math inline">\(\mathcal N\)</span> is invariant under <span class="math inline">\(W_i\)</span> (equivalently, <span class="math inline">\(T N N^\top T^{-1}\)</span> is symmetric). This holds in particular when every vector in <span class="math inline">\(\mathcal N\)</span> is supported on rows with a common weight <span class="math inline">\(w\)</span>.</p>
+<p><em>Proof.</em> Let <span class="math inline">\(M = I - H_i = T A T^{-1}\)</span> with <span class="math inline">\(A = I - S_i\)</span> symmetric, and <span class="math inline">\(G = T A^{+} T^{-1}\)</span>. Then <span class="math inline">\(MGM = M\)</span> and <span class="math inline">\(GMG = G\)</span> hold for any similarity, so <span class="math inline">\(G = M^+\)</span> iff <span class="math inline">\(MG\)</span> and <span class="math inline">\(GM\)</span> are symmetric. <span class="math inline">\(MG = T A A^+ T^{-1} = I - T N N^\top T^{-1}\)</span> and <span class="math inline">\(GM = I - T N N^\top T^{-1}\)</span> as well (as <span class="math inline">\(A^+A = AA^+ = I - NN^\top\)</span>). <span class="math inline">\(T N N^\top T^{-1}\)</span> is symmetric iff it equals <span class="math inline">\(T^{-1} N N^\top T\)</span>, iff <span class="math inline">\(T^2 N N^\top = N N^\top T^2\)</span>, iff <span class="math inline">\(W_i\)</span> commutes with the orthogonal projector onto <span class="math inline">\(\mathcal N\)</span>, iff <span class="math inline">\(\mathcal N\)</span> is <span class="math inline">\(W_i\)</span>-invariant. <span class="math inline">\(\square\)</span></p>
+<p>In the LSPIM design the isolated <code>trt_visit</code><span class="math inline">\(t\)</span> case satisfies the condition: all rows informing <code>trt_visit</code><span class="math inline">\(t\)</span> have <span class="math inline">\(x_j = e_{\texttt{trt\_visit}t}\)</span>, hence the same <span class="math inline">\(\mu_j\)</span> and <span class="math inline">\(w_j\)</span>, so the null vector <span class="math inline">\(\propto Z_i e_{\texttt{trt\_visit}t}\)</span> lies in a <span class="math inline">\(W_i\)</span>-eigenspace. Then <code>geessbin</code>’s result equals the in-house formula with <span class="math inline">\((1-\lambda_k)^{-1}\)</span> and <span class="math inline">\((1 - \lambda_k)^{-1/2}\)</span> <strong>replaced by 0</strong> for <span class="math inline">\(\lambda_k = 1\)</span> (the principal root of <span class="math inline">\(T A^+ T^{-1}\)</span> is <span class="math inline">\(T (A^+)^{1/2} T^{-1}\)</span> by the same argument as 5.3(ii), with eigenvalue 0 mapped to 0). The isolated <code>trend_treat</code>/<code>trend_ctrl</code> case does <strong>not</strong> satisfy it in general (the rows have different <span class="math inline">\(t' - t\)</span>, hence different <span class="math inline">\(w\)</span>), and then the Moore-Penrose inverse of the non-symmetric <span class="math inline">\(I - H_i\)</span> is not a similarity transform of anything the symmetric decomposition gives.</p>
+<p><strong>Recommendation for an implementation.</strong> Detect <span class="math inline">\(1 - \lambda_{\max}(S_i) \le \delta\)</span> (or equivalently <span class="math inline">\(\lambda_{\max}(K_i) \ge 1 - \delta\)</span> in the reduced form below) with a conservative <span class="math inline">\(\delta\)</span> that covers <code>ginv</code>’s threshold by 5.3(i), e.g.&nbsp;<span class="math inline">\(\delta = 10^{-6} \max(1, \max_{j \in \mathcal J_i} w_j / \min_{j \in \mathcal J_i} w_j)\)</span>, and for such clusters compute <span class="math inline">\(B_i\)</span> and <span class="math inline">\(A_i\)</span> <strong>literally as <code>geessbin</code> does</strong> (<code>ginv(diag(n_i) - Hi)</code> and <code>sqrtmat()</code> on the <span class="math inline">\(n_i \times n_i\)</span> matrices). The fallback is rare, guarantees agreement including <code>ginv</code>’s truncation threshold, and avoids having to reproduce the Moore-Penrose semantics analytically. (Whether <code>geessbin</code>’s Moore-Penrose treatment is statistically sensible is a separate question; the KC/MD corrections are undefined when a cluster has leverage 1 in some direction. For an identical-results replacement the literal fallback is the right choice.)</p>
+</section>
+<section id="proposition-5.5-simplified-per-cluster-meat" class="level3">
+<h3 class="anchored" data-anchor-id="proposition-5.5-simplified-per-cluster-meat">Proposition 5.5 (simplified per-cluster meat)</h3>
+<p>Assume <span class="math inline">\(\lambda_{\max}(S_i) &lt; 1\)</span>. With <span class="math inline">\(r_i = W_i^{-1/2} e_i\)</span> (Pearson residuals, unscaled), define the <span class="math inline">\(p\)</span>-vectors</p>
+<p><span class="math display">\[
+a_i = X_i^\top A_i e_i = Z_i^\top (I - S_i)^{-1/2} r_i,\qquad
+b_i = X_i^\top B_i e_i = Z_i^\top (I - S_i)^{-1} r_i .
+\]</span></p>
+<p>Then</p>
+<p><span class="math display">\[
+\boxed{\ \mathrm{covb}_C = F^{-1}\Bigl[\sum_{i=1}^{K_C} \tfrac12\bigl(a_i a_i^\top + b_i b_i^\top\bigr)\Bigr] F^{-1}\ }
+\]</span></p>
+<p><em>Proof.</em> <span class="math inline">\(X_i^\top A_i e_i = X_i^\top T Q(I-\Lambda)^{-1/2}Q^\top T^{-1} e_i = (TX_i)^\top (I - S_i)^{-1/2} (T^{-1}e_i)\)</span> with <span class="math inline">\(T X_i = Z_i\)</span> and <span class="math inline">\(T^{-1}e_i = r_i\)</span>; the same for <span class="math inline">\(B_i\)</span>. Insert into Proposition 4.2 and use <span class="math inline">\(X_i^\top A_i e_i e_i^\top A_i^\top X_i = a_i a_i^\top\)</span>. <span class="math inline">\(\square\)</span></p>
+<p>With the eigendecomposition <span class="math inline">\(S_i = Q \Lambda Q^\top\)</span> (<strong>Route A</strong>): <span class="math inline">\(a_i = Z_i^\top Q (I - \Lambda)^{-1/2} Q^\top r_i\)</span> and <span class="math inline">\(b_i = Z_i^\top Q (I - \Lambda)^{-1} Q^\top r_i\)</span>: one symmetric <span class="math inline">\(n_i \times n_i\)</span> eigendecomposition per cluster gives both corrections. Without any correction (<span class="math inline">\(A_i = B_i = I\)</span>) both vectors reduce to the cluster score <span class="math inline">\(g_i = X_i^\top e_i\)</span> and <span class="math inline">\(\mathrm{covb}_C\)</span> to the ordinary cluster-robust sandwich <span class="math inline">\(F^{-1}(\sum_i g_i g_i^\top) F^{-1}\)</span>.</p>
+</section>
+<section id="proposition-5.6-reduction-to-p-times-p-per-cluster-route-b" class="level3">
+<h3 class="anchored" data-anchor-id="proposition-5.6-reduction-to-p-times-p-per-cluster-route-b">Proposition 5.6 (reduction to <span class="math inline">\(p \times p\)</span> per cluster; Route B)</h3>
+<p><span class="math inline">\(S_i\)</span> has rank at most <span class="math inline">\(p\)</span>, so the <span class="math inline">\(n_i \times n_i\)</span> eigendecomposition is not needed. Let <span class="math inline">\(F = LL^\top\)</span> (Cholesky) and</p>
+<p><span class="math display">\[
+K_i = L^{-1} F_i L^{-\top} = \Psi_i\, \operatorname{diag}(\kappa_{i1}, \dots, \kappa_{ip})\, \Psi_i^\top
+\quad(p \times p,\ \Psi_i \text{ orthogonal}).
+\]</span></p>
+<p>Then <span class="math inline">\(0 \le \kappa_{ik} \le 1\)</span>, the non-zero <span class="math inline">\(\kappa_{ik}\)</span> are exactly the non-zero eigenvalues of <span class="math inline">\(S_i\)</span>, and for <span class="math inline">\(s \in \{\tfrac12, 1\}\)</span></p>
+<p><span class="math display">\[
+Z_i^\top (I - S_i)^{-s} r_i = g_i + F_i\, L^{-\top} \Psi_i\, \operatorname{diag}\bigl(\varphi_s(\kappa_{ik})\bigr)\, \Psi_i^\top L^{-1} g_i,
+\qquad
+\varphi_s(\kappa) = \frac{(1-\kappa)^{-s} - 1}{\kappa},\ \ \varphi_s(0) = s .
+\]</span></p>
+<p>In particular (<span class="math inline">\(s = 1\)</span>, <span class="math inline">\(\varphi_1(\kappa) = 1/(1-\kappa)\)</span>) the MD vector has the closed form</p>
+<p><span class="math display">\[
+b_i = F\, F_{(i)}^{-1} g_i, \qquad\text{so}\qquad F^{-1} b_i = F_{(i)}^{-1} g_i ,
+\]</span></p>
+<p>and the MD half of <span class="math inline">\(\mathrm{covb}_C\)</span> is <span class="math inline">\(\sum_i F_{(i)}^{-1} g_i g_i^\top F_{(i)}^{-1}\)</span>, built from the leave-cluster-out information <span class="math inline">\(F_{(i)} = F - F_i\)</span>. For the KC half, <span class="math inline">\(a_i = g_i + F_i L^{-\top}\Psi_i \operatorname{diag}(\varphi_{1/2}(\kappa_{ik}))\Psi_i^\top L^{-1} g_i\)</span> with <span class="math inline">\(\varphi_{1/2}(\kappa) = ((1-\kappa)^{-1/2} - 1)/\kappa\)</span>, which tends to <span class="math inline">\(\tfrac12\)</span> as <span class="math inline">\(\kappa \to 0\)</span> (for small <span class="math inline">\(\kappa\)</span> evaluate it as <span class="math inline">\(1/\bigl(\sqrt{1-\kappa}\,(1 + \sqrt{1-\kappa})\bigr)\)</span>, which equals <span class="math inline">\(((1-\kappa)^{-1/2}-1)/\kappa\)</span> and has no cancellation).</p>
+<p><em>Proof.</em> Put <span class="math inline">\(G = Z_i L^{-\top}\)</span> (<span class="math inline">\(n_i \times p\)</span>). Then <span class="math inline">\(S_i = Z_i (LL^\top)^{-1} Z_i^\top = G G^\top\)</span> and <span class="math inline">\(K_i = G^\top G\)</span>. Take a singular value decomposition <span class="math inline">\(G = U \Sigma \Psi^\top\)</span> with <span class="math inline">\(\Psi\)</span> <span class="math inline">\(p \times p\)</span> orthogonal, <span class="math inline">\(U\)</span> <span class="math inline">\(n_i \times p\)</span> with orthonormal columns where <span class="math inline">\(\sigma_k &gt; 0\)</span> (columns with <span class="math inline">\(\sigma_k = 0\)</span> are irrelevant since they are multiplied by 0). Then <span class="math inline">\(K_i = \Psi \Sigma^2 \Psi^\top\)</span>, so <span class="math inline">\(\kappa_k = \sigma_k^2\)</span>, and <span class="math inline">\(S_i = U \Sigma^2 U^\top\)</span>, so the non-zero eigenvalues agree and lie in <span class="math inline">\([0,1]\)</span> by Lemma 5.2. On <span class="math inline">\(\operatorname{col}(U)^\perp\)</span>, <span class="math inline">\(S_i = 0\)</span>, so</p>
+<p><span class="math display">\[
+(I - S_i)^{-s} = I + U\bigl[(I - \Sigma^2)^{-s} - I\bigr] U^\top = I + G\, \varphi_s(K_i)\, G^\top ,
+\]</span></p>
+<p>because <span class="math inline">\(G \varphi_s(K_i) G^\top = U\Sigma \Psi^\top \Psi \varphi_s(\Sigma^2) \Psi^\top \Psi \Sigma U^\top
+= U \Sigma^2 \varphi_s(\Sigma^2) U^\top = U[(I-\Sigma^2)^{-s} - I]U^\top\)</span>. Multiply by <span class="math inline">\(Z_i^\top\)</span> on the left and <span class="math inline">\(r_i\)</span> on the right, using <span class="math inline">\(Z_i^\top r_i = X_i^\top e_i = g_i\)</span>, <span class="math inline">\(Z_i^\top G = F_i L^{-\top}\)</span> and <span class="math inline">\(G^\top r_i = L^{-1} g_i\)</span>. For <span class="math inline">\(s = 1\)</span>: <span class="math inline">\(L^{-\top}\Psi (I - \operatorname{diag}\kappa)^{-1}\Psi^\top L^{-1} = L^{-\top}(I - K_i)^{-1}L^{-1} = (L(I-K_i)L^\top)^{-1}
+= (F - F_i)^{-1}\)</span>, so <span class="math inline">\(b_i = g_i + F_i F_{(i)}^{-1} g_i = (F_{(i)} + F_i) F_{(i)}^{-1} g_i = F F_{(i)}^{-1} g_i\)</span>. <span class="math inline">\(\square\)</span></p>
+<p>For the edge case of 5.4 in this form: <span class="math inline">\(\kappa_{ik} = 1\)</span> iff <span class="math inline">\(F_{(i)}\)</span> is singular. Where Proposition 5.4 applies, “replace <span class="math inline">\((1-\kappa)^{-s}\)</span> by 0” means <span class="math inline">\(\varphi_s(1) = -1\)</span>; otherwise use the literal fallback. Detecting <span class="math inline">\(\kappa_{\max} \ge 1 - \delta\)</span> is a <span class="math inline">\(p \times p\)</span> check.</p>
+<p>Route B needs per cluster only <span class="math inline">\(F_i\)</span> and <span class="math inline">\(g_i\)</span> (accumulated in one pass over the rows), one <span class="math inline">\(p \times p\)</span> symmetric eigendecomposition and a few <span class="math inline">\(p \times p\)</span> products. Its cost is independent of <span class="math inline">\(n_i\)</span> beyond the <span class="math inline">\(O(n_i p^2)\)</span> accumulation.</p>
+</section>
+<section id="remark-5.7-the-current-lspim-design-everything-is-diagonal" class="level3">
+<h3 class="anchored" data-anchor-id="remark-5.7-the-current-lspim-design-everything-is-diagonal">Remark 5.7 (the current LSPIM design: everything is diagonal)</h3>
+<p>Because each row of <span class="math inline">\(X\)</span> has exactly one non-zero entry (1.3), <span class="math inline">\(F\)</span> and every <span class="math inline">\(F_i\)</span> are diagonal. Then <span class="math inline">\(L = F^{1/2}\)</span>, <span class="math inline">\(K_i = \operatorname{diag}(\kappa_{ik})\)</span> with</p>
+<p><span class="math display">\[
+\kappa_{ik} = \frac{(F_i)_{kk}}{F_{kk}} = \frac{\sum_{j \in \mathcal J_i} w_j x_{jk}^2}{\sum_{j=1}^N w_j x_{jk}^2},
+\]</span></p>
+<p>the share of the information about <span class="math inline">\(\beta_k\)</span> that comes from cluster <span class="math inline">\(i\)</span>; <span class="math inline">\(\Psi_i = I\)</span>, and Proposition 5.6 collapses to</p>
+<p><span class="math display">\[
+a_{ik} = \frac{g_{ik}}{\sqrt{1 - \kappa_{ik}}},\qquad b_{ik} = \frac{g_{ik}}{1 - \kappa_{ik}},\qquad
+\mathrm{covb}_C = F^{-1}\Bigl[\sum_i \tfrac12(a_i a_i^\top + b_i b_i^\top)\Bigr]F^{-1}
+\]</span></p>
+<p>(<span class="math inline">\(F^{-1}\)</span> diagonal). Likewise <span class="math inline">\(h_j = w_j x_{jk(j)}^2 / F_{k(j)k(j)}\)</span> with <span class="math inline">\(k(j)\)</span> the non-zero column of row <span class="math inline">\(j\)</span>; the leverages within a column sum to 1. An implementation should still use the general <span class="math inline">\(p \times p\)</span> form (it costs nothing extra and does not silently break if a design column is added that overlaps others), but the diagonal form is a cheap independent check in tests.</p>
+<hr>
+</section>
+</section>
+<section id="why-one-fit-plus-three-sandwiches-is-equivalent-to-three-fits" class="level2">
+<h2 class="anchored" data-anchor-id="why-one-fit-plus-three-sandwiches-is-equivalent-to-three-fits">6. Why one fit plus three sandwiches is equivalent to three fits</h2>
+<section id="the-claim" class="level3">
+<h3 class="anchored" data-anchor-id="the-claim">6.1 The claim</h3>
+<p>Let <span class="math inline">\(\hat\beta\)</span>, <span class="math inline">\(\hat\phi\)</span>, the iteration count and the convergence label come from one PGEE fit (Section 3) on the <span class="math inline">\(N\)</span> pairs in any row order. For each <span class="math inline">\(C \in \{C_1, C_2, C_3\}\)</span> compute <span class="math inline">\(\mathrm{covb}_C\)</span> by Proposition 5.5 (Route A) or 5.6 (Route B) at <span class="math inline">\(\hat\beta\)</span>, using the <span class="math inline">\(\hat\mu\)</span>, <span class="math inline">\(W\)</span>, <span class="math inline">\(e\)</span> and <span class="math inline">\(F\)</span> of that <span class="math inline">\(\hat\beta\)</span> (with the literal fallback of 5.4 where needed), or $_C = $ the <span class="math inline">\(p \times p\)</span> <code>NA</code> matrix if the label is not <code>"converged"</code>. Then, in exact arithmetic,</p>
+<ul>
+<li><span class="math inline">\(\hat\beta\)</span> = <code>coef(mod_k)</code> for <span class="math inline">\(k = 1, 2, 3\)</span>, hence also their column mean;</li>
+<li><code>mod_k$iterations</code>, <code>mod_k$convergence</code> and <code>mod_k$scale</code> are the same for all <span class="math inline">\(k\)</span> and equal the single fit’s;</li>
+<li><span class="math inline">\(\mathrm{covb}_{C_k}\)</span> = <code>mod_k$covb</code>;</li>
+<li>therefore <code>V_raw</code>, <code>beta</code>, <code>converged</code> and everything downstream in <code>fit_lspim()</code> are unchanged.</li>
+</ul>
+</section>
+<section id="proof" class="level3">
+<h3 class="anchored" data-anchor-id="proof">6.2 Proof</h3>
+<p>The fit: Corollary 3.5. The covariance: for <code>mod_k</code>, <code>geessbin</code> evaluates <code>Iinv</code>, <code>phi</code> and the per-cluster <code>calc_mat</code> at the same final <span class="math inline">\(\hat\beta\)</span>; by Proposition 4.2 the result does not depend on <code>phi</code>; by Lemma 3.1 and Lemma 4.1 the per-cluster terms are those of Proposition 4.2 with <span class="math inline">\(A_i\)</span>, <span class="math inline">\(B_i\)</span> given by Proposition 5.3 (or by <code>ginv</code>/<code>sqrtmat</code> themselves in the fallback); the sum over clusters is a sum over a partition of the rows, which is the same whichever order the clusters are visited in. Propositions 5.5 and 5.6 are exact rewritings. <span class="math inline">\(\square\)</span></p>
+<p>The only role of the cluster label is which rows form a block <span class="math inline">\(\mathcal J_i\)</span>; the fit itself never looks at it.</p>
+</section>
+<section id="numerical-caveats" class="level3">
+<h3 class="anchored" data-anchor-id="numerical-caveats">6.3 Numerical caveats</h3>
+<ol type="1">
+<li><strong>Summation order.</strong> <code>geessbin</code> sorts the rows by the cluster label (<code>order()</code> on character labels, so the clusters are visited in collation order) and accumulates <span class="math inline">\(U\)</span>, <span class="math inline">\(\mathcal I\)</span> and <code>dI</code> cluster by cluster, and <span class="math inline">\(\phi\)</span> row by row in the sorted order. The in-house fit sums in one fixed order. All differences are of order <span class="math inline">\(\varepsilon_{\text{mach}}\)</span> times the size of the sums, which propagates to relative differences of order <span class="math inline">\(10^{-15}\)</span> in <span class="math inline">\(\hat\beta\)</span> for a well-conditioned <span class="math inline">\(F\)</span> (the 6e-16 between the three <code>geessbin</code> fits is exactly this effect).</li>
+<li><strong>Algebraic rewriting.</strong> <code>geessbin</code> computes <code>VD</code> as <span class="math inline">\(\sqrt{1/w}^2 w X/\phi\)</span> and inverts through <code>ginv</code> (SVD) rather than Cholesky; the in-house version uses <span class="math inline">\(X\)</span>, <span class="math inline">\(F^{-1}\)</span> via Cholesky and leverages via <span class="math inline">\(\lVert L^{-1}x_j\rVert^2\)</span>. Again only rounding differences, scaled by <span class="math inline">\(\kappa(F)\)</span>.</li>
+<li><strong>The stopping rule <code>del &lt;= 1e-05</code>.</strong> Rounding can change the iteration count only if at some iteration <code>del</code> lies within rounding distance (relative <span class="math inline">\(\sim 10^{-15}\)</span>) of <span class="math inline">\(10^{-5}\)</span>. Then one implementation makes one more update than the other, and <span class="math inline">\(\hat\beta\)</span> differs by one step of (3.7), whose size is at most of order <span class="math inline">\(\phi\,\lVert F^{-1}\rVert\, 10^{-5}\)</span>; the same can already happen between the three <code>geessbin</code> fits. It is a probability-near-zero event, but a verification over many replicates should report iteration-count mismatches separately rather than treat them as failures of the derivation. The same applies to the start loop’s <code>1e-05</code> and to the bounds check <span class="math inline">\(\mu &lt; 10^{-4}\)</span> or <span class="math inline">\(\mu &gt; 0.9999\)</span> at a boundary.</li>
+<li><strong>The column mean of three coefficient vectors.</strong> <code>colMeans()</code> of three equal numbers need not return the number bit for bit; the difference is at most a few ulps.</li>
+<li><strong><code>sqrtmat</code> conditioning.</strong> As explained in 5.3(iii), <code>geessbin</code>’s own result carries rounding proportional to <span class="math inline">\(\kappa_2\)</span> of the eigenvector matrix returned by the general eigensolver, which grows with cluster size. Disagreements in <code>covb</code> at large <span class="math inline">\(n\)</span> are more likely to be <code>geessbin</code>’s rounding than the in-house formula’s; a relative tolerance of <span class="math inline">\(10^{-8}\)</span> leaves ample room as long as that condition number stays below about <span class="math inline">\(10^{6}\)</span>.</li>
+<li><strong>Near-singular <span class="math inline">\(I - H_i\)</span>.</strong> Section 5.4: use the literal fallback when <span class="math inline">\(1 - \lambda_{\max} \le \delta\)</span>.</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="where-the-time-and-memory-go-in-geessbin" class="level2">
+<h2 class="anchored" data-anchor-id="where-the-time-and-memory-go-in-geessbin">7. Where the time and memory go in <code>geessbin</code></h2>
+<section id="cluster-sizes" class="level3">
+<h3 class="anchored" data-anchor-id="cluster-sizes">7.1 Cluster sizes</h3>
+<p>Complete data, <span class="math inline">\(n_0\)</span> control and <span class="math inline">\(n_1\)</span> treated subjects, <span class="math inline">\(v\)</span> visits, <span class="math inline">\(c = \binom{v}{2}\)</span>:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>clustering</th>
+<th>clusters</th>
+<th>rows per cluster</th>
+<th>number of clusters</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(C_1\)</span> (left subject)</td>
+<td>control subject <span class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(v\, n_1 + c\)</span> (its between pairs as left + its within pairs)</td>
+<td><span class="math inline">\(n_0\)</span></td>
+</tr>
+<tr class="even">
+<td></td>
+<td>treated subject <span class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(c\)</span> (its within pairs only; never left in a between pair)</td>
+<td><span class="math inline">\(n_1\)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(C_2\)</span> (right subject)</td>
+<td>treated subject <span class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(v\, n_0 + c\)</span></td>
+<td><span class="math inline">\(n_1\)</span></td>
+</tr>
+<tr class="even">
+<td></td>
+<td>control subject <span class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(c\)</span></td>
+<td><span class="math inline">\(n_0\)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(C_3\)</span> (subject pair)</td>
+<td>(control <span class="math inline">\(s\)</span>, treated <span class="math inline">\(s'\)</span>)</td>
+<td><span class="math inline">\(v\)</span> (one between pair per shared visit)</td>
+<td><span class="math inline">\(n_0 n_1\)</span></td>
+</tr>
+<tr class="even">
+<td></td>
+<td><span class="math inline">\((s, s)\)</span></td>
+<td><span class="math inline">\(c\)</span> (the subject’s within pairs)</td>
+<td><span class="math inline">\(n\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>With dropout replace <span class="math inline">\(v n_1\)</span> by <span class="math inline">\(\sum_{t \text{ observed for } s} n_{1t}\)</span>, <span class="math inline">\(c\)</span> by <span class="math inline">\(\binom{m_s}{2}\)</span>, and <span class="math inline">\(v\)</span> in the <span class="math inline">\(C_3\)</span> row by the number of visits at which both subjects are observed; subjects with no pair in the role are absent from that clustering. With <span class="math inline">\(n_0 = n_1 = n/2\)</span>, half the <span class="math inline">\(C_1\)</span> and <span class="math inline">\(C_2\)</span> clusters have about <span class="math inline">\(vn/2 + c\)</span> rows and the other half only <span class="math inline">\(c\)</span> rows; <span class="math inline">\(C_3\)</span> has about <span class="math inline">\(n^2/4 + n\)</span> small clusters (at most <span class="math inline">\(\max(v, c)\)</span> rows). The largest cluster size, which sets <code>R &lt;- diag(n)</code>, is about <span class="math inline">\(vn/2 + c\)</span> for <span class="math inline">\(C_1\)</span>/<span class="math inline">\(C_2\)</span> and <span class="math inline">\(\max(v, c)\)</span> for <span class="math inline">\(C_3\)</span>.</p>
+</section>
+<section id="costs-per-geessbin-call" class="level3">
+<h3 class="anchored" data-anchor-id="costs-per-geessbin-call">7.2 Costs per <code>geessbin</code> call</h3>
+<p>Let <span class="math inline">\(s_0\)</span> be the number of start-loop iterations and <span class="math inline">\(s\)</span> the number of main-loop iterations (both small in practice, typically single digits). Sums <span class="math inline">\(\sum_i\)</span> run over the clusters of the clustering in use.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>step</th>
+<th>what is done</th>
+<th>time</th>
+<th>memory</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>start value</td>
+<td><code>diag(X %*% ginv(I) %*% t(X))</code>, every start iteration</td>
+<td><span class="math inline">\(O(s_0 N^2 p)\)</span></td>
+<td>an <span class="math inline">\(N \times N\)</span> double matrix, <span class="math inline">\(8N^2\)</span> bytes</td>
+</tr>
+<tr class="even">
+<td>main loop, <code>calc_mat</code></td>
+<td><code>ginv(R_i)</code> <span class="math inline">\(=\)</span> SVD of <span class="math inline">\(I_{n_i}\)</span>; <code>Vinv</code> and <code>emat</code> (<span class="math inline">\(n_i \times n_i\)</span>); <code>VD</code></td>
+<td><span class="math inline">\(O(s \sum_i n_i^3)\)</span></td>
+<td><span class="math inline">\(O(\max_i n_i^2)\)</span></td>
+</tr>
+<tr class="odd">
+<td>main loop, subsetting</td>
+<td><code>X[idseq == i, ]</code>, <code>y[idseq == i]</code> scan all <span class="math inline">\(N\)</span> rows per cluster (twice: <code>calc_mat</code> and <code>dI</code>)</td>
+<td><span class="math inline">\(O(s\, K N)\)</span></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>main loop, <code>dI</code></td>
+<td><span class="math inline">\(p\)</span> products <span class="math inline">\(X_i^\top \operatorname{diag}(\cdot) W_i X_i\)</span> per cluster via <code>apply</code></td>
+<td><span class="math inline">\(O(s N p^3)\)</span></td>
+<td><span class="math inline">\(p^3\)</span> array</td>
+</tr>
+<tr class="odd">
+<td>FW</td>
+<td>per cluster: <code>Hi</code> (<span class="math inline">\(O(n_i^2 p)\)</span>), <strong>two</strong> <code>ginv(I - Hi)</code> (two SVDs), general <code>eigen()</code> of an <span class="math inline">\(n_i \times n_i\)</span> non-symmetric matrix, <code>ginv(eig$vectors)</code> (another SVD, complex if any eigenvalue is), and four <span class="math inline">\(n_i^3\)</span> matrix products for <code>HKC %*% emat %*% t(HKC)</code> and <code>HMD %*% emat %*% t(HMD)</code></td>
+<td><span class="math inline">\(O(\sum_i n_i^3)\)</span> with a large constant</td>
+<td><span class="math inline">\(O(\max_i n_i^2)\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>For <span class="math inline">\(C_1\)</span> and <span class="math inline">\(C_2\)</span> with <span class="math inline">\(n_0 = n_1 = n/2\)</span>: <span class="math inline">\(\sum_i n_i^3 \approx \tfrac n2 (vn/2)^3 = v^3 n^4/16\)</span>. For <span class="math inline">\(C_3\)</span>: <span class="math inline">\(\sum_i n_i^3 = O(n^2 \max(v,c)^3)\)</span>, but <span class="math inline">\(K \approx n^2/4\)</span> makes the subsetting term <span class="math inline">\(K N \approx v n^4 / 16\)</span> per pass. The start value costs <span class="math inline">\(N^2 p \approx v^2 n^4 p / 16\)</span> flops and <span class="math inline">\(8 N^2\)</span> bytes: about <span class="math inline">\(0.9\)</span> GB at <span class="math inline">\(n = 100\)</span>, <span class="math inline">\(v = 4\)</span> (<span class="math inline">\(N = 10\,600\)</span>) and about <span class="math inline">\(13.6\)</span> GB at <span class="math inline">\(n = 200\)</span> (<span class="math inline">\(N = 41\,200\)</span>), which is what runs out of memory at large <span class="math inline">\(n\)</span>. All of this is done three times, and the FW and start-value work is identical in the three calls except for the FW cluster blocks.</p>
+<p>The profile in the plan (n = 50, 4 visits) attributes about 95% of <code>fit_lspim()</code> to the three <code>geessbin</code> calls, about 35% of which is <code>ginv</code> and about 30% <code>sqrtmat</code>/<code>eigen</code>: the <span class="math inline">\(O(n_i^3)\)</span> per-cluster linear algebra of the main loop (<code>ginv(diag(n_i))</code>) and of FW.</p>
+<hr>
+</section>
+</section>
+<section id="cost-of-the-in-house-version" class="level2">
+<h2 class="anchored" data-anchor-id="cost-of-the-in-house-version">8. Cost of the in-house version</h2>
+<p>With <span class="math inline">\(N \approx v n^2/4 + n c\)</span>, <span class="math inline">\(p = v + 2\)</span>, <span class="math inline">\(K_{C_1} = K_{C_2} \approx n\)</span>, <span class="math inline">\(K_{C_3} \approx n^2/4 + n\)</span>:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>step</th>
+<th>in-house (Route B)</th>
+<th><code>geessbin</code>, three calls</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>start value</td>
+<td><span class="math inline">\(O(s_0 N p^2)\)</span> time, <span class="math inline">\(O(Np)\)</span> memory</td>
+<td><span class="math inline">\(3 \times O(s_0 N^2 p)\)</span> time, <span class="math inline">\(O(N^2)\)</span> memory</td>
+</tr>
+<tr class="even">
+<td>main loop</td>
+<td><span class="math inline">\(O(s\,(N p^2 + p^3))\)</span></td>
+<td><span class="math inline">\(3 \times O(s\,(\sum_i n_i^3 + KN + Np^3))\)</span>, i.e.&nbsp;<span class="math inline">\(O(s\, v^3 n^4)\)</span></td>
+</tr>
+<tr class="odd">
+<td>sandwiches</td>
+<td><span class="math inline">\(O(N p^2)\)</span> to accumulate all <span class="math inline">\(F_i\)</span>, <span class="math inline">\(g_i\)</span> for the three clusterings, plus <span class="math inline">\(O((K_{C_1}+K_{C_2}+K_{C_3})\, p^3) = O(n^2 p^3)\)</span></td>
+<td><span class="math inline">\(O(v^3 n^4)\)</span> with a large constant</td>
+</tr>
+<tr class="even">
+<td>total</td>
+<td><span class="math inline">\(O\bigl((s_0 + s)\, v n^2 p^2 + n^2 p^3\bigr)\)</span> time, <span class="math inline">\(O(Np)\)</span> memory</td>
+<td><span class="math inline">\(O\bigl(v^2 n^4 p + s\, v^3 n^4\bigr)\)</span> time, <span class="math inline">\(O(v^2 n^4)\)</span> memory</td>
+</tr>
+</tbody>
+</table>
+<p>So the in-house version is quadratic in <span class="math inline">\(n\)</span> (linear in the number of pairs) instead of quartic, and its memory is linear in <span class="math inline">\(N\)</span> instead of quadratic. Route A (one symmetric <span class="math inline">\(n_i \times n_i\)</span> eigendecomposition per cluster, done once at the end instead of per iteration) is still <span class="math inline">\(O(\sum_i n_i^3) = O(v^3 n^4)\)</span> for <span class="math inline">\(C_1\)</span>/<span class="math inline">\(C_2\)</span>, with a much smaller constant than <code>geessbin</code>; it is useful as an intermediate check between the literal <code>geessbin</code> formulas and Route B, but Route B is the one to implement. For the fallback clusters of 5.4 the cost is that of <code>geessbin</code> for those clusters only.</p>
+<hr>
+</section>
+<section id="behaviour-to-replicate-labels-warnings-errors-ties" class="level2">
+<h2 class="anchored" data-anchor-id="behaviour-to-replicate-labels-warnings-errors-ties">9. Behaviour to replicate: labels, warnings, errors, ties</h2>
+<section id="outcome-check-and-ties" class="level3">
+<h3 class="anchored" data-anchor-id="outcome-check-and-ties">9.1 Outcome check (and ties)</h3>
+<p>Before anything else, stop with exactly</p>
+<blockquote class="blockquote">
+<p><code>outcome vector must be numeric and take values in {0, 1}</code></p>
+</blockquote>
+<p>if <span class="math inline">\(y\)</span> is not numeric or <code>!setequal(unique(y), 0:1)</code>, that is if any pseudo-score is 0.5 (a tie in <span class="math inline">\(Y\)</span> between the two members of a pair) <strong>or</strong> if the pseudo-scores are all 0 or all 1. <code>fit_lspim()</code> turns this into <code>error_message</code> with <code>fit = NULL</code>. Ties are unlikely with continuous outcomes but possible after rounding. The current <code>glm_sandwich</code> engine accepts 0.5; an in-house PGEE engine could too (the estimating equation (3.6) and the FW formulas are well defined for <span class="math inline">\(y_j \in [0, 1]\)</span>), but that would be a deliberate behaviour change relative to <code>geessbin</code>, not part of an identical-results replacement. Keep the check, and treat removing it as a separate decision.</p>
+</section>
+<section id="convergence-labels-and-warnings" class="level3">
+<h3 class="anchored" data-anchor-id="convergence-labels-and-warnings">9.2 Convergence labels and warnings</h3>
+<p>In the order in which they are checked (Section 2.4), with the exact strings:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>condition (main loop, at the start of an iteration unless noted)</th>
+<th><code>convergence</code></th>
+<th>warning message</th>
+<th><code>covb</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>min(mu) &lt; 1e-04</code> or <code>max(mu) &gt; 0.9999</code></td>
+<td><code>"fitted probabilities numerically 0 or 1 occurred."</code></td>
+<td>same</td>
+<td><code>NA</code></td>
+</tr>
+<tr class="even">
+<td><code>phi</code> infinite (<span class="math inline">\(N = p\)</span>)</td>
+<td><code>"infinite scale parameter"</code></td>
+<td>same</td>
+<td><code>NA</code></td>
+</tr>
+<tr class="odd">
+<td>after the update, <code>nitr == 50</code> and <code>del &gt; 1e-05</code></td>
+<td><code>"maximum number of iterations consumed"</code></td>
+<td>same</td>
+<td><code>NA</code></td>
+</tr>
+<tr class="even">
+<td>after the update, <code>nitr == 50</code> and <code>del &lt;= 1e-05</code></td>
+<td><code>"converged"</code></td>
+<td><code>"converged"</code> (sic)</td>
+<td>computed</td>
+</tr>
+<tr class="odd">
+<td><code>del &lt;= 1e-05</code> before iteration 50</td>
+<td><code>"converged"</code></td>
+<td>none</td>
+<td>computed</td>
+</tr>
+<tr class="even">
+<td>(unreachable)</td>
+<td><code>"convergence failure"</code></td>
+<td>same</td>
+<td><code>NA</code></td>
+</tr>
+</tbody>
+</table>
+<p>The start loop never warns. Because <code>fit_lspim()</code> de-duplicates warning messages, raising each warning once (instead of three times) gives the same <code>warnings</code> vector. <code>converged</code> in <code>fit_lspim()</code> is <code>TRUE</code> iff the label is <code>"converged"</code>. When the label is not <code>"converged"</code>, <code>covb</code> must be the <code>NA</code> matrix so that the downstream eigenvalue check fails with the same error message as now.</p>
+</section>
+<section id="why-the-update-rule-must-be-copied-exactly" class="level3">
+<h3 class="anchored" data-anchor-id="why-the-update-rule-must-be-copied-exactly">9.3 Why the update rule must be copied exactly</h3>
+<p>The update (3.7) uses the unpenalised information, not the Jacobian of (3.5). For a parameter informed by a single pair (for example <code>trt_visit</code><span class="math inline">\(t\)</span> when <span class="math inline">\(n_{0t} = n_{1t} = 1\)</span>; that row has <span class="math inline">\(h_j = 1\)</span>), the start-loop map is <span class="math inline">\(\theta \mapsto \theta + (y + \tfrac12 - 2\mu)/(\mu(1-\mu))\)</span>, whose derivative at the fixed point is <span class="math inline">\(-1\)</span>: the iteration oscillates and can drift far away, and the main loop then stops with the <span class="math inline">\(\mu\)</span>-bounds label. A “better” Newton step would converge there and produce a different label and a different <span class="math inline">\(\hat\beta\)</span>. To replicate <code>geessbin</code>, copy its start value (<span class="math inline">\(\beta = 0\)</span>, <code>1e-05</code>, 50 iterations, silent), its update, its stopping quantity (3.5) and its check order.</p>
+</section>
+<section id="rank-deficient-x" class="level3">
+<h3 class="anchored" data-anchor-id="rank-deficient-x">9.4 Rank-deficient <span class="math inline">\(X\)</span></h3>
+<p>If a design column is identically zero (for example a visit at which one arm has no observed subject, so <code>trt_visit</code><span class="math inline">\(t\)</span> has no between pairs), <span class="math inline">\(F\)</span> is singular. <code>geessbin</code> uses <code>ginv</code> for every inverse (<span class="math inline">\(F\)</span> in the start loop, <span class="math inline">\(\mathcal I\)</span> in the main loop), so the corresponding coefficient stays at its start value 0, and the corresponding row and column of <code>covb</code> come out as 0 (which then triggers the non-positive-variance branch in <code>fit_lspim()</code>). An in-house version must either reproduce these Moore-Penrose semantics (e.g.&nbsp;by dropping zero columns, fitting, and re-inserting a zero coefficient and zero covariance rows and columns, which is equivalent for an all-zero column) or use <code>ginv</code> itself for <span class="math inline">\(F\)</span>. Cholesky-based steps must not be used blindly when <span class="math inline">\(F\)</span> is singular.</p>
+<hr>
+</section>
+</section>
+<section id="pseudocode" class="level2">
+<h2 class="anchored" data-anchor-id="pseudocode">10. Pseudocode</h2>
+<p>Inputs: the pair data <code>dat_GEE</code> exactly as built in <code>fit_lspim()</code> (<span class="math inline">\(y\)</span>, the <span class="math inline">\(p\)</span> design columns in formula order, <code>C1</code>, <code>C2</code>, <code>C3</code>). Constants: <code>tol = 1e-5</code>, <code>maxit = 50</code>; <code>delta_i</code> as in 5.4.</p>
+<pre class="text"><code>PGEE_FW_LSPIM(dat_GEE):
+  X &lt;- design columns of dat_GEE (formula order);  y &lt;- dat_GEE$y;  N &lt;- nrow(X);  p &lt;- ncol(X)
+  if y not numeric or set(y) != {0, 1}:
+      stop("outcome vector must be numeric and take values in {0, 1}")
+  handle all-zero columns of X as in 9.4
+
+  # Firth start value (phi = 1), as in geessbin
+  beta &lt;- 0_p
+  repeat at most 50 times:
+      mu &lt;- expit(X beta);  w &lt;- mu (1 - mu)
+      F &lt;- X' diag(w) X;  L &lt;- chol(F)
+      h_j &lt;- w_j * || L^{-1} x_j ||^2                 for all j      # O(N p^2), no N x N matrix
+      U &lt;- X' (y - mu + h * (1/2 - mu))
+      if max|U| &lt;= 1e-5: break
+      beta &lt;- beta + F^{-1} U
+
+  # main PGEE loop, as in geessbin
+  label &lt;- "converged";  iter &lt;- 0
+  repeat:
+      mu &lt;- expit(X beta);  w &lt;- mu (1 - mu)
+      if min(mu) &lt; 1e-4 or max(mu) &gt; 0.9999:
+          label &lt;- "fitted probabilities numerically 0 or 1 occurred.";  warn(label);  break
+      phi &lt;- sum((y - mu)^2 / w) / (N - p)
+      if phi is infinite:
+          label &lt;- "infinite scale parameter";  warn(label);  break
+      F &lt;- X' diag(w) X;  L &lt;- chol(F)
+      h_j &lt;- w_j * || L^{-1} x_j ||^2
+      U &lt;- X' (y - mu + phi * h * (1/2 - mu)) / phi              # geessbin's scaling, eq. (3.5)
+      del &lt;- max|U|
+      if del &gt; 1e-5: beta &lt;- beta + phi * F^{-1} U               # = beta + Iinv U, eq. (3.7)
+      iter &lt;- iter + 1
+      if iter == 50:
+          if del &gt; 1e-5: label &lt;- "maximum number of iterations consumed"
+          warn(label);  break                                    # warns "converged" if del &lt;= tol
+      if del &lt;= 1e-5: break
+
+  if label != "converged":
+      return beta, label, iter, covb = list(C1 = NA_pxp, C2 = NA_pxp, C3 = NA_pxp)
+
+  # FW sandwiches at the final beta (Route B)
+  mu, w, F, L as at the final beta;  e &lt;- y - mu
+  for each row j: f_j &lt;- w_j x_j x_j'   (p x p),   s_j &lt;- e_j x_j   (p)
+  for C in (C1, C2, C3):
+      meat &lt;- 0_{p x p}
+      for each cluster i of C:
+          F_i &lt;- sum_{j in i} f_j;  g_i &lt;- sum_{j in i} s_j
+          K_i &lt;- L^{-1} F_i L^{-T};  (kappa, Psi) &lt;- symmetric eigen(K_i)
+          if max(kappa) &gt;= 1 - delta_i:
+              compute A_i, B_i literally: H_i &lt;- W_i X_i F^{-1} X_i';  B_i &lt;- ginv(I - H_i);  A_i &lt;- sqrtmat(B_i)
+              a_i &lt;- X_i' A_i e_i;  b_i &lt;- X_i' B_i e_i
+          else:
+              q &lt;- Psi' L^{-1} g_i
+              a_i &lt;- g_i + F_i L^{-T} Psi diag(phi_half(kappa)) q    # phi_half(k) = 1/(sqrt(1-k)(1+sqrt(1-k)))
+              b_i &lt;- g_i + F_i L^{-T} Psi diag(1 / (1 - kappa)) q    # equivalently F (F - F_i)^{-1} g_i
+          meat &lt;- meat + (a_i a_i' + b_i b_i') / 2
+      covb[C] &lt;- F^{-1} meat F^{-1}
+
+  return beta, label, iter, phi, covb</code></pre>
+<p><code>fit_lspim()</code> would then use <code>V_raw &lt;- covb$C1 + covb$C2 - covb$C3</code>, <code>beta</code> directly (instead of the column mean of three identical vectors; whether to keep <code>colMeans</code> for bitwise identity is a detail), and <code>converged &lt;- label == "converged"</code>. The per-cluster sums <span class="math inline">\(F_i\)</span> and <span class="math inline">\(g_i\)</span> can be accumulated for all clusters at once with a grouped sum over rows (<code>rowsum()</code> on the <span class="math inline">\(N \times p\)</span> matrix of <span class="math inline">\(e_j x_j\)</span> and on the <span class="math inline">\(N \times p^2\)</span> matrix of the vectorised <span class="math inline">\(w_j x_j x_j^\top\)</span>; with the current design only the <span class="math inline">\(p\)</span> diagonal entries are non-zero, see Remark 5.7).</p>
+<hr>
+</section>
+<section id="verification-checklist" class="level2">
+<h2 class="anchored" data-anchor-id="verification-checklist">11. Verification checklist</h2>
+<p>For a future implementation, before it replaces the three <code>geessbin</code> calls:</p>
+<ol type="1">
+<li><strong>Coefficients.</strong> <span class="math inline">\(\hat\beta\)</span> equal to each of <code>coef(mod1)</code>, <code>coef(mod2)</code>, <code>coef(mod3)</code> within <span class="math inline">\(10^{-8}\)</span> (absolute, or relative for large coefficients) at several <span class="math inline">\(n\)</span> (for example 10, 20, 50 and the largest <span class="math inline">\(n\)</span> at which <code>geessbin</code> is still run), with and without dropout, with linear and log time trends.</li>
+<li><strong>Covariances.</strong> Each of the three <span class="math inline">\(\mathrm{covb}_C\)</span> equal to the corresponding <code>mod_k$covb</code> within relative <span class="math inline">\(10^{-8}\)</span> (max absolute difference divided by max absolute entry), on the same datasets; also compare the combined <code>V_raw</code>. Compare Route B against Route A and against the diagonal form of Remark 5.7 as internal checks.</li>
+<li><strong>Convergence.</strong> The same <code>convergence</code> label and the same <code>iterations</code> as <code>geessbin</code>, and the same <code>scale</code> (<span class="math inline">\(\hat\phi\)</span>). Report iteration-count mismatches separately (6.3, item 3).</li>
+<li><strong>Failure paths.</strong> Construct datasets that trigger: the <span class="math inline">\(\mu\)</span>-bounds label (e.g.&nbsp;a visit with a single control and a single treated subject, 9.3), the 50-iteration limit if a case can be found, an all-zero design column (9.4), and a cluster with <span class="math inline">\(\kappa_{\max} = 1\)</span> (one control subject observed at the last visit, Section 5.4; and an isolated trend column, which needs the literal fallback). Check labels, warnings, <code>NA</code> <code>covb</code>, and that <code>fit_lspim()</code> produces the same <code>fit</code>, <code>converged</code>, <code>warnings</code> and <code>error_message</code>.</li>
+<li><strong>Ties.</strong> A dataset with a tied pair (pseudo-score 0.5), and one where all pseudo-scores are equal: the same error message as <code>geessbin</code> and <code>fit = NULL</code>.</li>
+<li><strong>Test stub.</strong> <a href="../tests/testthat/test-convergence.R"><code>tests/testthat/test-convergence.R</code></a> stubs <code>fit_lspim_gee()</code> to fake non-converged fits; the in-house path needs an equivalent stub point (or the test must be adapted) so that the convergence logic stays covered.</li>
+<li><strong><code>sqrtmat</code> conditioning at large <span class="math inline">\(n\)</span>.</strong> At the largest cluster sizes used, record <span class="math inline">\(\kappa_2\)</span> of <code>eigen()</code>’s eigenvector matrix in <code>geessbin</code>’s FW step for a few clusters, to confirm that <code>geessbin</code> itself is still accurate there (5.3(iii)); if not, agreement to <span class="math inline">\(10^{-8}\)</span> cannot be expected and the comparison should be made against Route A instead.</li>
+<li><strong>Goldens.</strong> <code>tests/testthat/fixtures/compare_golden.R</code> shows zero differences (the goldens use the <code>geessbin</code> engine), and the fast test suite passes.</li>
+<li><strong>Speed and memory.</strong> Time and peak memory of <code>fit_lspim()</code> against the <code>geessbin</code> engine at the <span class="math inline">\(n\)</span> values above, and a run at an <span class="math inline">\(n\)</span> where <code>geessbin</code> runs out of memory.</li>
+</ol>
+<hr>
+</section>
+<section id="appendix-matrix-function-facts-used" class="level2">
+<h2 class="anchored" data-anchor-id="appendix-matrix-function-facts-used">12. Appendix: matrix-function facts used</h2>
+<p><strong>Fact A.1 (basis independence of primary matrix functions).</strong> Let <span class="math inline">\(B\)</span> be diagonalisable, <span class="math inline">\(B = V \operatorname{diag}(\nu) V^{-1}\)</span>, and let <span class="math inline">\(f\)</span> be defined on the eigenvalues. Then <span class="math inline">\(V \operatorname{diag}(f(\nu)) V^{-1}\)</span> does not depend on the choice of eigenbasis <span class="math inline">\(V\)</span> (nor on the order of the eigenvalues). <em>Proof.</em> Let <span class="math inline">\(p\)</span> be the Lagrange-Hermite interpolating polynomial with <span class="math inline">\(p(\nu_k) = f(\nu_k)\)</span> for the distinct eigenvalues. Then <span class="math inline">\(V \operatorname{diag}(f(\nu)) V^{-1} = V \operatorname{diag}(p(\nu)) V^{-1} = p(V \operatorname{diag}(\nu) V^{-1}) = p(B)\)</span>, which depends on <span class="math inline">\(B\)</span> only. <span class="math inline">\(\square\)</span></p>
+<p><strong>Fact A.2 (principal square root).</strong> A matrix <span class="math inline">\(B\)</span> with no eigenvalues on the closed negative real axis has a unique square root <span class="math inline">\(X\)</span> (<span class="math inline">\(X^2 = B\)</span>) all of whose eigenvalues have positive real part, the principal square root (Higham, <em>Functions of Matrices</em>, 2008, Thm. 1.29). If <span class="math inline">\(B\)</span> is diagonalisable with positive eigenvalues, it is <span class="math inline">\(V \operatorname{diag}(\sqrt{\nu}) V^{-1}\)</span> (by A.1, for any eigenbasis): this matrix squares to <span class="math inline">\(B\)</span> and has eigenvalues <span class="math inline">\(\sqrt{\nu_k} &gt; 0\)</span>. For <span class="math inline">\(B = T(I - S)^{-1}T^{-1}\)</span> with <span class="math inline">\(S\)</span> symmetric, <span class="math inline">\(0 \preceq S \prec I\)</span>, it is <span class="math inline">\(T (I - S)^{-1/2} T^{-1}\)</span>, where <span class="math inline">\((I - S)^{-1/2}\)</span> is the symmetric positive definite root.</p>
+<p><strong>Fact A.3 (singular values under a diagonal similarity).</strong> For invertible <span class="math inline">\(T\)</span> and any <span class="math inline">\(A\)</span>, <span class="math inline">\(\sigma_{\min}(T A T^{-1}) \ge \sigma_{\min}(A) / \kappa_2(T)\)</span>, since <span class="math inline">\(\lVert (TAT^{-1})^{-1}\rVert_2 \le \lVert T\rVert_2 \lVert A^{-1}\rVert_2 \lVert T^{-1}\rVert_2\)</span>. For <span class="math inline">\(A = I - S_i\)</span> symmetric, <span class="math inline">\(\sigma_{\min}(A) = 1 - \lambda_{\max}(S_i)\)</span>; with <span class="math inline">\(T = W_i^{1/2}\)</span>, <span class="math inline">\(\kappa_2(T) = \sqrt{\max w / \min w}\)</span> over the cluster. This is the bound used in 5.3(i).</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
