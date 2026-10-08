@@ -53,46 +53,175 @@ lspim_gees_converged <- function(gee_fits) {
   all(vapply(gee_fits, function(mod) identical(mod$convergence, "converged"), logical(1)))
 }
 
-# One logistic regression plus three clustered sandwich variances, for large n.
-# With an independence working correlation a binomial-logit GEE solves the ordinary
-# logistic-regression score equations, so the point estimate is the glm estimate for every
-# clustering (the three GEE estimates coincide, so no averaging is needed); only the sandwich
-# "meat" depends on the clustering. The sandwich below equals a geepack binomial GEE with
-# `std.err = "san.se"` (no small-sample or df scaling). Returns beta, the combined
-# V = V_C1 + V_C2 - V_C3 and whether glm.fit() converged.
-lspim_glm_sandwich <- function(dat_gee) {
+# In-house LSPIM engine "pgee_fw": one PGEE fit (geessbin's beta.method = "PGEE" under an
+# independence working correlation, i.e. Firth-type logistic regression with a phi-weighted
+# penalty) plus one Ford-Westgate (FW) sandwich per clustering C1, C2, C3. The fit does not
+# depend on the clustering, so it runs once on the unsorted pair data. Derivation and notation:
+# supplementary_material/lspim-pgee-fw-in-house.md (eq. (3.5)-(3.7), Prop. 5.6, Section 10).
+# `stop_rule = "geessbin_score"` reproduces geessbin's max|U| <= 1e-5 and is meant for
+# equivalence tests only. Kept as a separate top-level function so tests can stub it.
+fit_lspim_pgee_fw <- function(dat_gee, stop_rule = c("relative_step", "geessbin_score")) {
+  stop_rule <- match.arg(stop_rule)
+  max_iter <- 50L
   # Same columns, in the same order, as the GEE formula `y ~ . - 1 - C1 - C2 - C3`.
-  X <- as.matrix(dat_gee[, setdiff(names(dat_gee), c("y", "C1", "C2", "C3")), drop = FALSE])
-  # Pseudo-scores of 0.5 are not integer successes; glm's warning is expected.
-  fit <- withCallingHandlers(
-    stats::glm.fit(X, dat_gee$y, family = stats::binomial()),
-    warning = function(w) {
-      if (identical(conditionMessage(w), "non-integer #successes in a binomial glm!")) {
-        invokeRestart("muffleWarning")
-      }
+  design_cols <- setdiff(names(dat_gee), c("y", "C1", "C2", "C3"))
+  X <- as.matrix(dat_gee[, design_cols, drop = FALSE])
+  storage.mode(X) <- "double"
+  y <- dat_gee$y
+  N <- nrow(X)
+  p <- ncol(X)
+  if (!is.numeric(y) || anyNA(y) || !all(y %in% c(0, 0.5, 1))) {
+    stop("LSPIM: pseudo-scores must be numeric and take values in {0, 0.5, 1}.")
+  }
+  zero_cols <- design_cols[colSums(X != 0) == 0L]
+  if (length(zero_cols) > 0L) {
+    stop(
+      "LSPIM: design column(s) ", paste(zero_cols, collapse = ", "),
+      " are all zero (no comparable pairs)."
+    )
+  }
+  if (N <= p) {
+    stop("LSPIM: needs more pairs (", N, ") than parameters (", p, ").")
+  }
+
+  # Quantities at beta: R_inv with F^{-1} = R_inv R_inv' (F = R'R, chol), leverages h.
+  # R_inv is NULL when F is numerically singular (weights underflow at extreme fitted values).
+  at_beta <- function(beta) {
+    mu <- stats::plogis(drop(X %*% beta))
+    w <- mu * (1 - mu)
+    R_F <- tryCatch(chol(crossprod(X * sqrt(w))), error = function(e) NULL)
+    if (is.null(R_F)) {
+      return(list(mu = mu, w = w, R_inv = NULL))
     }
+    R_inv <- backsolve(R_F, diag(p))
+    h <- w * rowSums((X %*% R_inv)^2)
+    list(mu = mu, w = w, R_inv = R_inv, h = h)
+  }
+  stop_if_singular <- function(s) {
+    if (is.null(s$R_inv)) {
+      stop("LSPIM: information matrix is numerically singular at the current coefficients.")
+    }
+  }
+  # Penalised score in geessbin's scaling (eq. (3.5)) and the Fisher-scoring step (3.7).
+  score_step <- function(s, phi) {
+    U <- drop(crossprod(X, y - s$mu + phi * s$h * (0.5 - s$mu))) / phi
+    step <- phi * drop(s$R_inv %*% crossprod(s$R_inv, U))
+    list(U = U, step = step)
+  }
+  is_stopped <- function(us, beta) {
+    if (stop_rule == "geessbin_score") {
+      max(abs(us$U)) <= 1e-5
+    } else {
+      max(abs(us$step) / (abs(beta) + 0.1)) <= 1e-8
+    }
+  }
+
+  # Firth start value (phi = 1) from beta = 0; running out of iterations is silent. If F becomes
+  # singular the start loop ends there and the main loop's bounds check reports it.
+  beta <- numeric(p)
+  for (it in seq_len(max_iter)) {
+    s <- at_beta(beta)
+    if (is.null(s$R_inv)) break
+    us <- score_step(s, phi = 1)
+    if (is_stopped(us, beta)) break
+    beta <- beta + us$step
+  }
+
+  # Main PGEE loop, phi recomputed at every iteration.
+  converged <- FALSE
+  reason <- "maximum number of iterations reached"
+  iterations <- 0L
+  phi <- NA_real_
+  for (it in seq_len(max_iter)) {
+    s <- at_beta(beta)
+    if (min(s$mu) < 1e-4 || max(s$mu) > 0.9999) {
+      reason <- "fitted probabilities numerically 0 or 1 occurred"
+      break
+    }
+    stop_if_singular(s)
+    phi <- sum((y - s$mu)^2 / s$w) / (N - p)
+    if (!is.finite(phi) || phi <= 0) {
+      stop("LSPIM: Pearson scale parameter is zero; the pseudo-scores are fitted exactly (e.g. all pairs tied).")
+    }
+    us <- score_step(s, phi)
+    iterations <- it
+    if (is_stopped(us, beta)) {
+      converged <- TRUE
+      break
+    }
+    beta <- beta + us$step
+  }
+  if (!converged) {
+    warning("LSPIM PGEE did not converge: ", reason, ".")
+  }
+
+  # FW sandwiches at the final beta (Route B, note Prop. 5.6).
+  s <- at_beta(beta)
+  stop_if_singular(s)
+  e <- y - s$mu
+  F_inv <- tcrossprod(s$R_inv)
+  # Row j of XX is vec(x_j x_j'); w_j vec(x_j x_j') summed per cluster gives vec(F_i).
+  XX <- X[, rep(seq_len(p), times = p), drop = FALSE] * X[, rep(seq_len(p), each = p), drop = FALSE]
+  WXX <- XX * s$w
+  Xe <- X * e
+  # vec(L^{-1} F_i L^{-T}) = (R_inv' %x% R_inv') vec(F_i), with L^{-1} = R_inv'.
+  K_map <- t(kronecker(t(s$R_inv), t(s$R_inv)))
+  phi_half <- function(k) 1 / (sqrt(1 - k) * (1 + sqrt(1 - k)))
+  fw_covb <- function(clustering) {
+    cl <- dat_gee[[clustering]]
+    grp <- match(cl, unique(cl))
+    F_cl <- rowsum(WXX, grp, reorder = FALSE)
+    g_cl <- rowsum(Xe, grp, reorder = FALSE)
+    K_cl <- F_cl %*% K_map
+    w_ratio <- vapply(split(s$w, grp), function(wi) max(wi) / min(wi), numeric(1))
+    meat <- matrix(0, p, p)
+    for (i in seq_len(nrow(F_cl))) {
+      ee <- eigen(matrix(K_cl[i, ], p, p), symmetric = TRUE)
+      kappa <- pmax(ee$values, 0)
+      if (kappa[1L] >= 1 - 1e-6 * max(1, w_ratio[[i]])) {
+        stop(
+          "LSPIM: FW correction undefined, a cluster has leverage 1 for some parameter ",
+          "(clustering ", clustering, ")."
+        )
+      }
+      F_i <- matrix(F_cl[i, ], p, p)
+      g_i <- g_cl[i, ]
+      M <- F_i %*% s$R_inv %*% ee$vectors
+      q <- drop(crossprod(ee$vectors, crossprod(s$R_inv, g_i)))
+      a_i <- g_i + drop(M %*% (phi_half(kappa) * q))
+      b_i <- g_i + drop(M %*% (q / (1 - kappa)))
+      meat <- meat + (tcrossprod(a_i) + tcrossprod(b_i)) / 2
+    }
+    covb <- F_inv %*% meat %*% F_inv
+    dimnames(covb) <- list(design_cols, design_cols)
+    covb
+  }
+  covb <- list(C1 = fw_covb("C1"), C2 = fw_covb("C2"), C3 = fw_covb("C3"))
+
+  names(beta) <- design_cols
+  list(
+    beta = beta,
+    covb = covb,
+    V_raw = covb$C1 + covb$C2 - covb$C3,
+    phi = phi,
+    iterations = iterations,
+    converged = converged,
+    convergence_reason = if (converged) NA_character_ else reason
   )
-  beta <- fit$coefficients
-  mu <- fit$fitted.values
-  bread <- solve(crossprod(X * sqrt(mu * (1 - mu))))
-  scores <- X * (dat_gee$y - mu)
-  sandwich <- function(id) bread %*% crossprod(rowsum(scores, dat_gee[[id]])) %*% bread
-  V_raw <- sandwich("C1") + sandwich("C2") - sandwich("C3")
-  dimnames(V_raw) <- list(names(beta), names(beta))
-  list(beta = beta, V_raw = V_raw, converged = isTRUE(fit$converged))
 }
 
 #' Fit the LSPIM model for one dataset.
 #'
-#' Convergence: converged = FALSE if any of the three GEE fits did not converge
-#' (engine "geessbin": `convergence` other than "converged"; engine "glm_sandwich":
-#' `glm.fit()$converged` is FALSE); replacing the combined V via nearest_psd() is only a
-#' warning.
+#' Convergence: engine "pgee_fw": converged = FALSE if the single PGEE fit stopped without
+#' meeting its stopping rule (fitted probabilities outside [1e-4, 0.9999] or 50 iterations;
+#' one warning names the reason, and the sandwiches are still computed at the last beta);
+#' engine "geessbin": converged = FALSE if any of the three GEE fits reports a `convergence`
+#' other than "converged". Replacing the combined V via nearest_psd() is only a warning.
 #'
-#' @param engine "geessbin" (three PGEE + FW GEE fits, default) or "glm_sandwich" (one logistic
-#'   regression with three clustered sandwich variances, which scales to large n).
+#' @param engine "pgee_fw" (default: one in-house PGEE fit plus three Ford-Westgate sandwiches,
+#'   see fit_lspim_pgee_fw()) or "geessbin" (three PGEE + FW GEE fits with geessbin).
 #' @return A list with fit, converged, elapsed_seconds, warnings, and error_message.
-fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich")) {
+fit_lspim <- function(dat, alpha = 0.05, engine = c("pgee_fw", "geessbin")) {
   engine <- match.arg(engine)
   if (engine == "geessbin" && !requireNamespace("geessbin", quietly = TRUE)) {
     stop("Package 'geessbin' is required for LSPIM with engine 'geessbin'.")
@@ -125,8 +254,8 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
           stop("LSPIM requires both treatment groups coded as 0 and 1.")
         }
 
-        # Row indices of dat for the left/right observation of each pair. The pair order matters:
-        # geessbin sorts stably by cluster, so it fixes the floating-point sums.
+        # Row indices of dat for the left/right observation of each pair. The pair order matters for
+        # engine "geessbin": it sorts stably by cluster, so the order fixes the floating-point sums.
         pairs_left <- list()
         pairs_right <- list()
         for (tt in times) {
@@ -177,11 +306,11 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
         dat_GEE <- data.frame(y = y, X, C1 = C1, C2 = C2)
         dat_GEE$C3 <- paste(dat_GEE$C1, dat_GEE$C2, sep = "_")
 
-        if (engine == "glm_sandwich") {
-          sw <- lspim_glm_sandwich(dat_GEE)
-          beta <- sw$beta
-          V_raw <- sw$V_raw
-          converged <- sw$converged
+        if (engine == "pgee_fw") {
+          pgee <- fit_lspim_pgee_fw(dat_GEE)
+          beta <- pgee$beta
+          V_raw <- pgee$V_raw
+          converged <- pgee$converged
         } else {
           mod1 <- fit_lspim_gee(dat_GEE, "C1")
           mod2 <- fit_lspim_gee(dat_GEE, "C2")

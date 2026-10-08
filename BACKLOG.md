@@ -61,20 +61,10 @@ see the plans in [plans/](plans/) and the git history for what was done.
   It draws per subject in a `vapply`; vectorising it must keep the draw order so the generated
   data stay bit-identical.
 
-- [ ] **[efficiency] LSPIM: fit the PGEE once and compute the three FW sandwiches in-house.**
-  `fit_lspim()` fits the same pair-level PGEE three times with geessbin, clustered by `C1`, `C2`
-  and `C3`, only to get three covariance matrices ([lspim.R](scripts/simulation/lspim.R)); at
-  n = 50 the three fits are about 95% of the LSPIM time, and geessbin's start value builds a dense
-  pairs x pairs matrix. `SE.method = "FW"` is the Ford-Westgate correction (the average of the
-  Kauermann-Carroll and Mancl-DeRouen corrections), not Fay-Graubard (`"FG"`). The derivation,
-  the equivalence proof, the geessbin behaviour to copy (labels, update rule, leverage-1 clusters)
-  and a verification checklist are in
-  [lspim-pgee-fw-in-house.md](supplementary_material/lspim-pgee-fw-in-house.md). Must keep the
-  `fit_lspim_gee()` stub point used by [test-convergence.R](tests/testthat/test-convergence.R).
-
-- [ ] **[efficiency] LSPIM: use `coef(mod1)` instead of averaging three identical coefficient sets.**
+- [ ] **[efficiency] LSPIM (engine `geessbin`): use `coef(mod1)` instead of averaging three identical coefficient sets.**
   `colMeans(rbind(coef(mod1), coef(mod2), coef(mod3)), na.rm = TRUE)` returns `coef(mod1)`, and
-  `na.rm = TRUE` would silently hide an NA from one fit.
+  `na.rm = TRUE` would silently hide an NA from one fit. The default engine `pgee_fw` fits once
+  and is not affected.
 
 ## Pipeline robustness
 
@@ -88,15 +78,26 @@ see the plans in [plans/](plans/) and the git history for what was done.
   success with no warning ([lspim.R](scripts/simulation/lspim.R)). Decide whether this should
   warn or fail.
 
-- [ ] **[robustness] LSPIM: geessbin stops on tied outcomes.**
+- [ ] **[robustness] LSPIM (engine `geessbin`): geessbin stops on tied outcomes.**
   A tie in y gives a pseudo-score of 0.5, and `geessbin()` stops unless
   `setequal(unique(y), 0:1)` ("outcome vector must be numeric and take values in {0, 1}"), so the
   replicate fails with that error message; the same check also fails when all pseudo-scores are 0
-  or all are 1. The `glm_sandwich` engine accepts 0.5 (its non-integer warning is muffled). Ties
-  are unlikely with continuous outcomes but possible after rounding. Decide whether to handle ties
-  (e.g. split the pair into two half-weighted 0/1 rows; this keeps the ordinary score and the
-  cluster sums, but geessbin has no weights argument and the PGEE penalty and FW leverages would
-  change) or document the restriction.
+  or all are 1. The default engine `pgee_fw` accepts 0.5 (all-0 or all-1 pseudo-scores end as
+  non-convergence there). Ties are unlikely with continuous outcomes but possible after rounding.
+  Decide whether to handle ties for geessbin (e.g. split the pair into two half-weighted 0/1 rows;
+  this keeps the ordinary score and the cluster sums, but geessbin has no weights argument and
+  the PGEE penalty and FW leverages would change) or document the restriction.
+
+- [ ] **[robustness] LSPIM: consider Moore-Penrose handling of leverage-1 clusters in `pgee_fw`.**
+  When a cluster has leverage 1 for some parameter, the FW correction is undefined, and
+  `fit_lspim_pgee_fw()` stops, so the replicate fails ([lspim.R](scripts/simulation/lspim.R)).
+  geessbin instead uses a Moore-Penrose inverse there
+  ([lspim-pgee-fw-in-house.md](supplementary_material/lspim-pgee-fw-in-house.md), Section 5.4).
+  This happens at small n with dropout, when all pairs informing one parameter fall in a single
+  cluster (e.g. a visit with only one subject left in an arm). Note that geessbin's result equals
+  the in-house formula with the leverage-1 terms set to 0 only for an isolated `trt_visit`
+  parameter, not in general for the trend parameters (note, Proposition 5.4). Decide whether to
+  copy geessbin's behaviour or keep the error.
 
 ## Code structure
 

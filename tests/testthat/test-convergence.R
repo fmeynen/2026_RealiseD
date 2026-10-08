@@ -1,9 +1,9 @@
 # test-convergence.R
 # Covers the per-method `converged` definitions: lme4 optimizer code and
 # convergence-check messages (classical_ml), the reweighting loop hitting
-# max_iterations (reweighting), always-converged MI, and all three GEEs
-# converging (LSPIM). Warnings such as the D_tilde or nearest_psd repairs do
-# not affect `converged`.
+# max_iterations (reweighting), always-converged MI, and the PGEE fit (LSPIM
+# engine pgee_fw) or all three GEEs (engine geessbin) converging. Warnings such
+# as the D_tilde or nearest_psd repairs do not affect `converged`.
 
 build_convergence_data <- function(n = 20, n_measures = 6, seed_base = 42) {
   sc <- build_scenario_grid(
@@ -247,6 +247,19 @@ build_lspim_data <- function() {
   simulate_scenario(sc[1, , drop = FALSE], B = 1)
 }
 
+# build_lspim_data() has a leverage-1 cluster, which engine "pgee_fw" rejects; this complete
+# dataset fits under "pgee_fw" and needs the nearest_psd repair of V.
+build_lspim_complete_data <- function() {
+  sc <- build_scenario_grid(
+    n_values = 6,
+    n_measures = 4,
+    beta2_values = 0.3,
+    dropout_mechanism = "none",
+    seed_base = 1
+  )
+  simulate_scenario(sc[1, , drop = FALSE], B = 1)
+}
+
 test_that("lspim_gees_converged() requires every GEE to report 'converged'", {
   ok <- list(convergence = "converged")
   expect_true(lspim_gees_converged(list(ok, ok, ok)))
@@ -256,7 +269,7 @@ test_that("lspim_gees_converged() requires every GEE to report 'converged'", {
   expect_false(lspim_gees_converged(list(ok, ok, list(convergence = "convergence failure"))))
 })
 
-test_that("LSPIM row is not converged when one GEE hits its iteration limit", {
+test_that("LSPIM geessbin row is not converged when one GEE hits its iteration limit", {
   # Not a package, so stub fit_lspim_gee in the global environment (see
   # test-lspim-config.R) and restore it on exit.
   original_fit_lspim_gee <- fit_lspim_gee
@@ -273,17 +286,51 @@ test_that("LSPIM row is not converged when one GEE hits its iteration limit", {
     envir = globalenv()
   )
 
-  row <- add_convergence_status(analyze_lspim(build_lspim_data()))
+  row <- add_convergence_status(analyze_lspim(build_lspim_data(), engine = "geessbin"))
 
   expect_identical(row$status, "success")
   expect_false(row$converged)
   expect_identical(row$convergence_status, "not_converged")
 })
 
-test_that("LSPIM nearest_psd repair of V is a warning, not non-convergence", {
+test_that("LSPIM geessbin nearest_psd repair of V is a warning, not non-convergence", {
   # On this dataset the combined V is not PSD, so nearest_psd() is applied.
-  row <- add_convergence_status(analyze_lspim(build_lspim_data()))
+  row <- add_convergence_status(analyze_lspim(build_lspim_data(), engine = "geessbin"))
 
+  expect_identical(row$status, "success")
+  expect_true(row$converged)
+  expect_match(row$warning_message, "nearest PSD matrix")
+  expect_identical(row$convergence_status, "converged_warning")
+})
+
+test_that("LSPIM pgee_fw row is not converged when the PGEE fit does not converge", {
+  # Stub fit_lspim_pgee_fw in the global environment, as fit_lspim_gee above.
+  original_fit_lspim_pgee_fw <- fit_lspim_pgee_fw
+  withr::defer(assign("fit_lspim_pgee_fw", original_fit_lspim_pgee_fw, envir = globalenv()))
+  assign(
+    "fit_lspim_pgee_fw",
+    function(dat_gee, ...) {
+      fit <- original_fit_lspim_pgee_fw(dat_gee, ...)
+      fit$converged <- FALSE
+      fit$convergence_reason <- "maximum number of iterations reached"
+      fit
+    },
+    envir = globalenv()
+  )
+
+  row <- add_convergence_status(analyze_lspim(build_lspim_complete_data()))
+
+  expect_identical(row$engine, "pgee_fw")
+  expect_identical(row$status, "success")
+  expect_false(row$converged)
+  expect_identical(row$convergence_status, "not_converged")
+})
+
+test_that("LSPIM pgee_fw nearest_psd repair of V is a warning, not non-convergence", {
+  # On this dataset the combined V is not PSD, so nearest_psd() is applied.
+  row <- add_convergence_status(analyze_lspim(build_lspim_complete_data()))
+
+  expect_identical(row$engine, "pgee_fw")
   expect_identical(row$status, "success")
   expect_true(row$converged)
   expect_match(row$warning_message, "nearest PSD matrix")

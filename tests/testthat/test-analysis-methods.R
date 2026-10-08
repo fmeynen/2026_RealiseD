@@ -232,7 +232,10 @@ test_that("LSPIM rows keep df_beta3 NA", {
   scenario <- fast_classical_ml_scenario()
   dat <- simulate_scenario(scenario[1, , drop = FALSE], B = 1)
 
-  expect_true(is.na(analyze_lspim(dat, engine = "glm_sandwich")$df_beta3))
+  row <- analyze_lspim(dat)
+
+  expect_identical(row$status, "success")
+  expect_true(is.na(row$df_beta3))
 })
 
 test_that("parametric failure rows keep the interaction columns NA", {
