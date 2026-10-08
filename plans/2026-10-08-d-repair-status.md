@@ -87,3 +87,18 @@ Ground rules:
 
 4. **Close-out.** Full test suite (fast), record implementation status at the end of this plan,
    draft the PR description.
+
+## Implementation status (2026-10-08)
+
+All four items are done on `fix/d-repair-status`:
+
+- `140d7d4` item 1: `d_repaired` flag and one warning after the fit, for the returned D only.
+  Golden regenerated after an allowlisted diff: one reweighting replicate (scenario 2, sim 2)
+  whose only repair was in an earlier pass went from `converged_warning` to `converged_ok`
+  (`warning_message` to NA; aggregation `prop_converged_ok` 0 to 0.5, `prop_converged_warning`
+  0.5 to 0). Nothing else changed.
+- `557789c` item 2: singular via `d_repaired` OR the eigenvalue check (reweighting and MI), with
+  tests for an earlier-pass-only repair and for `epsilon_D = 1e-3`. No golden change.
+- `1d87062` item 3: README and the `update_261007.qmd` status table (qmd not re-rendered).
+- Fast suite: 773 expectations, 14 failed, all in `test-run-all-grid.R`. These fail on `main`
+  too (the log/crossing scenario grid) and are unrelated to this plan. Slow tests not run.
