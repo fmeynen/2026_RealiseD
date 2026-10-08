@@ -60,8 +60,16 @@ lspim_gees_converged <- function(gee_fits) {
 # supplementary_material/lspim-pgee-fw-in-house.md (eq. (3.5)-(3.7), Prop. 5.6, Section 10).
 # `stop_rule = "geessbin_score"` reproduces geessbin's max|U| <= 1e-5 and is meant for
 # equivalence tests only. Kept as a separate top-level function so tests can stub it.
-fit_lspim_pgee_fw <- function(dat_gee, stop_rule = c("relative_step", "geessbin_score")) {
+# The sandwich has two paths with the same result. When every row of the design matrix has exactly
+# one non-zero entry (the LSPIM design), F and every cluster's F_i are diagonal and the FW
+# corrections are elementwise (note Remark 5.7 and Section 8.1): the "diagonal" path, which needs
+# only N x p matrices. Otherwise the "general" path builds N x p^2 matrices and takes one eigen()
+# per cluster (note Prop. 5.6). `sandwich = "general"` forces the general path and is meant for
+# equivalence tests only. The path used is returned as `sandwich_path`.
+fit_lspim_pgee_fw <- function(dat_gee, stop_rule = c("relative_step", "geessbin_score"),
+                              sandwich = c("auto", "general")) {
   stop_rule <- match.arg(stop_rule)
+  sandwich <- match.arg(sandwich)
   max_iter <- 50L
   # Same columns, in the same order, as the GEE formula `y ~ . - 1 - C1 - C2 - C3`.
   design_cols <- setdiff(names(dat_gee), c("y", "C1", "C2", "C3"))
@@ -159,15 +167,21 @@ fit_lspim_pgee_fw <- function(dat_gee, stop_rule = c("relative_step", "geessbin_
   s <- at_beta(beta)
   stop_if_singular(s)
   e <- y - s$mu
-  F_inv <- tcrossprod(s$R_inv)
-  # Row j of XX is vec(x_j x_j'); w_j vec(x_j x_j') summed per cluster gives vec(F_i).
-  XX <- X[, rep(seq_len(p), times = p), drop = FALSE] * X[, rep(seq_len(p), each = p), drop = FALSE]
-  WXX <- XX * s$w
   Xe <- X * e
-  # vec(L^{-1} F_i L^{-T}) = (R_inv' %x% R_inv') vec(F_i), with L^{-1} = R_inv'.
-  K_map <- t(kronecker(t(s$R_inv), t(s$R_inv)))
-  phi_half <- function(k) 1 / (sqrt(1 - k) * (1 + sqrt(1 - k)))
-  fw_covb <- function(clustering) {
+  sandwich_path <- if (sandwich == "auto" && all(rowSums(X != 0) == 1L)) "diagonal" else "general"
+  if (sandwich_path == "general") {
+    F_inv <- tcrossprod(s$R_inv)
+    # Row j of XX is vec(x_j x_j'); w_j vec(x_j x_j') summed per cluster gives vec(F_i).
+    XX <- X[, rep(seq_len(p), times = p), drop = FALSE] * X[, rep(seq_len(p), each = p), drop = FALSE]
+    WXX <- XX * s$w
+    # vec(L^{-1} F_i L^{-T}) = (R_inv' %x% R_inv') vec(F_i), with L^{-1} = R_inv'.
+    K_map <- t(kronecker(t(s$R_inv), t(s$R_inv)))
+    phi_half <- function(k) 1 / (sqrt(1 - k) * (1 + sqrt(1 - k)))
+  } else {
+    XXw <- X^2 * s$w
+    F_diag <- colSums(XXw)
+  }
+  fw_covb_general <- function(clustering) {
     cl <- dat_gee[[clustering]]
     grp <- match(cl, unique(cl))
     F_cl <- rowsum(WXX, grp, reorder = FALSE)
@@ -196,6 +210,32 @@ fit_lspim_pgee_fw <- function(dat_gee, stop_rule = c("relative_step", "geessbin_
     dimnames(covb) <- list(design_cols, design_cols)
     covb
   }
+  # Diagonal F and F_i: kappa_ik = F_i[k, k] / F[k, k] and the FW corrections are elementwise.
+  fw_covb_diagonal <- function(clustering) {
+    cl <- dat_gee[[clustering]]
+    grp <- match(cl, unique(cl))
+    F_cl <- rowsum(XXw, grp, reorder = FALSE)
+    g_cl <- rowsum(Xe, grp, reorder = FALSE)
+    kappa <- sweep(F_cl, 2, F_diag, "/")
+    # Per-cluster min and max of w; grp takes every value 1..K, so row i is cluster i.
+    o <- order(grp, s$w)
+    g_o <- grp[o]
+    w_min <- s$w[o][!duplicated(g_o)]
+    w_max <- s$w[o][!duplicated(g_o, fromLast = TRUE)]
+    kappa_max <- kappa[cbind(seq_len(nrow(kappa)), max.col(kappa, ties.method = "first"))]
+    if (any(kappa_max >= 1 - 1e-6 * pmax(1, w_max / w_min))) {
+      stop(
+        "LSPIM: FW correction undefined, a cluster has leverage 1 for some parameter ",
+        "(clustering ", clustering, ")."
+      )
+    }
+    A <- g_cl / sqrt(1 - kappa)
+    B <- g_cl / (1 - kappa)
+    covb <- (crossprod(A) + crossprod(B)) / 2 / tcrossprod(F_diag)
+    dimnames(covb) <- list(design_cols, design_cols)
+    covb
+  }
+  fw_covb <- if (sandwich_path == "diagonal") fw_covb_diagonal else fw_covb_general
   covb <- list(C1 = fw_covb("C1"), C2 = fw_covb("C2"), C3 = fw_covb("C3"))
 
   names(beta) <- design_cols
@@ -206,7 +246,8 @@ fit_lspim_pgee_fw <- function(dat_gee, stop_rule = c("relative_step", "geessbin_
     phi = phi,
     iterations = iterations,
     converged = converged,
-    convergence_reason = if (converged) NA_character_ else reason
+    convergence_reason = if (converged) NA_character_ else reason,
+    sandwich_path = sandwich_path
   )
 }
 
