@@ -1,9 +1,18 @@
 # LSPIM: one in-house PGEE fit and three Ford-Westgate sandwiches in place of three `geessbin` fits
 
-Status: derivation only. Nothing here is implemented. The LSPIM engine `"geessbin"` in
-[`scripts/simulation/lspim.R`](../scripts/simulation/lspim.R) still calls `geessbin::geessbin()`
-three times (`fit_lspim_gee()` with `id` = `C1`, `C2`, `C3`). This note shows that the three calls
-can be replaced, without changing the result beyond floating-point rounding, by
+Status: implemented as the LSPIM engine `"pgee_fw"` (the default; config key `lspim_engine`),
+`fit_lspim_pgee_fw()` in [`scripts/simulation/lspim.R`](../scripts/simulation/lspim.R), using the
+general sandwich of Proposition 5.6 (Route B). The engine `"geessbin"` still calls
+`geessbin::geessbin()` three times (`fit_lspim_gee()` with `id` = `C1`, `C2`, `C3`). The
+implementation deviates from geessbin on purpose in its edge-case behaviour (Sections 9 and 10
+describe geessbin's): both loops stop when `max_k |delta_k| / (|beta_k| + 0.1) <= 1e-8` instead of
+`max|U| <= 1e-5`; ties (pseudo-score 0.5) are accepted; a cluster with leverage 1 (Section 5.4)
+and an all-zero design column are errors (the replicate fails) instead of Moore-Penrose handling;
+`N <= p` and a numerically singular information matrix are errors; and non-convergence (fitted
+probabilities outside [1e-4, 0.9999] or 50 iterations) gives one warning and keeps the fit, with
+`converged = FALSE`. With the internal argument `stop_rule = "geessbin_score"` it reproduces
+geessbin to floating-point rounding. The derivation below is unchanged: it shows that the three
+calls can be replaced, without changing the result beyond floating-point rounding, by
 
 1. **one** PGEE fit (Firth-type penalised logistic regression with a Pearson scale parameter),
    which does not involve any clustering at all, and
