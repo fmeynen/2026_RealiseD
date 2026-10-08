@@ -9,7 +9,7 @@ library(miceadds)
 
 # Settings ----------------------------------------------------------------------------------------------------------
 scenarios_linear <- build_scenario_grid(
-  n_values = c(10, 20, 50, 100),
+  n_values = c(10, 20, 50, 100, 1000),
   n_measures = 12,
   beta0_values = 2.4562,
   beta1_values = 0,
@@ -25,13 +25,13 @@ scenarios_linear <- build_scenario_grid(
 # Log scenarios use f(t) = log(1 + t). beta2, d22 and d12 are rescaled by 11 / log(12) so the total rise and the
 # random-slope variance at t = 11 match the linear scenarios. In the crossing scenarios treatment starts 0.385
 # below control and ends 0.385 above it.
-scenarios_log_crossing <- build_scenario_grid(
-  n_values = c(10, 20, 50, 100),
+scenarios_log_small <- build_scenario_grid(
+  n_values = c(10, 20, 50, 100, 1000),
   n_measures = 12,
   beta0_values = 2.4562,
-  beta1_values = c(-0.22 * 11, -0.0350 * 11),
+  beta1_values = -0.0350 * 11,
   beta2_values = 0.2792 * 11 / log(12),
-  beta3_values = c(2 * 0.22 * 11 / log(12), 2 * 0.0350 * 11 / log(12)),
+  beta3_values = 2 * 0.0350 * 11 / log(12),
   d11_values = 7.3174,
   d22_values = 0.2239 * (11 / log(12))^2,
   d12_values = -0.4985 * 11 / log(12),
@@ -40,6 +40,22 @@ scenarios_log_crossing <- build_scenario_grid(
   time_trend = "log",
   seed_base = 260925
 )
+scenarios_log_large <- build_scenario_grid(
+  n_values = c(10, 20, 50, 100, 1000),
+  n_measures = 12,
+  beta0_values = 2.4562,
+  beta1_values = -0.22 * 11,
+  beta2_values = 0.2792 * 11 / log(12),
+  beta3_values = 2 * 0.22 * 11 / log(12),
+  d11_values = 7.3174,
+  d22_values = 0.2239 * (11 / log(12))^2,
+  d12_values = -0.4985 * 11 / log(12),
+  sigma2_values = 3.1508,
+  dropout_mechanism = "three_obs_minimum",
+  time_trend = "log",
+  seed_base = 260925
+)
+
 scenarios_log_null <- build_scenario_grid(
   n_values = c(10, 20, 50, 100),
   n_measures = 12,
@@ -57,7 +73,8 @@ scenarios_log_null <- build_scenario_grid(
 )
 scenarios <- bind_scenario_grids(
   scenarios_linear,
-  scenarios_log_crossing,
+  scenarios_log_small,
+  scenarios_log_large,
   scenarios_log_null
 )
 n_simulations <- 5000L
@@ -103,5 +120,3 @@ analysis_outputs <- run_requested_analyses(
 )
 
 # Scratchpad ------------------------------------------------------------------------------------------------------
-
-analysis_outputs
