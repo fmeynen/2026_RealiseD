@@ -99,3 +99,39 @@ Ground rules:
 
 7. **Close-out.** Fast test suite (the `test-run-all-grid.R` failures from `main` are known and
    unrelated), record implementation status at the end of this plan, draft the PR description.
+
+## Implementation status (2026-10-08)
+
+All seven items are done on `feature/lspim-sparse-fw`. No golden regeneration was needed.
+
+- `d8e1934` plan and note (Remark 5.7, Section 8.1).
+- `b33e4d9` item 1: diagonal path in `fit_lspim_pgee_fw()`, `sandwich` argument, `sandwich_path`.
+  Per-cluster min/max of w via `order()` + `duplicated()`, row maxima of kappa via `max.col()`;
+  no loop over clusters.
+- `cbb1294` item 2: `C3` as the integer code `(match(C1, ids) - 1) * length(ids) + match(C2, ids)`
+  (double arithmetic, no overflow), for both engines.
+- `2ea4f8d` item 3: equivalence at n = 10, 20, 50 (none / half_missing), fallback with a
+  covariate-like column (`rep_len(c(0.2, 0.5, 0.9), N)`; a `seq_len(N) / N` column hit a
+  leverage-1 error), same leverage-1 message on both paths. The geessbin equivalence test asserts
+  the diagonal path.
+- Item 4 (scratch, `verify_sparse_fw/` in the session scratchpad): 48 datasets (n = 10/20/50/100 x
+  none/half_missing/three_obs_minimum x linear/log x 2 seeds, 12 visits). 44 fit on both paths
+  (auto = diagonal), max relative difference 0 (beta), 1.3e-13 (covb), 1.0e-13 (`V_raw`); the 4
+  others (n = 10, seed 1, with dropout) stop with the same C2 leverage-1 error on both paths.
+  Time and peak memory (gc "max used", fresh process, incl. ~150 MB data baseline):
+
+  | n | dropout | N | `fit_lspim()` (diagonal) | general path (`fit_lspim_pgee_fw()`) |
+  |---|---|---|---|---|
+  | 100 | half_missing | 20,868 | 0.09 s, 164 MB | 0.35 s, 281 MB |
+  | 100 | three_obs_minimum | 23,501 | 0.11 s, 164 MB | 0.41 s, 321 MB |
+  | 1000 | half_missing | 1,828,067 | 11.8 s, 2.1 GB | not run (~11 GB) |
+  | 1000 | three_obs_minimum | 2,030,513 | 12.7 s, 2.3 GB | not run |
+
+  At n = 1000 the pair construction takes ~2.4 s of the ~12 s; converged, no warnings.
+  Estimate for the n = 1000 LSPIM part of the study (12 scenarios x 5000 replicates): ~205 h
+  sequential, ~68 h on `default_n_cores()` = 3 workers (4 physical cores), ~7 GB RAM in total.
+- Item 5: `compare_golden.R` reports no differences in results or aggregation.
+- `e266cc2` item 6: note (status, 1.4, 8.1), README LSPIM row, BACKLOG chunked-general-path item.
+- Item 7: full suite 898 tests, failing only `test-run-all-grid.R` (17 expectations in 5 tests,
+  known from `main`). A lint failure (header line length in test-lspim-pgee-fw.R) was fixed in the
+  close-out commit.

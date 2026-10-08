@@ -104,7 +104,7 @@ test_that("fit_lspim engines pgee_fw and geessbin agree on V and Holm_p", {
   }
 })
 
-# Sandwich paths ---------------------------------------------------------------------------------------------------------
+# Sandwich paths -------------------------------------------------------------------------------------------------------
 
 test_that("the diagonal and general FW sandwich paths agree on beta, covb and V_raw", {
   for (n in c(10, 20, 50)) {
