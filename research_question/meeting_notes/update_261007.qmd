@@ -188,8 +188,8 @@ Each replicate gets exactly one of five convergence statuses, checked in this or
 |-------|-----------------------------------------|
 | Error | The fit failed (no estimates); excluded from all metrics. |
 | Not converged | Fit returned estimates, but the method's convergence criterion (table above) was not met. |
-| Converged (singular) | Converged, but the random-effects covariance is at the boundary (smallest eigenvalue $\leq 10^{-6}$, or $D$ repaired to positive definite). |
-| Converged (warning) | Converged and not singular, but a warning was raised (e.g. lme4's boundary message at its looser tolerance; for reweighting a $D$ repair or NaNs in an intermediate iteration). |
+| Converged (singular) | Converged, but the random-effects covariance is at the boundary (smallest eigenvalue $\leq 10^{-6}$, or the final $D$ repaired to positive definite). |
+| Converged (warning) | Converged and not singular, but a warning was raised (e.g. lme4's boundary message at its looser tolerance; for reweighting NaNs in an intermediate iteration). |
 | Converged | Converged, not singular, no warning. |
 
 : Convergence statuses. {tbl-colwidths="[24,76]"}
