@@ -21,9 +21,11 @@ make_deviation_from_mean_l <- function(beta_names, treatment_terms) {
   }
   L
 }
-nearest_psd <- function(V, eps = 1e-8) {
+nearest_psd <- function(V, eps = 1e-8, eig = NULL) {
+  # `eig`: optional eigen(V, symmetric = TRUE) of the already symmetrised V, to skip the
+  # recomputation.
   V <- (V + t(V)) / 2
-  ee <- eigen(V, symmetric = TRUE)
+  ee <- if (is.null(eig)) eigen(V, symmetric = TRUE) else eig
   vals <- pmax(ee$values, eps)
   out <- ee$vectors %*% diag(vals, length(vals)) %*% t(ee$vectors)
   dimnames(out) <- dimnames(V)
@@ -123,34 +125,41 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
           stop("LSPIM requires both treatment groups coded as 0 and 1.")
         }
 
-        all_pairs <- list()
+        # Row indices of dat for the left/right observation of each pair. The pair order matters:
+        # geessbin sorts stably by cluster, so it fixes the floating-point sums.
+        pairs_left <- list()
+        pairs_right <- list()
         for (tt in times) {
           id_fac <- which(dat$treatment == 0 & dat$time_value == tt)
           id_nonfac <- which(dat$treatment == 1 & dat$time_value == tt)
           if (length(id_fac) > 0L && length(id_nonfac) > 0L) {
-            tmp <- expand.grid(Var1 = id_fac, Var2 = id_nonfac)
-            tmp$pair_type <- "between"
-            all_pairs[[length(all_pairs) + 1L]] <- tmp
+            pairs_left[[length(pairs_left) + 1L]] <- rep(id_fac, times = length(id_nonfac))
+            pairs_right[[length(pairs_right) + 1L]] <- rep(id_nonfac, each = length(id_fac))
           }
         }
 
-        for (ii in sort(unique(dat$subject_id))) {
-          idx <- which(dat$subject_id == ii)
-          idx <- idx[order(dat$time_value[idx])]
+        # dat is sorted by subject and time, so each subject's rows are already in time order.
+        for (idx in split(seq_len(nrow(dat)), dat$subject_id)) {
           if (length(idx) >= 2L) {
-            tmp <- t(utils::combn(idx, 2L))
-            tmp <- data.frame(Var1 = tmp[, 1L], Var2 = tmp[, 2L])
-            tmp$pair_type <- "within"
-            all_pairs[[length(all_pairs) + 1L]] <- tmp
+            tmp <- utils::combn(idx, 2L)
+            pairs_left[[length(pairs_left) + 1L]] <- tmp[1L, ]
+            pairs_right[[length(pairs_right) + 1L]] <- tmp[2L, ]
           }
         }
-        if (length(all_pairs) == 0L) {
+        if (length(pairs_left) == 0L) {
           stop("LSPIM could not construct any comparable observation pairs.")
         }
 
-        compare <- dplyr::bind_rows(all_pairs)
-        L <- dat[compare$Var1, , drop = FALSE]
-        R <- dat[compare$Var2, , drop = FALSE]
+        left <- unlist(pairs_left)
+        right <- unlist(pairs_right)
+        L <- list(
+          subject_id = dat$subject_id[left], treatment = dat$treatment[left],
+          time_value = dat$time_value[left], y = dat$y[left]
+        )
+        R <- list(
+          subject_id = dat$subject_id[right], treatment = dat$treatment[right],
+          time_value = dat$time_value[right], y = dat$y[right]
+        )
         y <- pseudo_score(L$y, R$y, higher_is_better = TRUE)
 
         X <- data.frame(
@@ -163,8 +172,8 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
         }
 
         treatment_terms <- grep("^trt_visit", names(X), value = TRUE)
-        C1 <- as.vector(dat[compare$Var1, "subject_id"])
-        C2 <- as.vector(dat[compare$Var2, "subject_id"])
+        C1 <- as.vector(L$subject_id)
+        C2 <- as.vector(R$subject_id)
         dat_GEE <- data.frame(y = y, X, C1 = C1, C2 = C2)
         dat_GEE$C3 <- paste(dat_GEE$C1, dat_GEE$C2, sep = "_")
 
@@ -186,13 +195,13 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("geessbin", "glm_sandwich"))
         }
         V_for_inference <- V_raw
         V_eig_check <- (V_raw + t(V_raw)) / 2
-        if (min(eigen(V_eig_check, symmetric = TRUE, only.values = TRUE)$values) < -1e-8 ||
-              any(diag(V_raw) <= 0)) {
+        V_eig <- eigen(V_eig_check, symmetric = TRUE)
+        if (min(V_eig$values) < -1e-8 || any(diag(V_raw) <= 0)) {
           warning(
             "Combined V has negative eigenvalues or non-positive variances; ",
             "using nearest PSD matrix for numerical inference."
           )
-          V_for_inference <- nearest_psd(V_raw)
+          V_for_inference <- nearest_psd(V_raw, eig = V_eig)
         }
 
         L_const <- make_deviation_from_mean_l(names(beta), treatment_terms)
