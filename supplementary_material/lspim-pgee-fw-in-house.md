@@ -13,9 +13,12 @@ probabilities outside [1e-4, 0.9999] or 50 iterations) gives one warning and kee
 `converged = FALSE`. With the internal argument `stop_rule = "geessbin_score"` it reproduces
 geessbin to floating-point rounding. The general sandwich builds an $N \times p^2$ matrix that
 does not fit in memory at $n = 1000$; Section 8.1 explains why, and how the diagonal form of
-Remark 5.7 avoids it. That diagonal path is planned in
-[`plans/2026-10-08-lspim-sparse-fw.md`](../plans/2026-10-08-lspim-sparse-fw.md), with the general
-path kept as the fallback for designs where a row has more than one non-zero entry. The derivation
+Remark 5.7 avoids it. That diagonal path is implemented (internal argument `sandwich = "auto"`,
+result element `sandwich_path`; plan in
+[`plans/2026-10-08-lspim-sparse-fw.md`](../plans/2026-10-08-lspim-sparse-fw.md)) and is used
+automatically when every row of the design matrix has exactly one non-zero entry, as in the current
+LSPIM design. The general path is the silent fallback for designs where a row has more than one
+non-zero entry. The derivation
 below is otherwise unchanged: it shows that the three
 calls can be replaced, without changing the result beyond floating-point rounding, by
 
@@ -118,10 +121,14 @@ structure gives.
 
 - $C_1$: the left subject, $s_L$ (`C1 = subject_id[Var1]`);
 - $C_2$: the right subject, $s_R$ (`C2 = subject_id[Var2]`);
-- $C_3$: the ordered subject pair, the string `paste(C1, C2, sep = "_")`.
+- $C_3$: the ordered subject pair, the integer code
+  `(match(C1, ids) - 1) * length(ids) + match(C2, ids)` with `ids <- unique(c(C1, C2))`, built in
+  `fit_lspim()` for both engines. (Before 2026-10-08 it was the string `paste(C1, C2, sep = "_")`;
+  both identify the same pairs.)
 
 (`subject_id` is a factor in the LSPIM analysis data, so `as.vector()` turns `C1` and `C2` into
-character vectors; this only affects the order in which clusters are visited, see Section 6.3.)
+character vectors; the cluster labels and their order only affect the order in which clusters are
+visited, hence rounding only, see Section 6.3.)
 
 `fit_lspim()` combines the three `geessbin` covariance matrices as
 
@@ -1016,12 +1023,14 @@ design columns. A covariate column (for example baseline) would give rows with m
 non-zero entry, and $F$, $F_i$ would no longer be diagonal. The implementation therefore checks
 `all(rowSums(X != 0) == 1)` once per fit and falls back to the general Route B form when it does
 not hold. The fallback still builds `XX`, so it keeps the $O(Np^2)$ memory and is not suitable at
-$n = 1000$; a chunked accumulation of $F_i$ would fix that if such a design is ever needed.
+$n = 1000$; a chunked accumulation of $F_i$ would fix that if such a design is ever needed (listed
+in `BACKLOG.md`).
 
 The fit itself (start loop and main PGEE loop) needs only $N \times p$ objects and the $p \times p$
-Cholesky of $F$, so it is unchanged. A smaller memory saving is in the pair construction: `C3` is a
-`paste()` of the two subject labels, about 1.7 million strings at $n = 1000$, which an integer
-code of the (left, right) subject pair replaces.
+Cholesky of $F$, so it is unchanged. A smaller memory saving is in the pair construction: `C3` is an
+integer code of the (left, right) subject pair, `(match(C1, ids) - 1) * length(ids) + match(C2, ids)`,
+instead of a `paste()` of the two subject labels, which would be about 1.7 million strings at
+$n = 1000$.
 
 ---
 
