@@ -1,7 +1,8 @@
 # test-lspim-pgee-fw.R
 # Covers the in-house LSPIM engine "pgee_fw" (fit_lspim_pgee_fw()): equivalence
 # with geessbin (PGEE + FW, independence) under geessbin's stopping rule, and
-# between the two fit_lspim() engines; ties; and the edge cases that end a
+# between the two fit_lspim() engines; the diagonal and general FW sandwich paths
+# (agreement, fallback, leverage-1); ties; and the edge cases that end a
 # replicate (leverage-1 cluster, all-zero design column, invalid pseudo-scores)
 # or mark it not converged (fitted probabilities at the bounds).
 
@@ -82,6 +83,7 @@ test_that("pgee_fw with geessbin's stopping rule matches geessbin on beta, covb 
       expect_identical(as.integer(pgee$iterations), as.integer(gee$iterations))
     }
   }
+  expect_identical(pgee$sandwich_path, "diagonal")
 })
 
 test_that("fit_lspim engines pgee_fw and geessbin agree on V and Holm_p", {
@@ -100,6 +102,57 @@ test_that("fit_lspim engines pgee_fw and geessbin agree on V and Holm_p", {
     expect_lt(max_relative_diff(pgee$fit$V, gee$fit$V), 1e-6)
     expect_lt(max(abs(pgee$fit$Holm_p - gee$fit$Holm_p)), 1e-6)
   }
+})
+
+# Sandwich paths -------------------------------------------------------------------------------------------------------
+
+test_that("the diagonal and general FW sandwich paths agree on beta, covb and V_raw", {
+  for (n in c(10, 20, 50)) {
+    for (dropout_mechanism in c("none", "half_missing")) {
+      label <- paste0("n = ", n, ", dropout ", dropout_mechanism)
+      seed_base <- if (dropout_mechanism == "none") 1 else 3
+      dat_gee <- capture_lspim_dat_gee(build_pgee_fw_data(n, dropout_mechanism, seed_base))
+
+      diagonal <- fit_lspim_pgee_fw(dat_gee, sandwich = "auto")
+      general <- fit_lspim_pgee_fw(dat_gee, sandwich = "general")
+
+      expect_identical(diagonal$sandwich_path, "diagonal", label = label)
+      expect_identical(general$sandwich_path, "general", label = label)
+      expect_lt(max(abs(diagonal$beta - general$beta)), 1e-10 * max(1, max(abs(general$beta))))
+      for (clustering in c("C1", "C2", "C3")) {
+        expect_lt(max_relative_diff(diagonal$covb[[clustering]], general$covb[[clustering]]), 1e-10)
+      }
+      expect_lt(max_relative_diff(diagonal$V_raw, general$V_raw), 1e-10)
+    }
+  }
+})
+
+test_that("pgee_fw falls back to the general sandwich when a design row has several non-zero entries", {
+  dat_gee <- capture_lspim_dat_gee(build_pgee_fw_data(20, "none", 1))
+  dat_gee$covariate <- rep_len(c(0.2, 0.5, 0.9), nrow(dat_gee))
+
+  auto <- fit_lspim_pgee_fw(dat_gee, sandwich = "auto")
+  general <- fit_lspim_pgee_fw(dat_gee, sandwich = "general")
+
+  expect_identical(auto$sandwich_path, "general")
+  expect_true(all(is.finite(auto$V_raw)))
+  expect_identical(auto, general)
+})
+
+test_that("both sandwich paths stop on a leverage-1 cluster with the same message", {
+  sc <- build_scenario_grid(
+    n_values = 6,
+    n_measures = 4,
+    beta2_values = 0.3,
+    dropout_mechanism = "half_missing",
+    seed_base = 1
+  )
+  dat <- prepare_analysis_data(simulate_scenario(sc[1, , drop = FALSE], B = 1), type = "LSPIM")
+  dat_gee <- capture_lspim_dat_gee(dat)
+  message <- "LSPIM: FW correction undefined, a cluster has leverage 1 for some parameter (clustering C1)."
+
+  expect_error(fit_lspim_pgee_fw(dat_gee), message, fixed = TRUE)
+  expect_error(fit_lspim_pgee_fw(dat_gee, sandwich = "general"), message, fixed = TRUE)
 })
 
 # Edge cases -----------------------------------------------------------------------------------------------------------
