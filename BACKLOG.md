@@ -66,6 +66,13 @@ see the plans in [plans/](plans/) and the git history for what was done.
   `na.rm = TRUE` would silently hide an NA from one fit. The default engine `pgee_fw` fits once
   and is not affected.
 
+- [ ] **[efficiency] LSPIM `pgee_fw` general sandwich path: accumulate the per-cluster F_i in chunks of rows.**
+  The general path of `fit_lspim_pgee_fw()` is used only when a design row has more than one
+  non-zero entry (for example after adding a covariate). It still builds the N x p^2 matrices `XX`
+  and `WXX`, about 11 GB at n = 1000 with 12 visits. Accumulating `rowsum()` over chunks of rows
+  would bound the memory ([lspim.R](scripts/simulation/lspim.R),
+  [lspim-pgee-fw-in-house.md](supplementary_material/lspim-pgee-fw-in-house.md), Section 8.1).
+
 ## Pipeline robustness
 
 - [ ] **[robustness] An invalid generated scenario file stops the run.**
