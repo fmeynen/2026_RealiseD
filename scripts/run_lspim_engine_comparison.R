@@ -1,7 +1,8 @@
 # Compare the two LSPIM engines on the same generated datasets:
 #   "geessbin": three PGEE + Ford-Westgate GEE fits with geessbin::geessbin() (the original method),
 #   "pgee_fw":  the in-house engine, one PGEE fit plus three Ford-Westgate sandwiches.
-# The scenarios follow scripts/run_all.R, limited to n = 10, 20, 50 and the three_obs_minimum dropout mechanism.
+# The scenarios follow scripts/run_all.R, limited to n = 10, 20, 50, the three_obs_minimum dropout mechanism
+# and the null and large effect sizes (linear beta3 = 0 and 0.22, log null and large crossing).
 # LSPIM only reports the Holm decision for the interaction (no beta estimates, SEs or p-values), so the
 # comparison is on rejection rates, convergence/failure and paired decisions.
 rm(list = ls())
@@ -21,7 +22,7 @@ scenarios_linear <- build_scenario_grid(
   beta0_values = 2.4562,
   beta1_values = 0,
   beta2_values = 0.2792,
-  beta3_values = c(0.22, 0.0350, 0),
+  beta3_values = c(0.22, 0),
   d11_values = 7.3174,
   d22_values = 0.2239,
   d12_values = -0.4985,
@@ -29,14 +30,15 @@ scenarios_linear <- build_scenario_grid(
   dropout_mechanism = dropout_mechanism,
   seed_base = 260925
 )
-# Log scenarios use f(t) = log(1 + t), rescaled as in scripts/run_all.R.
-scenarios_log_small <- build_scenario_grid(
+# Log scenarios use f(t) = log(1 + t), rescaled as in scripts/run_all.R. Only the large crossing effect and the
+# identical-arms null are run; the small effect sizes are left out to limit the geessbin run time.
+scenarios_log_large <- build_scenario_grid(
   n_values = n_values,
   n_measures = 12,
   beta0_values = 2.4562,
-  beta1_values = -0.0350 * 11,
+  beta1_values = -0.22 * 11,
   beta2_values = 0.2792 * 11 / log(12),
-  beta3_values = 2 * 0.0350 * 11 / log(12),
+  beta3_values = 2 * 0.22 * 11 / log(12),
   d11_values = 7.3174,
   d22_values = 0.2239 * (11 / log(12))^2,
   d12_values = -0.4985 * 11 / log(12),
@@ -45,17 +47,12 @@ scenarios_log_small <- build_scenario_grid(
   time_trend = "log",
   seed_base = 260925
 )
-scenarios_log_large <- scenarios_log_small
-scenarios_log_large$beta1 <- -0.22 * 11
-scenarios_log_large$beta3 <- 2 * 0.22 * 11 / log(12)
-
-scenarios_log_null <- scenarios_log_small
+scenarios_log_null <- scenarios_log_large
 scenarios_log_null$beta1 <- 0
 scenarios_log_null$beta3 <- 0
 
 scenarios <- bind_scenario_grids(
   scenarios_linear,
-  scenarios_log_small,
   scenarios_log_large,
   scenarios_log_null
 )
