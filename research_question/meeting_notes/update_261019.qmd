@@ -1,11 +1,13 @@
 ---
-title: "Update Joint Modeling 12/10"
+title: "Update Joint Modeling 19/10"
 format:
   pdf:
     papersize: a4
     geometry: margin=2cm
     fig-width: 7
     fig-height: 4
+filters:
+  - table-widths.lua
 editor: visual
 execute:
   echo: false
@@ -165,41 +167,69 @@ lambda_table <- function(df, caption) {
 }
 ```
 
+# Overview of the changes
+
+Following changes are made compared to last report:
+
+1.  Reweighting. A relatively small error in the reweighting algorithm compounded over iterations, causing the reweighting method to fail. This is fixed. Reweighting performs similar to MI + closed form
+
+2.  Power. In the previous report, the power of all methods was very low. This was not due to an error, but because the effect size (taken from toenail data) was simply too small. An additional simulation with a larger effect size was added, resulting in a total of 3 different effect sizes, called: null, small and large.
+
+3.  Updated LSPIM method. The method failed for large number of clusters (100 and 1.000). 2 new versions of the LSPIM method were implemented, by using "shortcuts":
+
+    1.  If the fitted GEE's use independent correlation structure, 100 clusters are manageable
+
+    2.  If in addition, no other covariates are fitted, 1000 clusters are manageable
+
+4.  Log time model. As a "fair" comparison between the semi-parametric LSPIM method and the other linear methods a log time model is considered. The parameters are chosen such that the treatment difference at the end equals that of the linear model and the mean profiles of the two treatment arms cross.
+
+\newpage
+
 # Overview methods
 
+4 different methods are considered & implemented:
+
+- Classical maximum likelihood
+
+- Multiple imputation first (as in Van der Elst #471) followed by applying the closed form (Florez Poveda #546)
+
+- Closed form with iterative reweighting (Florez Poveda #568)
+
+- LSPIM
+
 | Method | Configuration |
-|-------|-----------------------------------------|
+|------------------------------------|------------------------------------|
 | Classical ML | `lme4::lmer`, ML (REML = FALSE); Wald $t$ test on $\beta_3$ with $N - 2$ df |
 | MI + closed form | `mice` `2l.pmm`, 3 imputations, `maxit` = 10; closed form (CbC) per imputation, pooled with Rubin's rules; Wald $t$ test on $\beta_3$ with Barnard-Rubin df (complete-data df $N - 2$) |
 | Reweighting | Closed form, reweighted until max $\Delta\beta < 10^{-6}$, at most 30 iterations; Wald $t$ test on $\beta_3$ with $N - 2$ df |
-| LSPIM | Pseudo-score GEE model (Firth-penalised, Ford-Westgate small-sample sandwich), fitted with an improved algorithm; Holm-adjusted test that the per-visit treatment effects differ; run at every $n$ |
+| LSPIM | Pseudo-score GEE model (Firth-penalised, Ford-Westgate small-sample sandwich); Holm-adjusted test that the per-visit treatment effects differ; |
 
-: Configuration of the methods; $N$ is the number of clusters in the fit. {tbl-colwidths="[20,80]"}
+: Configuration of the methods; $N$ is the number of clusters (=patients) in the fit.
 
 | Method | "Not converged" when |
-|-------|-----------------------------------------|
+|------------------------------------|------------------------------------|
 | Classical ML | optimizer code $\neq 0$ or an lme4 convergence message (e.g. max\|grad\| $> 0.002$) |
 | MI + closed form | never; a failed fit in any imputation counts as an error |
-| Reweighting | the loop reaches 30 iterations without meeting the $\Delta\beta$ criterion |
+| Reweighting | the reweighting loop reaches 30 iterations without meeting the $\Delta\beta$ criterion |
 | LSPIM | the penalised GEE does not converge (fitted probabilities numerically 0 or 1) |
 
-: Definition of "not converged" per method. {tbl-colwidths="[20,80]"}
+: Definition of "not converged" per method.
 
 Each replicate gets exactly one of five convergence statuses, checked in this order:
 
 | Status | Meaning |
-|-------|-----------------------------------------|
+|------------------------------------|------------------------------------|
 | Error | The fit failed (no estimates); excluded from all metrics. |
 | Not converged | Fit returned estimates, but the method's convergence criterion (table above) was not met. |
 | Converged (singular) | Converged, but the random-effects covariance is at the boundary (smallest eigenvalue $\leq 10^{-6}$, or the final $D$ repaired to positive definite). |
 | Converged (warning) | Converged and not singular, but a warning was raised (e.g. lme4's boundary message at its looser tolerance; for reweighting NaNs in an intermediate iteration; for LSPIM the combined covariance $V$ repaired to the nearest positive semi-definite matrix). |
 | Converged | Converged, not singular, no warning. |
 
-: Convergence statuses. {tbl-colwidths="[24,76]"}
+: Convergence statuses.
 
--   All tests at $\alpha = 0.05$; coverage of the 95% $t$ interval for $\beta_3$.
--   All statuses except "error" are kept in all metrics.
--   LSPIM gives only a test decision, no estimate of $\beta_3$: it appears in the type I error, power, convergence and computation time results, not in MSE, coverage or fraction of missing information. Its errors and warnings are described in the appendix.
+- All tests at $\alpha = 0.05$; coverage of the 95% $t$ interval for $\beta_3$.
+- All statuses except "error" are kept in all metrics.
+- LSPIM gives only a test decision, no estimate of $\beta_3$: it appears in the type I error, power, convergence and computation time results, not in MSE or coverage. Its errors and warnings are described in the appendix.
 
 ```{r}
 #| label: failed-note
@@ -228,7 +258,7 @@ Log model, $t_j = j = 0, \dots, 11$: $$ y_{ij} = \beta_0 + \beta_1 Treatment_i +
 In both models $(b_{0i}, b_{1i})^\top \sim N(0, D)$ with $D = \begin{pmatrix} d_{11} & d_{12} \\ d_{12} & d_{22} \end{pmatrix}$ and $\varepsilon_{ij} \sim N(0, \sigma^2)$.
 
 | Effect | Symbol | Linear | Log |
-|---------------|------|-------------|--------------------------|
+|------------------|------------------|------------------|------------------|
 | Intercept | $\beta_0$ | 2.4562 | 2.4562 |
 | Treatment effect | $\beta_1$ | 0 | $-2.42$ / $-0.385$ / 0 |
 | Time effect | $\beta_2$ | 0.2792 | 1.2359 |
@@ -238,22 +268,22 @@ In both models $(b_{0i}, b_{1i})^\top \sim N(0, D)$ with $D = \begin{pmatrix} d_
 | Random effects covariance | $d_{12}$ | $-0.4985$ | $-2.2067$ |
 | Residual variance | $\sigma^2$ | 3.1508 | 3.1508 |
 
-: Data-generating parameters; a / b / c gives the values of the large, small and null effect. {tbl-colwidths="[36,10,24,30]"}
+: Data-generating parameters; a / b / c gives the values of the large, small and null effect.
 
--   Linear parameters taken from the toenail data ($\beta_3 = 0.035$); $\beta_3 = 0.22$ added as a larger effect.
--   Log parameters: $\beta_2$, $d_{22}$ and $d_{12}$ rescaled by $11 / \log 12$, so the rise and the slope variance at $t = 11$ match the linear scenario.
--   Log crossing: arms cross at $t \approx 2.5$; the treatment difference at $t = 11$ equals that of the linear scenario with $\beta_3 = 0.22$ (large) or $0.035$ (small).
--   Log null: identical arms ($\beta_1 = \beta_3 = 0$).
+- Linear parameters taken from the toenail data ($\beta_3 = 0.035$); $\beta_3 = 0.22$ added as a larger effect.
+- Log parameters: $\beta_2$, $d_{22}$ and $d_{12}$ rescaled by $11 / \log 12$, so the rise and the slope variance at $t = 11$ match the linear scenario.
+- Log crossing: arms cross at $t \approx 2.5$; the treatment difference at $t = 11$ equals that of the linear scenario with $\beta_3 = 0.22$ (large) or $0.035$ (small).
+- Log null: identical arms ($\beta_1 = \beta_3 = 0$).
 
 | Variable | Value |
-|---------------|---------------------------------------------|
+|------------------------------------|------------------------------------|
 | Number of clusters | 10, 20, 50, 100, 1000 |
 | Number of repeated measures | 12 |
 | Missingness pattern | "Half-missing" (HM): half of the clusters have no missingness, the other half have a uniform probability to keep 1--11 observations; dropout is monotone. |
-| | "Three observations minimum" (3O): as half-missing, but with at least three observations per cluster. |
+|  | "Three observations minimum" (3O): as half-missing, but with at least three observations per cluster. |
 | Simulations per scenario | 5000 |
 
-: Simulation design. {tbl-colwidths="[31,69]"}
+: Simulation design.
 
 ```{r}
 #| label: fig-log-profiles
@@ -292,17 +322,20 @@ ggplot(profiles, aes(x = t, y = mean_y, colour = arm)) +
 
 ```{r}
 #| label: tbl-lin-mse
-metric_table(lin_est, "mse_beta3", "MSE of beta3 (HM = half-missing, 3O = three observations minimum; columns = true beta3).")
+lin_est |>
+  mutate(method = recode(method, "MI + closed form" = "MI")) |>
+  metric_table("mse_beta3", "MSE of beta3 (HM = half-missing, 3O = three observations minimum; columns = true beta3).")
 ```
 
 ```{r}
 #| label: fig-lin-mse
 #| fig-cap: "MSE of beta3 for the linear time trend (log scale)."
-metric_plot(lin_est, "mse_beta3", "MSE (beta3)", log_y = TRUE)
+metric_plot(lin_est, "mse_beta3", "MSE (beta3)", log_y = FALSE)
 ```
 
--   MSE falls with the number of clusters at the same rate for all methods; the effect size hardly matters, and MSE is slightly lower under three observations minimum.
--   MI has the lowest MSE at $n = 10$ and $20$; from $n = 50$ onwards classical ML and reweighting are slightly better and nearly identical.
+- MSE falls with the number of clusters at a similar rate for all methods; the effect size doesn't matter, and MSE is slightly lower under three observations minimum.
+- Classical ML and reweighting are nearly identical.
+- MI has the lowest MSE at $n = 10$ and $20$; from $n = 50$ onwards classical ML and reweighting are slightly better.
 
 \newpage
 
@@ -319,10 +352,10 @@ metric_table(filter(lin, beta3 == 0), "type1_error", "Type I error rate of the i
 metric_plot(filter(lin, beta3 == 0), "type1_error", "Type I error rate", hline = 0.05)
 ```
 
--   Classical ML is still anti-conservative at small $n$ (about 0.10 at $n = 10$, 0.07--0.08 at $n = 20$) and close to nominal from $n = 50$.
--   Reweighting is slightly inflated at $n = 10$ and $20$ (about 0.06) and nominal from $n = 50$.
--   MI is at or slightly below nominal at every $n$ (about 0.04--0.05).
--   LSPIM is the most inflated at $n = 10$ (0.11--0.12) and still at $n = 20$ (about 0.08); from $n = 50$ onwards it is conservative (0.035--0.045).
+- Classical ML is anti-conservative at small $n$ (about 0.10 at $n = 10$, 0.07--0.08 at $n = 20$) and close to nominal from $n = 50$.
+- Reweighting is slightly inflated at $n = 10$ and $20$ (about 0.06) and nominal from $n = 50$.
+- MI is at or slightly below nominal at every $n$ (about 0.04--0.05).
+- LSPIM is the most inflated at $n = 10$ (0.11--0.12) and still at $n = 20$ (about 0.08); from $n = 50$ onwards it is conservative (0.035--0.045).
 
 \newpage
 
@@ -339,9 +372,9 @@ metric_table(filter(lin, beta3 != 0), "power", "Power of the interaction test.")
 metric_plot(filter(lin, beta3 != 0), "power", "Power")
 ```
 
--   Classical ML has the highest power, then reweighting, then MI; at small $n$ the lead of classical ML partly reflects its type I error inflation.
--   For $\beta_3 = 0.22$ classical ML, reweighting and MI reach full power at $n = 1000$; for $\beta_3 = 0.035$ power stays low even at $n = 1000$ (0.13--0.17), lowest for MI.
--   LSPIM has much lower power than the other methods for a linear effect: for $\beta_3 = 0.22$ about 0.18--0.20 at $n = 100$ (others 0.40--0.53), 0.99 at $n = 1000$; for $\beta_3 = 0.035$ it stays near its type I error level. At $n = 10$ and $20$ its power mostly reflects its type I error inflation.
+- Classical ML has the highest power, then reweighting, then MI; at small $n$ the lead of classical ML partly reflects its type I error inflation.
+- For $\beta_3 = 0.22$ classical ML, reweighting and MI reach full power at $n = 1000$; for $\beta_3 = 0.035$ power stays low even at $n = 1000$ (0.13--0.17).
+- LSPIM has much lower power than the other methods for a linear effect: for $\beta_3 = 0.22$ about 0.18--0.20 at $n = 100$ (others 0.40--0.53).
 
 \newpage
 
@@ -358,9 +391,9 @@ metric_table(lin_est, "coverage_beta3", "Coverage of the 95% t interval for beta
 metric_plot(lin_est, "coverage_beta3", "Coverage (beta3)", hline = 0.95)
 ```
 
--   Classical ML undercovers at small $n$ (about 0.90 at $n = 10$, 0.92--0.93 at $n = 20$) and is close to nominal from $n = 50$.
--   Reweighting is slightly below nominal at $n = 10$ and $20$ (0.94) and nominal from $n = 50$.
--   MI is at or slightly above nominal at every $n$ (0.95--0.96).
+- Classical ML has low coverage at small $n$ (about 0.90 at $n = 10$, 0.92--0.93 at $n = 20$) and is close to nominal from $n = 50$.
+- Reweighting is slightly below nominal at $n = 10$ and $20$ (0.94) and nominal from $n = 50$.
+- MI is at or slightly above nominal at every $n$ (0.95--0.96).
 
 \newpage
 
@@ -373,10 +406,10 @@ metric_plot(lin_est, "coverage_beta3", "Coverage (beta3)", hline = 0.95)
 convergence_plot(lin)
 ```
 
--   Singular fits occur at $n = 10$ for classical ML, MI and reweighting at a similar rate (5--9%) and almost vanish from $n = 20$.
--   Reweighting and MI essentially always converge; reweighting has a small warning share at $n = 10$ and $20$.
--   Classical ML has a small "not converged" share at every $n$, which grows to about 26% at $n = 1000$. This is a false positive of lme4's absolute gradient check, which scales with the sample size: the flagged fits are kept in all metrics.
--   LSPIM: about 20% errors at $n = 10$, and almost all fits at $n = 10$ and $20$ carry a warning; see the appendix.
+- Singular fits occur at $n = 10$ for classical ML, MI and reweighting at a similar rate (5--9%) and almost vanish from $n = 20$.
+- Reweighting and MI essentially always converge; reweighting has a small warning share at $n = 10$ and $20$.
+- Classical ML has a small "not converged" share at every $n$, which grows to about 26% at $n = 1000$. This is a false positive of lme4's absolute gradient check, which scales with the sample size: the flagged fits are kept in all metrics.
+- LSPIM: about 20% errors at $n = 10$, and almost all fits at $n = 10$ and $20$ carry a warning; see the appendix.
 
 \newpage
 
@@ -384,36 +417,28 @@ convergence_plot(lin)
 
 ```{r}
 #| label: tbl-lin-time
-metric_table(lin, "time_median_seconds", "Median computation time per replicate (seconds).")
+lin |>
+  mutate(method = recode(method, "MI + closed form" = "MI")) |>
+  metric_table("time_median_seconds", "Median computation time per replicate (seconds).")
 ```
 
 ```{r}
 #| label: fig-lin-time
+#| fig-pos: "H"
 #| fig-cap: "Median computation time per replicate for the linear time trend (log scale)."
 metric_plot(lin, "time_median_seconds", "Median time (seconds)", log_y = TRUE)
 ```
 
--   Classical ML is fastest from $n = 50$ onwards; at $n = 10$ and $20$ LSPIM is slightly faster.
--   MI is slowest up to $n = 100$ (1--2 seconds per replicate).
--   LSPIM is fast up to $n = 100$ (at most about 1 second) but grows roughly quadratically with $n$: at $n = 1000$ it is the slowest method (about 45--58 seconds), against about 14--17 seconds for MI and reweighting.
-
-\newpage
-
-## Fraction of missing information (MI)
-
-```{r}
-#| label: tbl-lin-lambda
-lambda_table(lin, "Mean fraction of missing information for beta3 (MI only).")
-```
-
--   The fraction of missing information is higher under half-missing than under three observations minimum, and increases slightly with $n$.
+- Classical ML is fastest from $n = 50$ onwards; at $n = 10$ and $20$ LSPIM is slightly faster.
+- MI is slowest up to $n = 100$ (1--2 seconds per replicate).
+- LSPIM is fast up to $n = 100$ (at most about 1 second) but grows roughly quadratically with $n$: at $n = 1000$ it is the slowest method (about 45--58 seconds), against about 14--17 seconds for MI and reweighting.
 
 \newpage
 
 # Results - log time trend
 
--   MSE and coverage are not reported: the linear methods estimate a linear slope, which has no true value under the log trend.
--   Effect sizes: large ($\beta_1 = -2.42$, $\beta_3 = 1.95$), small ($\beta_1 = -0.385$, $\beta_3 = 0.31$).
+- MSE and coverage are not reported: the linear methods estimate a linear slope, which has no true value under the log trend.
+- Effect sizes: large ($\beta_1 = -2.42$, $\beta_3 = 1.95$), small ($\beta_1 = -0.385$, $\beta_3 = 0.31$).
 
 ## Type I error
 
@@ -424,13 +449,15 @@ metric_table(filter(logt, beta3 == 0), "type1_error", "Type I error rate of the 
 
 ```{r}
 #| label: fig-log-t1e
+#| fig-pos: "H"
+#| fig-height: 3
 #| fig-cap: "Type I error rate for the log time trend (dotted line: nominal 0.05)."
 metric_plot(filter(logt, beta3 == 0), "type1_error", "Type I error rate", hline = 0.05)
 ```
 
--   Classical ML and LSPIM show the same small-$n$ inflation as in the linear scenarios (about 0.10 and 0.11 at $n = 10$); LSPIM is again conservative from $n = 50$.
--   MI is at or slightly below nominal at every $n$.
--   Reweighting is close to nominal at $n = 10$ and $20$, and becomes conservative from $n = 50$ onwards (about 0.035 at $n = 1000$).
+- Classical ML and LSPIM show the same small-$n$ inflation as in the linear scenarios (about 0.10 and 0.11 at $n = 10$); LSPIM is again conservative from $n = 50$.
+- MI is at or slightly below nominal at every $n$.
+- Reweighting is close to nominal at $n = 10$ and $20$, and becomes conservative from $n = 50$ onwards (about 0.035 at $n = 1000$).
 
 \newpage
 
@@ -447,9 +474,9 @@ metric_table(filter(logt, beta3 != 0), "power", "Power of the interaction test."
 metric_plot(filter(logt, beta3 != 0), "power", "Power")
 ```
 
--   The linear methods still detect the crossing well: power is higher than in the linear scenarios with the same end-of-study difference (large vs. $\beta_3 = 0.22$, small vs. $\beta_3 = 0.035$).
--   Classical ML has the highest power, then reweighting, then MI.
--   LSPIM is close to MI for the large effect (about 0.88--0.90 at $n = 100$), but has the lowest power for the small effect (about 0.29 at $n = 1000$, others 0.41--0.54).
+- The linear methods still detect the interaction effect well: power is higher than in the linear scenarios with the same end-of-study difference (large vs. $\beta_3 = 0.22$, small vs. $\beta_3 = 0.035$).
+- Classical ML has the highest power, then reweighting, then MI.
+- LSPIM is close to MI for the large effect (about 0.88--0.90 at $n = 100$), but has the lowest power for the small effect (about 0.29 at $n = 1000$, others 0.41--0.54).
 
 \newpage
 
@@ -462,9 +489,9 @@ metric_plot(filter(logt, beta3 != 0), "power", "Power")
 convergence_plot(logt)
 ```
 
--   Same pattern as the linear scenarios, with more singular fits at $n = 10$ (10--20%).
--   Classical ML's "not converged" share at $n = 1000$ (about 18%) is again the lme4 gradient false positive.
--   LSPIM errors and warnings as in the linear scenarios; see the appendix.
+- Same pattern as the linear scenarios, with more singular fits at $n = 10$ (10--20%).
+- Classical ML's "not converged" share at $n = 1000$ (about 18%) is again the lme4 gradient false positive.
+- LSPIM errors and warnings as in the linear scenarios; see the appendix.
 
 \newpage
 
@@ -472,35 +499,24 @@ convergence_plot(logt)
 
 ```{r}
 #| label: tbl-log-time
-metric_table(logt, "time_median_seconds", "Median computation time per replicate (seconds).")
+logt |>
+  mutate(method = recode(method, "MI + closed form" = "MI")) |>
+  metric_table("time_median_seconds", "Median computation time per replicate (seconds).")
 ```
 
 ```{r}
 #| label: fig-log-time
+#| fig-pos: "H"
 #| fig-cap: "Median computation time per replicate for the log time trend (log scale)."
 metric_plot(logt, "time_median_seconds", "Median time (seconds)", log_y = TRUE)
 ```
-
--   Same ordering as the linear scenarios.
-
-\newpage
-
-## Fraction of missing information (MI)
-
-```{r}
-#| label: tbl-log-lambda
-lambda_table(logt, "Mean fraction of missing information for beta3 (MI only).")
-```
-
--   Slightly higher than in the linear scenarios; same pattern over dropout mechanism and $n$.
 
 \newpage
 
 # Suggested improvements
 
 1.  Classical ML convergence: replace lme4's absolute gradient flag with a relative gradient check, to remove the false "not converged" at large $n$.
-
-\newpage
+2.  Currently, naive Wald t-test with N-2 df is used. This could be improved on.
 
 # Appendix: LSPIM errors and warnings
 
@@ -553,10 +569,9 @@ lspim_reps |>
   )
 ```
 
--   LSPIM uses three clusterings of the pairwise pseudo-observations: by left subject (C1), by right subject (C2) and by pair (C3); the combined covariance is $V = V_{C1} + V_{C2} - V_{C3}$.
--   Errors occur almost only at $n = 10$ (about 20% of replicates):
-    -   about 10% each: a cluster has leverage 1 in clustering C1 or C2, so the Ford-Westgate small-sample correction is undefined;
-    -   about 1%: no between-arm pairs at one or more late visits (one arm has no observations left there), so the corresponding design columns are all zero.
--   Warnings: at $n = 10$ and $20$ nearly every fit that does not error has to repair the combined covariance $V$ to the nearest positive semi-definite matrix (negative eigenvalues or non-positive variances); about 1--2% of fits at $n = 50$, and none from $n = 100$.
--   Not converged: rare (below 1% at $n = 10$, almost none from $n = 20$); the penalised GEE gives fitted probabilities numerically 0 or 1.
--   The repaired $V$ at small $n$ may contribute to LSPIM's type I error inflation at $n = 10$ and $20$.
+- LSPIM uses three clusterings of the pairwise pseudo-observations: by left subject (C1), by right subject (C2) and by pair (C3); the combined covariance is $V = V_{C1} + V_{C2} - V_{C3}$.
+- Errors occur almost only at $n = 10$ (about 20% of replicates):
+  - about 10% each: a cluster has leverage 1 in clustering C1 or C2, so the Ford-Westgate small-sample correction is undefined;
+  - about 1%: no between-arm pairs at one or more late visits (one arm has no observations left there), so the corresponding design columns are all zero.
+- Warnings: at $n = 10$ and $20$ nearly every fit that does not error has to repair the combined covariance $V$ to the nearest positive semi-definite matrix (negative eigenvalues or non-positive variances); about 1--2% of fits at $n = 50$, and none from $n = 100$.
+- Not converged: rare (below 1% at $n = 10$, almost none from $n = 20$); the penalised GEE gives fitted probabilities numerically 0 or 1.
