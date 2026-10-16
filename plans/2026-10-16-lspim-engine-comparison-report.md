@@ -106,3 +106,11 @@ Ground rules:
   the page width, figures readable, no raw NA / code output).
 - Cross-check two numbers in the PDF against the RDS (one agreement count, one median time).
 - Commit `.qmd` + PDF with a conventional message (`docs: ...`), attribution trailer as usual.
+
+## Status
+
+- [x] Report written and rendered (2026-10-16): 5 pages, all sections as planned. Deviations
+  (from the data): 3GEE-only failures are 62, 61 at n = 10 and 1 at n = 20; 3GEE null rejection
+  rate on Logistic leverage-1 failures is 0.251-0.298 per scenario (not 0.26-0.36); extra Table 5
+  (3GEE null rejection rate by Logistic failure type); time table uses the median over the four
+  scenarios of each n.
