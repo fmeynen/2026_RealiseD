@@ -36,6 +36,13 @@ see the plans in [plans/](plans/) and the git history for what was done.
   Checking and repairing only the treatment submatrix avoids that. Would change LSPIM results in
   some replicates (regenerate goldens).
 
+- [ ] **[statistics] LSPIM: t reference instead of z for the Holm contrasts.**
+  `fit_lspim()` tests the visit-effect deviations with `multcomp::parm(beta, V)`, whose default
+  `df = 0` means a normal reference ([lspim.R](scripts/simulation/lspim.R)). The planned MI-LSPIM
+  method uses a t reference with Barnard-Rubin df and `nu_com = N - 2` (decided 2026-10-20).
+  Investigate type I error and power of complete-case LSPIM with a t reference on N - 2 df,
+  especially at n = 10 and 20. Would change LSPIM results (regenerate goldens).
+
 ## Efficiency
 
 ## Reproducibility
