@@ -1,0 +1,396 @@
+---
+title: "LSPIM: 3GEE + FW versus Logistic + 3FW"
+format:
+  pdf:
+    papersize: a4
+    geometry: margin=2cm
+    fig-width: 7
+    fig-height: 4
+filters:
+  - ../../research_question/meeting_notes/table-widths.lua
+editor: visual
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(here)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+knitr::opts_chunk$set(dev = "png", dpi = 300)
+
+cmp <- readRDS(here::here(
+  "results", "data", "lspim_engine_comparison",
+  "lspim_engine_comparison_c1feac084af6cb59_22612da3a9139167.rds"
+))
+hashes <- cmp$analysis_run_hashes
+alpha <- cmp$alpha
+n_sim <- cmp$n_simulations
+
+# Engine codes (as in the analysis code) -> method labels. This is the only place the codes appear.
+engine_labels <- c(geessbin = "3GEE", pgee_fw = "Logistic")
+method_levels <- unname(engine_labels)
+method_colours <- c("3GEE" = "#0072B2", "Logistic" = "#D55E00")
+
+# Per-replicate rows of both runs.
+reps <- bind_rows(lapply(hashes, function(h) {
+  readRDS(here::here("results", "data", h, "analysis_combined_convenience.rds"))$results[, c(
+    "scenario_id", "sim_id", "engine", "status", "convergence_status",
+    "interaction_rejected", "warning_message", "error_message"
+  )]
+})) |>
+  mutate(
+    method = factor(engine_labels[engine], levels = method_levels),
+    has_decision = status != "failure" & !is.na(interaction_rejected)
+  )
+
+# One row per scenario with a short identifier of the effect.
+scen <- cmp$scenarios |>
+  mutate(
+    is_null = beta3 == 0,
+    effect = case_when(
+      time_trend == "linear" & beta3 == 0 ~ "Linear null",
+      time_trend == "linear" ~ paste0("Linear ", signif(beta3, 3)),
+      beta3 == 0 ~ "Log null",
+      TRUE ~ "Log large"
+    ),
+    effect = factor(effect, levels = c("Linear 0.22", "Linear null", "Log large", "Log null"))
+  ) |>
+  select(scenario_id, n, effect, is_null)
+
+# Three significant digits, keeping trailing zeros; NA as a dash.
+fmt3 <- function(x) ifelse(is.na(x), "-", formatC(signif(x, 3), format = "fg", digits = 3, flag = "#"))
+fmt3 <- Vectorize(fmt3)
+fmt3_trim <- function(x) sub("\\.$", "", fmt3(x))
+
+# Wide table in scenario order.
+scen_order <- function(df) df |> arrange(effect, n) |> mutate(effect = as.character(effect))
+
+# Paired decisions per replicate.
+paired <- reps |>
+  select(scenario_id, sim_id, engine, has_decision, interaction_rejected, convergence_status, warning_message, error_message) |>
+  pivot_wider(
+    names_from = engine,
+    values_from = c(has_decision, interaction_rejected, convergence_status, warning_message, error_message)
+  )
+both <- paired |> filter(has_decision_geessbin, has_decision_pgee_fw)
+```
+
+# Setup
+
+Two engines of the LSPIM test are compared on the same generated datasets (generation run `e64245fe0a9d0284`; the analysis runs are `c1feac084af6cb59` and `22612da3a9139167`, produced by `scripts/run_lspim_engine_comparison.R`, where the engines are called `pgee_fw` and `geessbin`).
+
+- **3GEE + FW** (short label **3GEE**, the original engine): three PGEE fits with `geessbin`, one for each clustering (left subject C1, right subject C2, pair C3), each with Ford-Westgate (FW) standard errors.
+- **Logistic + 3FW** (short label **Logistic**): one penalised logistic fit and three FW sandwiches.
+
+Under an independence working correlation the GEE estimating equations are the logistic score equations. The PGEE point estimate is therefore a Firth-type penalised logistic regression on the 0 / 0.5 / 1 pseudo-scores, with the penalty weighted by the Pearson scale $\phi$ (re-estimated at each iteration). It is not a plain `glm()`: the penalty term is what makes it PGEE. The clustering does not enter the equation for $\beta$, so the three 3GEE fits give the same $\beta$ and only the sandwiches (C1, C2, C3) differ. Logistic + 3FW fits $\beta$ once and computes the three FW sandwiches. The test is the same for both: Holm adjustment on the treatment-by-visit contrasts.
+
+The scenarios are $n = 10, 20, 50$ clusters, three observations minimum per cluster, with a linear time trend ($\beta_3 = 0.22$ and $\beta_3 = 0$) and a log time trend (large crossing, $\beta_1 = -2.42$, $\beta_3 = 1.95$; and identical arms as null). That gives `r nrow(scen)` scenarios with `r n_sim` replicates each, tested at $\alpha = `r alpha`$.
+
+"Has a decision" means the replicate gave a test result (no error and a non-missing rejection).
+
+# Decision agreement
+
+```{r}
+#| label: tbl-agreement
+cmp$decision_agreement |>
+  inner_join(scen, by = c("scenario_id", "n")) |>
+  scen_order() |>
+  transmute(
+    Effect = effect, n,
+    Pairs = n_pairs,
+    `Both reject` = both_reject,
+    `Only 3GEE` = only_geessbin_rejects,
+    `Only Logistic` = only_pgee_fw_rejects,
+    Neither = neither_rejects,
+    Agreement = fmt3_trim(agreement)
+  ) |>
+  knitr::kable(
+    caption = "Decisions on the replicates where both methods give a decision (pairs).",
+    align = "l"
+  )
+```
+
+```{r}
+#| label: agreement-numbers
+n_off <- with(cmp$decision_agreement, sum(only_geessbin_rejects + only_pgee_fw_rejects))
+all_agree <- all(cmp$decision_agreement$agreement == 1)
+tot_pairs <- sum(cmp$decision_agreement$n_pairs)
+```
+
+- Over `r format(tot_pairs, big.mark = ",")` pairs in `r nrow(cmp$decision_agreement)` scenarios, the number of replicates where only one method rejects is `r n_off`; agreement is `r if (all_agree) "1 in every scenario" else "below 1 in some scenarios"`.
+
+# Rejection rates
+
+```{r}
+#| label: rates
+# Own replicates: each method's rate over its own replicates with a decision.
+own <- cmp$side_by_side |>
+  transmute(
+    scenario_id, method = factor(engine_labels[engine], levels = method_levels),
+    rate = ifelse(is.na(type1_error), power, type1_error)
+  )
+
+# Common replicates: computed separately for each method from the per-replicate rows.
+common <- both |>
+  group_by(scenario_id) |>
+  summarise(
+    `3GEE` = mean(interaction_rejected_geessbin),
+    Logistic = mean(interaction_rejected_pgee_fw),
+    n_common = n(),
+    .groups = "drop"
+  )
+
+# 3GEE where only Logistic failed.
+only_log <- paired |>
+  filter(has_decision_geessbin, !has_decision_pgee_fw) |>
+  group_by(scenario_id) |>
+  summarise(rate_only = mean(interaction_rejected_geessbin), n_only = n(), .groups = "drop")
+
+rates <- scen |>
+  left_join(
+    own |> pivot_wider(names_from = method, values_from = rate, names_prefix = "own_"),
+    by = "scenario_id"
+  ) |>
+  left_join(common, by = "scenario_id") |>
+  left_join(only_log, by = "scenario_id")
+
+rate_table <- function(df, caption) {
+  scen_order(df) |>
+    transmute(
+      Effect = effect, n,
+      `Own 3GEE` = fmt3_trim(own_3GEE),
+      `Own Logistic` = fmt3_trim(own_Logistic),
+      `Common 3GEE` = fmt3_trim(`3GEE`),
+      `Common Logistic` = fmt3_trim(Logistic),
+      `3GEE, only Logistic failed (n)` = ifelse(is.na(rate_only), "-", paste0(fmt3_trim(rate_only), " (", n_only, ")"))
+    ) |>
+    knitr::kable(caption = caption, align = "l")
+}
+
+same_common <- all(rates$`3GEE` == rates$Logistic)
+n10_null <- rates |> filter(is_null, n == 10) |> arrange(effect)
+```
+
+The rate columns are: **Own**, each method over its own replicates with a decision (as in the main simulation); **Common**, each method over the replicates where both gave a decision, computed separately for each method from the per-replicate rows; and the rate of 3GEE on the replicates where only Logistic failed (number of replicates in brackets).
+
+```{r}
+#| label: tbl-t1e
+rates |>
+  filter(is_null) |>
+  rate_table(paste0("Type I error rate (nominal ", alpha, ")."))
+```
+
+```{r}
+#| label: tbl-power
+rates |>
+  filter(!is_null) |>
+  rate_table("Power.")
+```
+
+```{r}
+#| label: fig-rates
+#| fig-cap: "Rejection rate over each method's own replicates (dotted line: nominal 0.05 in the null panels)."
+#| fig-height: 4
+#| fig-pos: "H"
+fig_dat <- own |>
+  inner_join(scen, by = "scenario_id") |>
+  mutate(n = factor(n), panel = effect)
+
+ggplot(fig_dat, aes(x = n, y = rate, colour = method, group = method)) +
+  geom_line() +
+  geom_point(size = 2) +
+  geom_hline(
+    data = data.frame(panel = factor(c("Linear null", "Log null"), levels = levels(fig_dat$panel))),
+    aes(yintercept = alpha), linetype = "dotted"
+  ) +
+  facet_wrap(~panel, scales = "free_y") +
+  scale_colour_manual(values = method_colours) +
+  labs(x = "Number of clusters", y = "Rejection rate", colour = "Method") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+- On the common replicates the rates of the two methods are `r if (same_common) "identical in every scenario" else "not identical in every scenario"`.
+- At $n = 20$ and $50$ the own-replicate rates are the same or nearly so, since nearly every replicate has a decision from both methods.
+- At $n = 10$ the type I error of 3GEE is higher: `r fmt3_trim(n10_null$own_3GEE[1])` against `r fmt3_trim(n10_null$own_Logistic[1])` (linear null) and `r fmt3_trim(n10_null$own_3GEE[2])` against `r fmt3_trim(n10_null$own_Logistic[2])` (log null). On the common replicates the two rates are equal; the gap comes from the replicates that only Logistic + 3FW refuses (last column).
+
+# Failures and warnings
+
+```{r}
+#| label: failure-data
+fail_tab <- cmp$failure_summary |>
+  inner_join(scen, by = c("scenario_id", "n")) |>
+  scen_order()
+
+osf <- cmp$one_sided_failures |>
+  mutate(
+    log_failure = case_when(
+      grepl("leverage 1", error_message_pgee_fw, fixed = TRUE) & grepl("(clustering C1)", error_message_pgee_fw, fixed = TRUE) ~ "Leverage 1, C1",
+      grepl("leverage 1", error_message_pgee_fw, fixed = TRUE) & grepl("(clustering C2)", error_message_pgee_fw, fixed = TRUE) ~ "Leverage 1, C2",
+      grepl("are all zero", error_message_pgee_fw, fixed = TRUE) ~ "All-zero design column",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  inner_join(scen, by = "scenario_id")
+
+only_log_fail <- osf |> filter(!is.na(log_failure))
+only_gee_fail <- osf |>
+  filter(is.na(log_failure), grepl("infinite or missing values in 'x'", error_message_geessbin, fixed = TRUE))
+# Logistic convergence status on the replicates where only 3GEE failed.
+only_gee_conv <- only_gee_fail |>
+  left_join(
+    paired |> select(scenario_id, sim_id, convergence_status_pgee_fw, warning_message_pgee_fw),
+    by = c("scenario_id", "sim_id")
+  )
+n_only_gee_notconv <- sum(only_gee_conv$convergence_status_pgee_fw == "not_converged", na.rm = TRUE)
+n_only_gee_probs <- sum(grepl("fitted probabilities numerically 0 or 1", only_gee_conv$warning_message_pgee_fw, fixed = TRUE))
+
+type_levels <- c("Leverage 1, C1", "Leverage 1, C2", "All-zero design column")
+type_tab <- only_log_fail |>
+  group_by(Type = factor(log_failure, levels = type_levels)) |>
+  summarise(
+    Replicates = n(),
+    `All at n = 10` = ifelse(all(n == 10), "yes", "no"),
+    `Null: replicates` = sum(is_null),
+    `Null: 3GEE rejects` = ifelse(sum(is_null) == 0, NA_real_, mean(interaction_rejected_geessbin[is_null])),
+    .groups = "drop"
+  )
+type_count <- function(t) type_tab$Replicates[type_tab$Type == t]
+```
+
+```{r}
+#| label: tbl-failures
+#| tbl-colwidths: [18, 6, 12, 14, 12, 14, 12, 12]
+fail_tab |>
+  transmute(
+    Effect = effect, n,
+    `Err. 3GEE` = n_failure_geessbin,
+    `Err. Logistic` = n_failure_pgee_fw,
+    `Not conv. 3GEE` = n_not_converged_geessbin,
+    `Not conv. Logistic` = n_not_converged_pgee_fw,
+    `Only 3GEE` = n_only_geessbin_failed,
+    `Only Logistic` = n_only_pgee_fw_failed
+  ) |>
+  knitr::kable(
+    caption = "Failures per scenario (5000 replicates each). Err.: no decision. Not conv.: a decision flagged as not converged. Only X: replicates where just X gave no decision.",
+    align = "l"
+  )
+```
+
+The replicates where only one method fails fall into the following types.
+
+- **Logistic + 3FW stops** on `r nrow(only_log_fail)` replicates where 3GEE returns a decision: `r type_count("Leverage 1, C1")` with a leverage-1 cluster in clustering C1, `r type_count("Leverage 1, C2")` with a leverage-1 cluster in C2 (the Ford-Westgate correction is undefined), and `r type_count("All-zero design column")` with an all-zero design column (late `trt_visit` columns with no comparable pairs).
+- **3GEE stops** ("infinite or missing values in 'x'") on `r nrow(only_gee_fail)` replicates, `r sum(only_gee_fail$n == 10)` of them at $n = 10$. On these Logistic returns a decision, flagged not converged on `r n_only_gee_notconv` of them, with the warning "fitted probabilities numerically 0 or 1" on `r n_only_gee_probs`.
+
+```{r}
+#| label: tbl-failure-types
+type_tab |>
+  transmute(
+    `Logistic failure type` = Type,
+    Replicates,
+    `Of which in null scenarios` = `Null: replicates`,
+    `3GEE rejection rate, null scenarios` = fmt3_trim(`Null: 3GEE rejects`)
+  ) |>
+  knitr::kable(
+    caption = "Replicates where only Logistic failed, by failure type, and the rejection rate of 3GEE on them in the null scenarios (nominal 0.05).",
+    align = "l"
+  )
+```
+
+```{r}
+#| label: null-rates-by-type
+null_by_scen <- only_log_fail |>
+  filter(is_null) |>
+  group_by(effect, n, log_failure) |>
+  summarise(rate = mean(interaction_rejected_geessbin), k = n(), .groups = "drop")
+lev_rng <- null_by_scen |> filter(grepl("Leverage", log_failure), n == 10) |> pull(rate) |> range()
+```
+
+On the replicates that Logistic refuses with a leverage-1 error, 3GEE rejects the null in `r fmt3_trim(lev_rng[1])` to `r fmt3_trim(lev_rng[2])` of the cases per null scenario at $n = 10$, far above $\alpha = `r alpha`$.
+
+\newpage
+
+```{r}
+#| label: tbl-warnings
+warn_tab <- reps |>
+  filter(has_decision) |>
+  group_by(scenario_id, method) |>
+  summarise(
+    psd = mean(grepl("Combined V has negative eigenvalues", warning_message, fixed = TRUE)),
+    prob = mean(grepl("fitted probabilities numerically 0 or 1", warning_message, fixed = TRUE)),
+    .groups = "drop"
+  ) |>
+  pivot_wider(names_from = method, values_from = c(psd, prob)) |>
+  inner_join(scen, by = "scenario_id") |>
+  scen_order()
+warn_tab |>
+  transmute(
+    Effect = effect, n,
+    `Nearest PSD 3GEE` = fmt3_trim(psd_3GEE),
+    `Nearest PSD Logistic` = fmt3_trim(psd_Logistic),
+    `Probs. 0 or 1 3GEE` = fmt3_trim(prob_3GEE),
+    `Probs. 0 or 1 Logistic` = fmt3_trim(prob_Logistic)
+  ) |>
+  knitr::kable(
+    caption = "Share of replicates with a decision that carry a warning: combined V repaired to the nearest PSD matrix, and fitted probabilities numerically 0 or 1.",
+    align = "l"
+  )
+```
+
+# Computation time
+
+```{r}
+#| label: time-data
+time_tab <- cmp$aggregation |>
+  transmute(
+    n, method = factor(engine_labels[engine], levels = method_levels),
+    time = time_median_seconds, scenario_id
+  ) |>
+  inner_join(scen |> select(scenario_id, effect), by = "scenario_id") |>
+  group_by(n, method) |>
+  summarise(time = median(time), .groups = "drop")
+t_at <- function(nn, m) time_tab$time[time_tab$n == nn & time_tab$method == m]
+speedup50 <- t_at(50, "3GEE") / t_at(50, "Logistic")
+```
+
+```{r}
+#| label: tbl-time
+time_tab |>
+  mutate(time = fmt3_trim(time)) |>
+  pivot_wider(names_from = method, values_from = time) |>
+  arrange(n) |>
+  knitr::kable(
+    caption = "Median computation time per replicate (seconds), median over the four scenarios of each n.",
+    align = "l"
+  )
+```
+
+```{r}
+#| label: fig-time
+#| fig-cap: "Median computation time per replicate (seconds, log scale), median over the scenarios of each n."
+#| fig-height: 3
+#| fig-pos: "H"
+ggplot(time_tab, aes(x = factor(n), y = time, colour = method, group = method)) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_y_log10() +
+  scale_colour_manual(values = method_colours) +
+  labs(x = "Number of clusters", y = "Median time (seconds)", colour = "Method") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+# Conclusion
+
+- Decisions are identical wherever both methods give one; the rates on the common replicates are equal; the own-replicate rates are identical at $n = 50$ and nearly identical at $n = 20$.
+- The $n = 10$ difference comes entirely from replicates where Logistic + 3FW stops (a leverage-1 cluster or an all-zero design column) and 3GEE still returns a decision; on those 3GEE rejects far more often than $\alpha$ under the null.
+- One earlier check (2026-10-08 scratch verification, not part of this run): in such a case 3GEE reported "converged" with a C2 variance of 3.4e-17 for the affected column. This is a single example.
+- Logistic + 3FW is several hundred times faster (about `r round(speedup50)` times at $n = 50$).
