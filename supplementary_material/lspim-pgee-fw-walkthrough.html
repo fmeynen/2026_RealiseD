@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>lspim-pgee-fw-walkthrough</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="lspim-pgee-fw-walkthrough_files/libs/clipboard/clipboard.min.js"></script>
+<script src="lspim-pgee-fw-walkthrough_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="lspim-pgee-fw-walkthrough_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="lspim-pgee-fw-walkthrough_files/libs/quarto-html/popper.min.js"></script>
+<script src="lspim-pgee-fw-walkthrough_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="lspim-pgee-fw-walkthrough_files/libs/quarto-html/anchor.min.js"></script>
+<link href="lspim-pgee-fw-walkthrough_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="lspim-pgee-fw-walkthrough_files/libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="lspim-pgee-fw-walkthrough_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="lspim-pgee-fw-walkthrough_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="lspim-pgee-fw-walkthrough_files/libs/bootstrap/bootstrap-215b371544c282197b31c8aa00ce3677.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="walkthrough-of-fit_lspim_pgee_fw" class="level1">
+<h1>Walkthrough of <code>fit_lspim_pgee_fw()</code></h1>
+<p>A guided reading of the in-house LSPIM engine in <a href="../scripts/simulation/lspim.R#L69-L252"><code>scripts/simulation/lspim.R</code></a>. The derivations behind the formulas are in <a href="lspim-pgee-fw-in-house.md"><code>lspim-pgee-fw-in-house.md</code></a>; this document explains what the code does, section by section. Line references are to <code>lspim.R</code>.</p>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p><code>fit_lspim_pgee_fw()</code> fits the LSPIM regression model and returns the coefficients together with a small-sample-corrected covariance matrix. It replaces the three <code>geessbin::geessbin()</code> calls of the <code>"geessbin"</code> engine.</p>
+<p><strong>Input.</strong> <code>dat_gee</code> is built in <code>fit_lspim()</code> (<a href="../scripts/simulation/lspim.R#L325-L349">lines 325–349</a>) and has one row per pair of observations (left, right):</p>
+<ul>
+<li><code>y</code>: the pseudo-score. It is 1 if the right observation wins, 0 if the left observation wins, and 0.5 for a tie.</li>
+<li>Design columns: <code>trend_treat</code>, <code>trend_ctrl</code> and <code>trt_visit&lt;t&gt;</code>.</li>
+<li>Three cluster IDs: <code>C1</code> (the left subject), <code>C2</code> (the right subject) and <code>C3</code> (the specific left/right subject combination).</li>
+</ul>
+<p><strong>Model.</strong> P(right &gt; left) = expit(xᵀβ), with no intercept.</p>
+<p><strong>The function works in two stages:</strong></p>
+<ol type="1">
+<li><p><strong>Estimate β with PGEE.</strong> Under an independence working correlation, geessbin’s PGEE is Firth-type bias-reduced logistic regression, with the penalty scaled by a Pearson dispersion φ. The function solves it by Fisher scoring:</p>
+<ul>
+<li>First it fits plain Firth regression (φ = 1) to get a starting value.</li>
+<li>Then it iterates with φ re-estimated at every step.</li>
+</ul>
+<p>With independence, the estimating equations do not involve the clustering. So β only needs to be fitted <strong>once</strong>; geessbin fits it three times.</p></li>
+<li><p><strong>Compute three Ford–Westgate (FW) sandwich covariances</strong>, one per clustering (C1, C2, C3). FW is the average of two small-sample corrections: Kauermann–Carroll (KC) and Mancl–DeRouen (MD). The three covariances are combined as <strong>V = V_C1 + V_C2 − V_C3</strong>. This is two-way clustering applied to pair data:</p>
+<ul>
+<li>Pairs that share a left subject are correlated (C1).</li>
+<li>Pairs that share a right subject are correlated (C2).</li>
+<li>Pairs that share <em>both</em> subjects would be counted twice, so C3 is subtracted.</li>
+</ul></li>
+</ol>
+<p><strong>Two equivalent ways to compute the sandwich:</strong></p>
+<ul>
+<li><strong>Diagonal path.</strong> In the LSPIM design every pair row has exactly one non-zero design entry. A within-subject pair is non-zero only in a trend column. A between-group pair at the same visit is non-zero only in its <code>trt_visit</code> column. As a result, XᵀWX and every per-cluster piece are diagonal, and every correction becomes an elementwise division. This path is fast and needs little memory, which matters at n = 1000.</li>
+<li><strong>General path.</strong> Works for any design. It builds N × p² matrices and does one eigendecomposition per cluster. In practice it is used only for equivalence tests.</li>
+</ul>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Section</th>
+<th>Lines</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>69–93</td>
+<td>Arguments, design matrix and input checks</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>95–125</td>
+<td>Helper closures <code>at_beta</code>, <code>score_step</code>, <code>is_stopped</code></td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>127–136</td>
+<td>Firth start values</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>138–164</td>
+<td>Main PGEE loop</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>166–183</td>
+<td>Sandwich setup and choice of path</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>184–212</td>
+<td>General FW sandwich</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>213–237</td>
+<td>Diagonal FW sandwich</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>238–251</td>
+<td>Combining and returning</td>
+</tr>
+</tbody>
+</table>
+<p>Notation used throughout:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>N</td>
+<td>Number of pairs, not subjects</td>
+</tr>
+<tr class="even">
+<td>p</td>
+<td>Number of coefficients</td>
+</tr>
+<tr class="odd">
+<td>μⱼ</td>
+<td>Fitted probability for pair j</td>
+</tr>
+<tr class="even">
+<td>wⱼ</td>
+<td>μⱼ(1 − μⱼ)</td>
+</tr>
+<tr class="odd">
+<td>F</td>
+<td>XᵀWX (no φ)</td>
+</tr>
+<tr class="even">
+<td>F = RᵀR</td>
+<td>Cholesky factorisation, with R upper triangular and L = Rᵀ</td>
+</tr>
+<tr class="odd">
+<td><code>R_inv</code></td>
+<td>R⁻¹</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="arguments-design-matrix-and-input-checks-lines-6993" class="level2">
+<h2 class="anchored" data-anchor-id="arguments-design-matrix-and-input-checks-lines-6993">1. Arguments, design matrix and input checks (<a href="../scripts/simulation/lspim.R#L69-L93">lines 69–93</a>)</h2>
+<p><strong>Arguments.</strong></p>
+<ul>
+<li><code>stop_rule</code> selects the convergence criterion. The default <code>"relative_step"</code> is the in-house rule. <code>"geessbin_score"</code> reproduces geessbin’s rule, so tests can show the two engines agree.</li>
+<li><code>sandwich = "auto"</code> uses the diagonal path when the design allows it. <code>"general"</code> forces the general path, again for equivalence tests.</li>
+<li><code>match.arg()</code> turns each default vector into its first element and rejects unknown values.</li>
+<li><code>max_iter = 50L</code> caps both the start loop and the main loop.</li>
+</ul>
+<p><strong>Design matrix.</strong></p>
+<ul>
+<li><code>design_cols</code> is every column except <code>y</code>, <code>C1</code>, <code>C2</code> and <code>C3</code>. These are the same columns, in the same order, as geessbin’s formula <code>y ~ . - 1 - C1 - C2 - C3</code>, so coefficient names and order match across engines.</li>
+<li>There is no intercept. That fits a PIM: comparing a pair with itself gives probability 0.5, which is expit(0).</li>
+<li><code>X</code> is converted to a numeric matrix. <code>storage.mode(X) &lt;- "double"</code> makes sure all later matrix algebra (<code>crossprod</code>, <code>chol</code>, …) runs on doubles.</li>
+<li><code>N</code> is the number of pairs, which is much larger than the number of subjects n.&nbsp;<code>p</code> is the number of coefficients.</li>
+</ul>
+<p><strong>Checks.</strong> Each check fails early with a clear message:</p>
+<ul>
+<li><code>y</code> must be numeric, have no missing values, and take values in {0, 0.5, 1}. Because 0.5 is allowed, this is not an ordinary binary logistic regression. It is also why the Pearson dispersion φ tends to be below 1: a tie has less variance than a 0/1 outcome.</li>
+<li>No design column may be zero in every row. This happens, for example, when no treated and control subjects were both observed at some visit. That coefficient cannot be identified, and F would be singular. A clear early message is better than a cryptic <code>chol()</code> failure later.</li>
+<li><code>N &gt; p</code>, because φ is estimated as Pearson χ² / (N − p).</li>
+</ul>
+</section>
+<section id="helper-closures-lines-95125" class="level2">
+<h2 class="anchored" data-anchor-id="helper-closures-lines-95125">2. Helper closures (<a href="../scripts/simulation/lspim.R#L95-L125">lines 95–125</a>)</h2>
+<p>These are small functions defined inside <code>fit_lspim_pgee_fw()</code>, so they can use <code>X</code>, <code>y</code>, <code>p</code> and <code>stop_rule</code> without having them passed in. Each loop iteration calls them in the order <code>at_beta</code> → <code>score_step</code> → <code>is_stopped</code>.</p>
+<section id="at_betabeta-everything-that-depends-on-the-current-β" class="level3">
+<h3 class="anchored" data-anchor-id="at_betabeta-everything-that-depends-on-the-current-β"><code>at_beta(beta)</code>: everything that depends on the current β</h3>
+<ul>
+<li><p><code>mu = plogis(X %*% beta)</code> gives the fitted probabilities μⱼ = expit(xⱼᵀβ).</p></li>
+<li><p><code>w = mu * (1 - mu)</code> gives the logistic variance weights. For the logit link they are also the GLM working weights.</p></li>
+<li><p><code>chol(crossprod(X * sqrt(w)))</code>:</p>
+<ul>
+<li><code>X * sqrt(w)</code> scales row j of X by √wⱼ, which is W^{1/2}X.</li>
+<li><code>crossprod</code> turns that into <strong>F = XᵀWX</strong>, the Fisher information without φ.</li>
+<li><code>chol</code> returns the upper-triangular R with F = RᵀR.</li>
+</ul>
+<p>When μ gets numerically close to 0 or 1, the weights underflow, F stops being positive definite and <code>chol</code> fails. The <code>tryCatch</code> then returns <code>R_inv = NULL</code> as a flag, and the caller decides whether that is fatal.</p></li>
+<li><p><code>R_inv = backsolve(R_F, diag(p))</code> gives R⁻¹. Because R is triangular this is cheap and stable. Then F⁻¹ = R⁻¹R⁻ᵀ, so the code can keep <code>R_inv</code> as a “square root” of F⁻¹ and never form F⁻¹ unless it needs to.</p></li>
+<li><p>The leverages are the diagonal of the hat matrix W<sup>{1/2}XF⁻¹XᵀW</sup>{1/2}:</p>
+<p>hⱼ = wⱼ · xⱼᵀF⁻¹xⱼ = wⱼ · ‖xⱼᵀR⁻¹‖²</p>
+<p>This is computed as <code>w * rowSums((X %*% R_inv)^2)</code>, which costs O(Np²) and never builds the N × N hat matrix.</p></li>
+</ul>
+</section>
+<section id="stop_if_singulars" class="level3">
+<h3 class="anchored" data-anchor-id="stop_if_singulars"><code>stop_if_singular(s)</code></h3>
+<p>Turns the <code>R_inv = NULL</code> flag into an error. It is used wherever a usable F⁻¹ is required: the main loop and the final sandwich.</p>
+</section>
+<section id="score_steps-phi-penalised-score-and-one-fisher-scoring-step" class="level3">
+<h3 class="anchored" data-anchor-id="score_steps-phi-penalised-score-and-one-fisher-scoring-step"><code>score_step(s, phi)</code>: penalised score and one Fisher-scoring step</h3>
+<p>The penalised (Firth-type) score is</p>
+<p>U(β) = (1/φ) · Xᵀ[ y − μ + φ · h ⊙ (½ − μ) ]</p>
+<ul>
+<li>Xᵀ(y − μ) is the ordinary logistic score.</li>
+<li>h(½ − μ) is the Firth adjustment. It pulls each fitted probability towards ½, and pulls harder for pairs with high leverage. This removes the O(1/N) bias of the maximum-likelihood estimate and keeps estimates finite under separation.</li>
+<li>With dispersion φ the information is F/φ, so the actual leverages are φ·h. Dividing by φ puts U on geessbin’s scale. That matters for the <code>"geessbin_score"</code> rule, which compares |U| with an absolute threshold.</li>
+</ul>
+<p>The step is Δ = (F/φ)⁻¹U = φ · F⁻¹U, computed right to left as R⁻¹(R⁻ᵀU). The bias term is deliberately left out of the information matrix: using F as an approximate Jacobian is the standard Fisher-scoring choice for Firth and PGEE.</p>
+</section>
+<section id="is_stoppedus-beta-convergence-criterion" class="level3">
+<h3 class="anchored" data-anchor-id="is_stoppedus-beta-convergence-criterion"><code>is_stopped(us, beta)</code>: convergence criterion</h3>
+<ul>
+<li><code>"geessbin_score"</code>: max|U| ≤ 1e-5. This is kept only for equivalence tests against geessbin. Its scale depends on N: U grows with the number of pairs, so the same threshold is much stricter at n = 1000 than at n = 10.</li>
+<li><code>"relative_step"</code> (the default): max |Δ| / (|β| + 0.1) ≤ 1e-8. This is a relative step size. The <code>+ 0.1</code> keeps it from blowing up for coefficients near 0, where it effectively becomes an absolute criterion of about 1e-9. Because it measures changes in β itself, it does not depend on N.</li>
+</ul>
+<p><strong>Takeaway.</strong> One Cholesky factorisation per iteration yields F⁻¹ (through <code>R_inv</code>), the leverages and the Newton step. No N × N matrices are ever formed.</p>
+</section>
+</section>
+<section id="firth-start-values-lines-127136" class="level2">
+<h2 class="anchored" data-anchor-id="firth-start-values-lines-127136">3. Firth start values (<a href="../scripts/simulation/lspim.R#L127-L136">lines 127–136</a>)</h2>
+<p><strong>Why a start loop is needed.</strong> The main PGEE loop re-estimates φ from the current residuals at every iteration. Started from a poor β, the first φ would also be poor, and the iterations could drift. So the function first solves an easier problem that does not involve φ: ordinary Firth logistic regression (φ = 1). That solution becomes the main loop’s starting value. geessbin’s PGEE also starts from a Firth fit.</p>
+<p><strong>What the loop does.</strong></p>
+<ul>
+<li>It starts at β = 0. Every μⱼ is then 0.5 (the “no effect” null of a PIM), every weight is as large as it can be (0.25), and F is well conditioned.</li>
+<li>Each iteration:
+<ol type="1">
+<li>Computes <code>at_beta(beta)</code>.</li>
+<li>Breaks if <code>s$R_inv</code> is <code>NULL</code>, i.e.&nbsp;if F is singular (line 132).</li>
+<li>Computes the Firth step with <code>score_step(s, phi = 1)</code>.</li>
+<li>Breaks if the stopping rule is met. This check happens <em>before</em> the update, so the final tiny step is not applied. The main loop does the same.</li>
+<li>Otherwise takes the full step. There is no step halving or line search: Firth’s penalty keeps estimates finite, and plain Fisher scoring from β = 0 converges reliably for logistic regression.</li>
+</ol></li>
+</ul>
+<p><strong>Failures here are silent, on purpose.</strong> A singular F or 50 iterations without convergence ends the start loop without a warning. The main loop’s first action is to check the fitted probabilities, so it reports a near-singular situation with a meaningful reason. If F is singular anyway, <code>stop_if_singular()</code> in the main loop catches it. Convergence is judged by the main loop only, so <code>converged</code> and the warnings always refer to one well-defined criterion.</p>
+</section>
+<section id="main-pgee-loop-lines-138164" class="level2">
+<h2 class="anchored" data-anchor-id="main-pgee-loop-lines-138164">4. Main PGEE loop (<a href="../scripts/simulation/lspim.R#L138-L164">lines 138–164</a>)</h2>
+<p><strong>Bookkeeping.</strong></p>
+<ul>
+<li><code>converged = FALSE</code>. It becomes <code>TRUE</code> only when the stopping rule is met.</li>
+<li><code>reason</code> starts as “maximum number of iterations reached”. It is overwritten only if the loop exits early for another reason, so running out of iterations needs no extra code.</li>
+<li><code>iterations</code> counts the main-loop iterations.</li>
+<li><code>phi</code> starts as <code>NA</code>. If the loop exits on its very first bounds check, the returned φ honestly says “never estimated”.</li>
+</ul>
+<p><strong>Each iteration:</strong></p>
+<ol type="1">
+<li><p><strong><code>at_beta(beta)</code>.</strong></p></li>
+<li><p><strong>Bounds check.</strong> If any μⱼ &lt; 1e-4 or μⱼ &gt; 0.9999, <code>reason</code> is set to “fitted probabilities numerically 0 or 1 occurred” and the loop breaks.</p>
+<ul>
+<li>Near 0 or 1, the weights wⱼ approach 0, F becomes ill-conditioned, and φ (which divides by
+<ol start="23" type="a">
+<li>blows up.</li>
+</ol></li>
+<li>This situation signals (quasi-)separation.</li>
+<li>It is a <code>break</code>, not a <code>stop()</code>. The fit counts as not converged, but the sandwiches are still computed at the last β.</li>
+</ul></li>
+<li><p><strong><code>stop_if_singular(s)</code>.</strong> A hard error. In practice it is reached only when μ is within bounds but F is still singular, which is very rare.</p></li>
+<li><p><strong>Pearson dispersion.</strong></p>
+<p>φ̂ = Σⱼ (yⱼ − μⱼ)² / [μⱼ(1 − μⱼ)] / (N − p)</p>
+<p>For a true Bernoulli outcome φ ≈ 1. A tie (y = 0.5) has a smaller squared residual than the Bernoulli variance, so many ties give φ̂ &lt; 1. φ scales how strongly the bias penalty acts (φ·h in the score); this is how PGEE differs from plain Firth here. φ depends on μ, so it is recomputed every iteration, and β, φ and the penalty are solved jointly by alternation.</p></li>
+<li><p><strong>Degenerate φ.</strong> If φ̂ is not finite or is ≤ 0, the function stops with an error. The typical cause is that every pair is tied: y ≡ 0.5 is fitted exactly by β = 0.</p></li>
+<li><p><strong><code>score_step(s, phi)</code></strong>, then <code>iterations &lt;- it</code>. This is set before the stopping check, so an exit at iteration k reports k.</p></li>
+<li><p><strong>Stopping check.</strong> If met, <code>converged &lt;- TRUE</code> and the loop breaks without applying the final step. This is the only place <code>converged</code> becomes <code>TRUE</code>.</p></li>
+<li><p>Otherwise, <code>beta &lt;- beta + us$step</code>.</p></li>
+</ol>
+<p>After the loop, a non-converged fit raises one warning, “LSPIM PGEE did not converge: <reason>.” <code>fit_lspim()</code> catches it in <code>withCallingHandlers</code>, stores it under <code>warnings</code>, and passes <code>pgee$converged</code> into its own <code>converged</code> field.</reason></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Exit</th>
+<th><code>converged</code></th>
+<th>Consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Stopping rule met</td>
+<td><code>TRUE</code></td>
+<td>Clean exit</td>
+</tr>
+<tr class="even">
+<td>μ out of bounds, or 50 iterations</td>
+<td><code>FALSE</code></td>
+<td>One warning; sandwiches are still computed</td>
+</tr>
+<tr class="odd">
+<td>Singular F, or φ ≤ 0</td>
+<td>—</td>
+<td>Error; <code>fit_lspim()</code> records <code>error_message</code> and <code>fit = NULL</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="sandwich-setup-and-choice-of-path-lines-166183" class="level2">
+<h2 class="anchored" data-anchor-id="sandwich-setup-and-choice-of-path-lines-166183">5. Sandwich setup and choice of path (<a href="../scripts/simulation/lspim.R#L166-L183">lines 166–183</a>)</h2>
+<section id="what-is-being-computed" class="level3">
+<h3 class="anchored" data-anchor-id="what-is-being-computed">What is being computed</h3>
+<p>For one clustering with clusters i = 1…K, the plain cluster-robust sandwich is</p>
+<p>V = F⁻¹ · [ Σᵢ gᵢgᵢᵀ ] · F⁻¹, where gᵢ = Σ_{j ∈ i} xⱼ(yⱼ − μⱼ)</p>
+<p>With few clusters this underestimates the variance: each cluster pulls the fit towards itself, which makes its residuals too small. The small-sample corrections inflate each gᵢ according to the cluster’s leverage. Let Fᵢ = Σ_{j∈i} wⱼxⱼxⱼᵀ be cluster i’s share of F.</p>
+<ul>
+<li><strong>Mancl–DeRouen (MD):</strong> gᵢ → (I − FᵢF⁻¹)⁻¹ gᵢ</li>
+<li><strong>Kauermann–Carroll (KC):</strong> gᵢ → (I − FᵢF⁻¹)^{-1/2} gᵢ, which is milder</li>
+<li><strong>Ford–Westgate (FW):</strong> the average of the KC and MD sandwiches. MD tends to over-correct and KC to under-correct.</li>
+</ul>
+<p>The textbook formulas use the nᵢ × nᵢ hat block (I − Hᵢᵢ). The note’s “Route B” moves the correction to p × p matrices using the push-through identity</p>
+<p>Xᵢᵀ f(WᵢXᵢF⁻¹Xᵢᵀ) = f(FᵢF⁻¹) Xᵢᵀ,</p>
+<p>which holds for both f(x) = (1 − x)⁻¹ and f(x) = (1 − x)^{-1/2}. This matters because a cluster under C1 can contain hundreds of pairs.</p>
+</section>
+<section id="the-code" class="level3">
+<h3 class="anchored" data-anchor-id="the-code">The code</h3>
+<ul>
+<li><p><code>s &lt;- at_beta(beta)</code> recomputes μ, w and F at the <strong>final</strong> β. The main loop’s <code>s</code> belongs to the β before its last update (or the β where it stopped). Recomputing makes sure bread and meat are evaluated at the β that is returned. <code>stop_if_singular(s)</code> follows, because the sandwich needs F⁻¹. This matters mostly after a non-converged exit.</p></li>
+<li><p><code>e = y - mu</code> are the <strong>raw</strong> residuals, without the h(½ − μ) term. The penalty is O(1) while the score is O(N), so it does not affect the first-order variance. geessbin makes the same choice.</p></li>
+<li><p><code>Xe = X * e</code> is an N × p matrix whose row j is pair j’s score contribution xⱼᵀeⱼ. Summing these rows per cluster gives gᵢ. It is computed once and shared by all three clusterings.</p></li>
+<li><p><strong>Choice of path</strong> (line 171): the diagonal path is used when <code>sandwich == "auto"</code> and every row of X has exactly one non-zero entry. In the LSPIM design this always holds:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pair type</th>
+<th>Non-zero column</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Same treated subject, two visits</td>
+<td><code>trend_treat</code> (the time difference)</td>
+</tr>
+<tr class="even">
+<td>Same control subject, two visits</td>
+<td><code>trend_ctrl</code></td>
+</tr>
+<tr class="odd">
+<td>Control vs treated, same visit t</td>
+<td><code>trt_visit&lt;t&gt;</code> (= 1)</td>
+</tr>
+</tbody>
+</table>
+<p>If each xⱼ has a single non-zero entry, xⱼxⱼᵀ has a single non-zero diagonal element. So F, every Fᵢ and every FᵢF⁻¹ are diagonal, and the matrix functions act elementwise.</p></li>
+</ul>
+</section>
+<section id="setup-for-the-general-path" class="level3">
+<h3 class="anchored" data-anchor-id="setup-for-the-general-path">Setup for the general path</h3>
+<ul>
+<li><p><code>F_inv = tcrossprod(R_inv)</code> = R⁻¹R⁻ᵀ = F⁻¹, the bread. Here it is formed explicitly because it is used on both sides of the meat.</p></li>
+<li><p><code>XX</code> is an N × p² matrix whose row j is vec(xⱼxⱼᵀ) in R’s column-major order:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>X[, <span class="fu">rep</span>(<span class="fu">seq_len</span>(p), <span class="at">times =</span> p)] <span class="sc">*</span> X[, <span class="fu">rep</span>(<span class="fu">seq_len</span>(p), <span class="at">each =</span> p)]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>For p = 2 this gives the columns X₁X₁, X₂X₁, X₁X₂, X₂X₂. Element [a, b] sits at position (b − 1)p + a, so <code>matrix(row, p, p)</code> rebuilds xⱼxⱼᵀ. This is where the N × p² memory cost comes from.</p></li>
+<li><p><code>WXX = XX * w</code>. Summing its rows per cluster gives vec(Fᵢ).</p></li>
+<li><p><strong><code>K_map</code>.</strong> FᵢF⁻¹ is not symmetric, so it is unsafe to eigendecompose. The code works instead with the <strong>symmetric</strong> matrix</p>
+<p>Kᵢ = L⁻¹FᵢL⁻ᵀ, which satisfies FᵢF⁻¹ = L Kᵢ L⁻¹.</p>
+<p>Kᵢ is similar to FᵢF⁻¹, so it has the same eigenvalues κ (the cluster’s leverages, in [0, 1)), and the symmetric eigensolver is stable on it. Using vec(ABC) = (Cᵀ ⊗ A) vec(B) with L⁻¹ = R⁻ᵀ:</p>
+<p>vec(Kᵢ) = (R⁻ᵀ ⊗ R⁻ᵀ) vec(Fᵢ)</p>
+<p>The cluster sums are stored as rows, so the map has to multiply from the right, which is why the code takes the transpose. <code>K_map</code> is p² × p². It is computed once per fit and shared by all three clusterings.</p></li>
+<li><p><strong><code>phi_half(k)</code></strong> = 1 / [√(1−κ)(1 + √(1−κ))]. The KC correction needs</p>
+<p>f(κ) = (1 − κ)^{-1/2} − 1 = κ · <code>phi_half</code>(κ).</p>
+<p>Written this way, it avoids the cancellation in 1 − √(1−κ) when κ is small. The factor κ is supplied by the matrix M in section 6. (The name follows the note’s notation; it has nothing to do with the dispersion φ.)</p></li>
+</ul>
+</section>
+<section id="setup-for-the-diagonal-path" class="level3">
+<h3 class="anchored" data-anchor-id="setup-for-the-diagonal-path">Setup for the diagonal path</h3>
+<ul>
+<li><code>XXw = X^2 * w</code> is the N × p diagonal counterpart of <code>WXX</code>: row j is the diagonal of wⱼxⱼxⱼᵀ. Nothing is lost because each row has only one non-zero entry.</li>
+<li><code>F_diag = colSums(XXw)</code> = diag(F). Since F is diagonal, this <em>is</em> F, and F⁻¹ = 1/<code>F_diag</code>.</li>
+</ul>
+<p><strong>Takeaway.</strong> Everything that does not depend on the clustering is computed once. This includes the final μ and w, the residuals, F (or F⁻¹), the vec(xxᵀ) layout and the Kronecker map. Each clustering then needs only per-cluster sums and the corrections.</p>
+</section>
+</section>
+<section id="general-fw-sandwich-lines-184212" class="level2">
+<h2 class="anchored" data-anchor-id="general-fw-sandwich-lines-184212">6. General FW sandwich (<a href="../scripts/simulation/lspim.R#L184-L212">lines 184–212</a>)</h2>
+<p><code>fw_covb_general(clustering)</code> returns the p × p FW covariance for one clustering.</p>
+<p><strong>Per-cluster sums.</strong></p>
+<ul>
+<li><code>grp = match(cl, unique(cl))</code> recodes the cluster IDs to 1…K in order of first appearance.</li>
+<li><code>rowsum(..., reorder = FALSE)</code> keeps that same order, so row i of every per-cluster matrix belongs to cluster i:
+<ul>
+<li><code>F_cl</code> (K × p²): row i is vec(Fᵢ).</li>
+<li><code>g_cl</code> (K × p): row i is gᵢ.</li>
+</ul></li>
+<li><code>K_cl = F_cl %*% K_map</code> gives vec(Kᵢ)ᵀ for every cluster in one matrix product.</li>
+<li><code>w_ratio</code> is each cluster’s max(w)/min(w). It is used only for the tolerance of the leverage check. <code>split()</code> orders the groups 1…K, so it is aligned with the rows.</li>
+</ul>
+<p><strong>Loop over clusters.</strong> This loop is why the general path is slow. Under C3 there is one cluster per (left subject, right subject) combination, roughly n_ctrl × n_trt ≈ n²/4 clusters. At n = 1000 that is about 250,000 eigendecompositions.</p>
+<ol type="1">
+<li><p><strong>Eigendecomposition.</strong> <code>eigen(matrix(K_cl[i, ], p, p), symmetric = TRUE)</code> gives Kᵢ = V diag(κ) Vᵀ. <code>symmetric = TRUE</code> is valid by construction and guarantees real eigenvalues and orthonormal V. The κ are cluster i’s leverages: the share of the information in each direction that comes from cluster i.</p></li>
+<li><p><strong>Clamping.</strong> <code>kappa = pmax(values, 0)</code> removes tiny negative eigenvalues caused by rounding. In theory κ ∈ [0, 1).</p></li>
+<li><p><strong>Leverage-1 check.</strong> <code>eigen()</code> sorts eigenvalues in decreasing order, so <code>kappa[1]</code> is the largest. If it is numerically 1, some direction of β is determined entirely by cluster i, so (1 − κ)⁻¹ is infinite and the correction is undefined, and the function stops with an error. A typical case is a <code>trt_visit&lt;t&gt;</code> column whose pairs all involve one control subject. The tolerance 1 − 1e-6 · max(1, w_ratio) is widened when weights within the cluster vary a lot, presumably because rounding error in κ grows with that spread (see the note).</p></li>
+<li><p><strong>Shared pieces.</strong> Both corrections have the form</p>
+<p>gᵢ + L V diag(κ · c(κ)) Vᵀ L⁻¹ gᵢ</p>
+<p>for a scalar function c, because (I − K)⁻¹ = I + V diag(κ/(1−κ)) Vᵀ and (I − K)^{-1/2} = I + V diag(κ · <code>phi_half</code>(κ)) Vᵀ. The code computes:</p>
+<ul>
+<li><strong>M = Fᵢ R⁻¹ V</strong>, which equals L Kᵢ V = <strong>L V diag(κ)</strong>. So M contains “L on the left” and the factor κ, with no need to invert L.</li>
+<li><strong>q = Vᵀ R⁻ᵀ gᵢ = Vᵀ L⁻¹ gᵢ</strong>: the score expressed in Kᵢ’s eigenbasis.</li>
+</ul></li>
+<li><p><strong>Corrected scores.</strong></p>
+<ul>
+<li>KC: aᵢ = gᵢ + M (<code>phi_half</code>(κ) ⊙ q) = (I − FᵢF⁻¹)^{-1/2} gᵢ</li>
+<li>MD: bᵢ = gᵢ + M (q ⊘ (1 − κ)) = (I − FᵢF⁻¹)⁻¹ gᵢ</li>
+</ul>
+<p>The “gᵢ + correction” form is numerically stable: when a cluster has little leverage (κ ≈ 0), the correction goes smoothly to 0.</p></li>
+<li><p><strong>Meat.</strong> <code>meat += (aᵢaᵢᵀ + bᵢbᵢᵀ) / 2</code>. Averaging the meats is the same as averaging the KC and MD sandwiches, because they share the bread.</p></li>
+</ol>
+<p><strong>Sandwich.</strong> <code>covb = F_inv %*% meat %*% F_inv</code>. φ does not appear: using (F/φ)⁻¹ as the bread would add a factor φ² that cancels the 1/φ² of a φ-scaled score. The rows and columns are named after the coefficients, so <code>multcomp</code> and the contrast matrix can match by name.</p>
+<p><strong>Takeaway.</strong> The symmetric similar matrix Kᵢ makes the eigendecomposition safe. M and q are shared by the KC and MD corrections, so each cluster costs one p × p eigendecomposition plus a few small products. The result is exact for any design, but one eigendecomposition per cluster is slow under C3 at large n.</p>
+</section>
+<section id="diagonal-fw-sandwich-lines-213237" class="level2">
+<h2 class="anchored" data-anchor-id="diagonal-fw-sandwich-lines-213237">7. Diagonal FW sandwich (<a href="../scripts/simulation/lspim.R#L213-L237">lines 213–237</a>)</h2>
+<p><code>fw_covb_diagonal(clustering)</code> computes the same quantity as section 6, using the fact that in the LSPIM design F and every Fᵢ are diagonal. There is no eigendecomposition, no Kronecker product, and no loop over clusters.</p>
+<ul>
+<li><p><strong>Per-cluster sums.</strong> <code>grp</code>, <code>F_cl</code> and <code>g_cl</code> are built as in section 6, except that <code>F_cl</code> is K × p: row i is diag(Fᵢ).</p></li>
+<li><p><strong>Leverages.</strong> <code>kappa = sweep(F_cl, 2, F_diag, "/")</code> gives the K × p matrix</p>
+<p>κᵢₖ = Fᵢ[k, k] / F[k, k],</p>
+<p>the share of coefficient k’s information that comes from cluster i. These are exactly the eigenvalues of section 6. When F and Fᵢ are diagonal, Kᵢ = diag(Fᵢ[k, k] / F[k, k]), and its eigenvectors are the unit vectors.</p></li>
+<li><p><strong>Smallest and largest weight per cluster, vectorised.</strong></p>
+<ol type="1">
+<li><code>o = order(grp, w)</code> sorts the pairs by cluster, then by weight within the cluster.</li>
+<li><code>!duplicated(grp[o])</code> marks the first pair of each cluster, which has the smallest weight. With <code>fromLast = TRUE</code> it marks the last pair, which has the largest weight.</li>
+<li>Every cluster label 1…K occurs, so element i of <code>w_min</code> and <code>w_max</code> belongs to cluster i.</li>
+</ol>
+<p>This replaces the <code>split()</code> + <code>vapply()</code> loop of section 6, which matters with about 250,000 clusters under C3.</p></li>
+<li><p><strong>Largest leverage per cluster.</strong> <code>kappa[cbind(rows, max.col(kappa, ties.method = "first"))]</code> is a vectorised <code>apply(kappa, 1, max)</code>. <strong><code>ties.method = "first"</code> matters</strong>: the default <code>"random"</code> uses the random-number generator. Inside a simulation that would silently shift the RNG stream and change every later random draw.</p></li>
+<li><p><strong>Leverage-1 check.</strong> The same check and tolerance as in section 6, applied to all clusters at once with <code>pmax</code>.</p></li>
+<li><p><strong>Corrections, elementwise.</strong></p>
+<ul>
+<li>KC: <code>A = g_cl / sqrt(1 - kappa)</code>. Row i is aᵢ.</li>
+<li>MD: <code>B = g_cl / (1 - kappa)</code>. Row i is bᵢ.</li>
+</ul>
+<p>No <code>phi_half</code> trick is needed, because there is no “g + correction” split here to cancel.</p></li>
+<li><p><strong>Sandwich in one line.</strong> <code>covb = (crossprod(A) + crossprod(B)) / 2 / tcrossprod(F_diag)</code>:</p>
+<ul>
+<li><code>crossprod(A)</code> = AᵀA = Σᵢ aᵢaᵢᵀ is the KC meat, and likewise <code>crossprod(B)</code> is the MD meat. <code>/ 2</code> gives the FW meat.</li>
+<li><code>tcrossprod(F_diag)</code> is the outer product F[k, k] · F[l, l]. Dividing elementwise by it equals F⁻¹ · meat · F⁻¹ when F is diagonal.</li>
+</ul></li>
+</ul>
+<p><strong>The covariance is not diagonal.</strong> F is diagonal, but the meat is not. One subject contributes pairs to several coefficients (for example, a control subject’s between-group pairs at visits 1 and 2). So gᵢ has several non-zero entries, and gᵢgᵢᵀ has off-diagonal terms. These covariances are needed for the Holm contrasts on β_At − mean(β_A) to be correct.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>General</th>
+<th>Diagonal</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Storage per pair</td>
+<td>N × p² (<code>WXX</code>)</td>
+<td>N × p (<code>XXw</code>)</td>
+</tr>
+<tr class="even">
+<td>Leverages</td>
+<td>One <code>eigen()</code> per cluster</td>
+<td>One <code>sweep()</code> division</td>
+</tr>
+<tr class="odd">
+<td>Loop over clusters</td>
+<td><code>for</code> over K clusters</td>
+<td>Fully vectorised</td>
+</tr>
+<tr class="even">
+<td>Weight range per cluster</td>
+<td><code>split</code> + <code>vapply</code></td>
+<td>One <code>order()</code> + <code>duplicated()</code></td>
+</tr>
+</tbody>
+</table>
+<p>The two paths agree up to rounding, which the <code>sandwich = "general"</code> equivalence tests check.</p>
+</section>
+<section id="combining-and-returning-lines-238251" class="level2">
+<h2 class="anchored" data-anchor-id="combining-and-returning-lines-238251">8. Combining and returning (<a href="../scripts/simulation/lspim.R#L238-L251">lines 238–251</a>)</h2>
+<ul>
+<li><code>fw_covb</code> holds whichever function belongs to the chosen path. Both take the same argument and return the same kind of object, so the next line can call it without branching.</li>
+<li><code>covb</code> holds the three FW covariances. They are all computed from the <strong>same</strong> β, residuals and F; only the grouping differs:
+<ul>
+<li><strong>C1</strong> captures the correlation between pairs that share the left subject.</li>
+<li><strong>C2</strong> does the same for the right subject.</li>
+<li><strong>C3</strong> captures only the correlation between pairs that share <em>both</em> subjects.</li>
+</ul>
+This is where the in-house engine saves work compared with geessbin. geessbin runs three full PGEE fits. Because β does not depend on the clustering, those three fits give the same β, up to the order of floating-point sums. The <code>"geessbin"</code> branch of <code>fit_lspim()</code> averages them with <code>colMeans</code>.</li>
+<li><code>names(beta) &lt;- design_cols</code> labels the coefficients for <code>multcomp::parm()</code> and <code>make_deviation_from_mean_l()</code>.</li>
+</ul>
+<p><strong>Return value:</strong></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Element</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>beta</code></td>
+<td>The PGEE coefficients.</td>
+</tr>
+<tr class="even">
+<td><code>covb</code></td>
+<td>The three FW covariances, <code>C1</code>, <code>C2</code> and <code>C3</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>V_raw</code></td>
+<td><strong>V_C1 + V_C2 − V_C3</strong>, the two-way cluster-robust variance (as in Cameron, Gelbach and Miller) applied to pair data. Pairs that share both subjects appear in both C1 and C2, so their covariance would be counted twice; subtracting the C3 sandwich, which contains exactly those terms, removes the double count. For within-subject pairs the C1, C2 and C3 clusters coincide. V_raw is a <em>difference</em> of positive semi-definite matrices, so it need not be positive semi-definite itself. That is why <code>fit_lspim()</code> checks its eigenvalues and, if needed, uses <code>nearest_psd()</code> with a warning (<a href="../scripts/simulation/lspim.R#L367-L376">lines 367–376</a>).</td>
+</tr>
+<tr class="even">
+<td><code>phi</code></td>
+<td>The Pearson dispersion from the last main-loop iteration, or <code>NA</code> if it was never computed. It is diagnostic only and not used in the sandwich.</td>
+</tr>
+<tr class="odd">
+<td><code>iterations</code></td>
+<td>The number of main-loop iterations. The start loop is not counted.</td>
+</tr>
+<tr class="even">
+<td><code>converged</code></td>
+<td>Whether the stopping rule was met. Passed on into <code>fit_lspim()</code>’s result.</td>
+</tr>
+<tr class="odd">
+<td><code>convergence_reason</code></td>
+<td><code>NA_character_</code> on success, otherwise the same reason as in the warning. Using <code>NA_character_</code> keeps the field a character type either way.</td>
+</tr>
+<tr class="even">
+<td><code>sandwich_path</code></td>
+<td><code>"diagonal"</code> or <code>"general"</code>. Tests use it to check that <code>"auto"</code> picks the diagonal path for the LSPIM design and that <code>"general"</code> is respected.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<pre><code>dat_gee (one row per pair: y, X, C1, C2, C3)
+   │
+   ├─ checks: y ∈ {0, .5, 1}, no all-zero columns, N &gt; p
+   │
+   ├─ Firth start (φ = 1, from β = 0) ─────────── silent if it fails
+   │
+   ├─ PGEE loop: φ = Pearson χ²/(N−p) each iteration,
+   │             β ← β + φ F⁻¹ U_penalised
+   │             exits: converged │ μ out of bounds / 50 iterations (warning) │ error
+   │
+   ├─ at final β: residuals e, score per pair x·e, F (via Cholesky)
+   │
+   ├─ FW sandwich per clustering (½ KC + ½ MD leverage corrections)
+   │     diagonal path: κ = Fᵢ[k,k]/F[k,k], elementwise         ← LSPIM
+   │     general path:  κ = eig(L⁻¹FᵢL⁻ᵀ), one eigen per cluster
+   │
+   └─ V_raw = V_C1 + V_C2 − V_C3  →  fit_lspim(): PSD check → Holm contrasts</code></pre>
+<p><code>fit_lspim_pgee_fw()</code> reproduces geessbin’s PGEE + FW. It replaces three fits with one and uses a much cheaper sandwich. Both shortcuts rest on two structural facts:</p>
+<ol type="1">
+<li>Under an independence working correlation, β does not depend on the clustering.</li>
+<li>In the LSPIM design every pair loads on exactly one coefficient, so all information matrices are diagonal.</li>
+</ol>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
