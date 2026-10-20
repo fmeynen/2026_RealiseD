@@ -871,7 +871,8 @@ estimates_d_matrix <- function(estimates) {
 #' @param m       Number of imputations.
 #' @param nu_com  Complete-data degrees of freedom.
 #'
-#' @return Numeric scalar; NA_real_ when \code{nu_com} is not a single finite number > 0.
+#' @return Numeric vector, one df per value of \code{lambda}; NA_real_ when \code{nu_com} is not
+#'   a single finite number > 0.
 
 barnard_rubin_df <- function(lambda, m, nu_com) {
   if (length(nu_com) != 1L || !is.finite(nu_com) || nu_com <= 0) {
@@ -1193,7 +1194,8 @@ is_singular <- function(cov_matrix, tol) {
 #' @return One of `"success"`, `"singular_fit"`, or `"failure"`.
 
 classify_fit_status <- function(fit_result, singular_tol = 1e-06,
-                                method = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")) {
+                                method = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM",
+                                           "MI_LSPIM")) {
   if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) {
     return("failure")
   }
@@ -1388,7 +1390,8 @@ extract_lspim_results <- function(
   if (status == "failure") {
     return(result_row)
   }
-  result_row$n_observed <- as.integer(nrow(analysis_data))
+  # MI_LSPIM's analysis data keep the missing outcomes; count the observed ones only.
+  result_row$n_observed <- as.integer(sum(!is.na(analysis_data$y)))
   result_row$interaction_tested <- TRUE
   result_row$interaction_rejected <- isTRUE(fit_result$fit$interaction_rejected)
   result_row$interaction_alpha <- as.numeric(fit_result$fit$interaction_alpha)

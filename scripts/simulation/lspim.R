@@ -433,3 +433,103 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("pgee_fw", "geessbin")) {
     error_message = error_message
   )
 }
+
+#' Fit the MI + LSPIM method on one replicate: impute, fit LSPIM per imputation, then pool.
+#'
+#' Imputes the missing outcomes m times with \code{impute_data()}, runs the LSPIM estimation
+#' step (\code{lspim_estimate()}, engine "pgee_fw") separately on each completed dataset, and
+#' pools the m coefficient vectors and combined sandwiches V_raw with Rubin's rules
+#' (\code{pool_rubin_core()}). impute_data() draws from the current global RNG;
+#' fit_mi_lspim() takes no seed of its own (see analyze_mi_lspim()'s rng_state argument).
+#'
+#' Pooled test: the Holm test of lspim_holm_test() on the pooled beta_bar and total variance T.
+#' Each deviation contrast l (rows of make_deviation_from_mean_l()) gets its own t reference
+#' with Barnard-Rubin df from \code{barnard_rubin_df(lambda_l, m, nu_com)}, with
+#' \code{lambda_l = (1 + 1/m) * l'Bl / l'Tl} and \code{nu_com} = number of subjects - 2. lambda_l
+#' is computed on the pooled T before any PSD repair; the nearest_psd() repair (once, on the
+#' pooled T, with lspim_holm_test()'s warning) only affects the test.
+#'
+#' Failures: if the imputation or any of the m LSPIM fits errors, the replicate's result is an
+#' error (\code{fit = NULL}, \code{error_message} set, prefixed with the imputation number for a
+#' fit error); there is no pooling over fewer fits. The imputations must give the same
+#' coefficient names and treatment terms (e.g. the same visits), otherwise the replicate fails.
+#'
+#' Convergence: converged = TRUE only if all m PGEE fits met their stopping rule (see
+#' fit_lspim(), engine "pgee_fw"). Replacing the pooled T via nearest_psd() is only a warning.
+#'
+#' @param data        Prepared analysis data (missing outcomes as NA), see
+#'   \code{prepare_analysis_data(type = "multiple_imputation")}.
+#' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
+#' @param alpha       Significance level of the Holm test.
+#'
+#' @return A list with fit (as from lspim_holm_test(), or NULL), converged, elapsed_seconds,
+#'   warnings, and error_message.
+fit_mi_lspim <- function(data, impute_args = set_impute_args(method_y = "2l.pmm"), alpha = 0.05) {
+  if (!is.numeric(alpha) || length(alpha) != 1L || is.na(alpha) || alpha <= 0 || alpha >= 1) {
+    stop("'alpha' must be a single number strictly between 0 and 1.")
+  }
+
+  warning_messages <- character(0)
+  error_message <- NULL
+  converged <- FALSE
+  start_time <- proc.time()[["elapsed"]]
+  fit <- withCallingHandlers(
+    tryCatch(
+      {
+        imputed_data <- impute_data(data, impute_args)
+        # .imp == 0 is the incomplete original data (include_original = TRUE); it is not fitted.
+        imputed_data <- imputed_data[imputed_data$.imp > 0, , drop = FALSE]
+        imputations <- split(imputed_data, imputed_data$.imp)
+        per_imputation <- lapply(seq_along(imputations), function(k) {
+          tryCatch(
+            lspim_estimate(imputations[[k]], engine = "pgee_fw"),
+            error = function(error) {
+              stop(paste0("imputation ", k, ": ", conditionMessage(error)), call. = FALSE)
+            }
+          )
+        })
+        same_terms <- vapply(per_imputation, function(est) {
+          identical(names(est$beta), names(per_imputation[[1L]]$beta)) &&
+            identical(est$treatment_terms, per_imputation[[1L]]$treatment_terms)
+        }, logical(1))
+        if (!all(same_terms)) {
+          stop("MI_LSPIM: the imputations give different LSPIM coefficients.")
+        }
+        converged <- all(vapply(per_imputation, `[[`, logical(1), "converged"))
+        treatment_terms <- per_imputation[[1L]]$treatment_terms
+
+        pooled <- pool_rubin_core(
+          lapply(per_imputation, `[[`, "beta"),
+          lapply(per_imputation, `[[`, "V_raw")
+        )
+        # Per-contrast Barnard-Rubin df, from the pooled T before any PSD repair.
+        nu_com <- length(unique(data$subject_id)) - 2
+        L <- make_deviation_from_mean_l(names(pooled$beta_bar), treatment_terms)
+        between_l <- diag(L %*% tcrossprod(pooled$B, L))
+        total_l <- diag(L %*% tcrossprod(pooled$T, L))
+        lambda_l <- (1 + 1 / pooled$m) * between_l / total_l
+        df_l <- barnard_rubin_df(lambda_l, pooled$m, nu_com)
+
+        holm <- lspim_holm_test(pooled$beta_bar, pooled$T, alpha, treatment_terms, df = df_l)
+        holm$interaction_test_procedure <-
+          "Holm-adjusted treatment-effect deviations, MI (Barnard-Rubin t)"
+        holm
+      },
+      error = function(error) {
+        error_message <<- conditionMessage(error)
+        NULL
+      }
+    ),
+    warning = function(warning) {
+      warning_messages <<- c(warning_messages, conditionMessage(warning))
+      invokeRestart("muffleWarning")
+    }
+  )
+  list(
+    fit = fit,
+    converged = !is.null(fit) && converged,
+    elapsed_seconds = as.numeric(proc.time()[["elapsed"]] - start_time),
+    warnings = unique(warning_messages),
+    error_message = error_message
+  )
+}

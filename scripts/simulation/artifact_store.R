@@ -31,7 +31,8 @@
 #'   "converged_ok"       if success, converged, non-singular, no warning
 #' converged is the method's real convergence (v2): lme4 optimizer code/convergence
 #' checks; reweighting loop stopped by epsilon_B; MI always; LSPIM engine pgee_fw: its single
-#' PGEE fit met its stopping rule, engine geessbin: all three GEEs converged.
+#' PGEE fit met its stopping rule, engine geessbin: all three GEEs converged; MI_LSPIM: all m
+#' per-imputation PGEE fits met their stopping rule.
 #'
 #' @param data Data frame with columns status, converged, singular,
 #'   warning_message, and error_message.
