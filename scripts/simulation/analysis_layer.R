@@ -871,7 +871,8 @@ estimates_d_matrix <- function(estimates) {
 #' @param m       Number of imputations.
 #' @param nu_com  Complete-data degrees of freedom.
 #'
-#' @return Numeric scalar; NA_real_ when \code{nu_com} is not a single finite number > 0.
+#' @return Numeric vector, one df per value of \code{lambda}; NA_real_ when \code{nu_com} is not
+#'   a single finite number > 0.
 
 barnard_rubin_df <- function(lambda, m, nu_com) {
   if (length(nu_com) != 1L || !is.finite(nu_com) || nu_com <= 0) {
@@ -882,7 +883,58 @@ barnard_rubin_df <- function(lambda, m, nu_com) {
   1 / (1 / nu_old + 1 / nu_obs)
 }
 
+#' Pool m per-imputation coefficient vectors and covariance matrices with Rubin's rules.
+#'
+#' With \code{beta_i} and \code{V_i} the estimates and covariance matrix from imputation i:
+#' \code{beta_bar} is the mean of the \code{beta_i}, \code{U_bar} the mean of the \code{V_i},
+#' \code{B} the sample covariance (denominator m - 1) of the \code{beta_i}, and
+#' \code{T = U_bar + (1 + 1/m) * B}.
+#'
+#' @param coef_list List of m >= 2 numeric vectors of the same length p.
+#' @param vcov_list List of m p x p covariance matrices, in the order of \code{coef_list}.
+#'
+#' @return List with \code{m}, \code{beta_bar} (length-p vector), and the p x p matrices
+#'   \code{U_bar}, \code{B} and \code{T}. Names and dimnames come from the first coefficient
+#'   vector.
+
+pool_rubin_core <- function(coef_list, vcov_list) {
+  m <- length(coef_list)
+  if (m < 2L) {
+    stop(
+      "Rubin's rules need at least 2 imputations to estimate the between-imputation variance; got ",
+      m, "."
+    )
+  }
+  if (length(vcov_list) != m) {
+    stop("pool_rubin_core() needs one covariance matrix per coefficient vector.")
+  }
+  p <- length(coef_list[[1]])
+  if (any(lengths(coef_list) != p)) {
+    stop("pool_rubin_core() needs coefficient vectors of the same length.")
+  }
+  is_p_by_p <- vapply(
+    vcov_list, function(V) is.matrix(V) && identical(dim(V), c(p, p)), logical(1)
+  )
+  if (!all(is_p_by_p)) {
+    stop("pool_rubin_core() needs each covariance matrix to be ", p, " x ", p, ".")
+  }
+
+  coefs <- do.call(rbind, lapply(coef_list, unname))
+  vcovs <- do.call(rbind, lapply(vcov_list, as.vector))
+  beta_bar <- colMeans(coefs)
+  U_bar <- matrix(colMeans(vcovs), nrow = p)
+  B <- stats::var(coefs)
+  total <- U_bar + (1 + 1 / m) * B
+
+  coef_names <- names(coef_list[[1]])
+  names(beta_bar) <- coef_names
+  dimnames(U_bar) <- dimnames(B) <- dimnames(total) <- list(coef_names, coef_names)
+  list(m = m, beta_bar = beta_bar, U_bar = U_bar, B = B, T = total)
+}
+
 #' Pool per-imputation CbC fits with Rubin's rules.
+#'
+#' The betas are pooled by \code{pool_rubin_core()} with diagonal covariance matrices.
 #'
 #' @param estimates_list List of m >= 2 named vectors as returned by \code{extract_cbc_result()},
 #'   one per completed dataset.
@@ -906,22 +958,21 @@ barnard_rubin_df <- function(lambda, m, nu_com) {
 #'   }
 
 pool_rubin <- function(estimates_list, nu_com) {
-  m <- length(estimates_list)
-  if (m < 2L) {
-    stop(
-      "pool_rubin() needs at least 2 imputations to estimate the between-imputation variance; got ",
-      m, "."
-    )
-  }
-  estimates <- do.call(rbind, estimates_list)
   estimate_names <- paste0("estimate_beta", 0:3)
   se_names <- paste0("se_beta", 0:3)
+  rubin <- pool_rubin_core(
+    lapply(estimates_list, function(estimates) estimates[estimate_names]),
+    lapply(estimates_list, function(estimates) {
+      diag(unname(estimates[se_names])^2, nrow = 4L)
+    })
+  )
+  m <- rubin$m
+  between_var <- diag(rubin$B)
+  total_var <- diag(rubin$T)
 
-  # Means of the estimates and of the variance components; the SEs are replaced below.
-  pooled <- colMeans(estimates)
-  within_var <- colMeans(estimates[, se_names, drop = FALSE]^2)
-  between_var <- apply(estimates[, estimate_names, drop = FALSE], 2, stats::var)
-  total_var <- within_var + (1 + 1 / m) * between_var
+  # Means of the variance components; the betas and SEs are replaced by the pooled values.
+  pooled <- colMeans(do.call(rbind, estimates_list))
+  pooled[estimate_names] <- rubin$beta_bar
   pooled[se_names] <- sqrt(total_var)
 
   lambda <- unname((1 + 1 / m) * between_var[4] / total_var[4])
@@ -1143,7 +1194,8 @@ is_singular <- function(cov_matrix, tol) {
 #' @return One of `"success"`, `"singular_fit"`, or `"failure"`.
 
 classify_fit_status <- function(fit_result, singular_tol = 1e-06,
-                                method = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM")) {
+                                method = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM",
+                                           "MI_LSPIM")) {
   if (is.null(fit_result$fit) || !is.null(fit_result$error_message)) {
     return("failure")
   }
@@ -1338,7 +1390,8 @@ extract_lspim_results <- function(
   if (status == "failure") {
     return(result_row)
   }
-  result_row$n_observed <- as.integer(nrow(analysis_data))
+  # MI_LSPIM's analysis data keep the missing outcomes; count the observed ones only.
+  result_row$n_observed <- as.integer(sum(!is.na(analysis_data$y)))
   result_row$interaction_tested <- TRUE
   result_row$interaction_rejected <- isTRUE(fit_result$fit$interaction_rejected)
   result_row$interaction_alpha <- as.numeric(fit_result$fit$interaction_alpha)

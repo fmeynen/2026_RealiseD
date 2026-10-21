@@ -1,15 +1,16 @@
 # analysis_methods.R
 # What each analysis method does per dataset and per generated scenario: the
 # per-dataset analyzers (classical ML, MI + closed-form, closed-form
-# reweighting, LSPIM), their generated-data wrappers, and the registry that
-# resolves a method name to its runner and config.
+# reweighting, LSPIM, MI + LSPIM), their generated-data wrappers, and the
+# registry that resolves a method name to its runner and config.
 #
 # Function hierarchy:
 #   run_method
 #   analyze_classical_ml, analyze_mi_closed_form,
-#     analyze_reweighting, analyze_lspim
+#     analyze_reweighting, analyze_lspim, analyze_mi_lspim
 #   analyze_generated_data_classical_ml, analyze_generated_data_mi_closed_form,
-#     analyze_generated_data_reweighting, analyze_generated_data_lspim
+#     analyze_generated_data_reweighting, analyze_generated_data_lspim,
+#     analyze_generated_data_mi_lspim
 #   validate_lspim_config, build_analysis_registry, resolve_analysis_config, run_single_analysis_method
 
 # Analyze Single Dataset ---------------------------------------------------------------------------------------
@@ -196,6 +197,62 @@ analyze_lspim <- function(data, alpha = 0.05, engine = "pgee_fw") {
   )
 }
 
+#' Run the multiple-imputation + LSPIM analysis for one simulation replicate.
+#'
+#' Imputes as \code{analyze_mi_closed_form()} does, fits LSPIM (engine "pgee_fw") per completed
+#' dataset and pools with Rubin's rules (see \code{fit_mi_lspim()}).
+#'
+#' @param data        Long-format data frame for one simulation replicate.
+#' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
+#' @param alpha       Significance level shared by all methods.
+#' @param rng_state   Optional L'Ecuyer-CMRG \code{.Random.seed}, as in
+#'   \code{analyze_mi_closed_form()}. With the same substream, the imputations are the same as
+#'   those of \code{analyze_mi_closed_form()}.
+#'
+#' @return One-row data frame with standardized MI + LSPIM analysis results.
+
+analyze_mi_lspim <- function(
+  data,
+  impute_args = set_impute_args(method_y = "2l.pmm"),
+  alpha = 0.05,
+  rng_state = NULL
+) {
+  if (!is.null(rng_state)) {
+    return(with_rng_state(
+      rng_state,
+      analyze_mi_lspim(data, impute_args, alpha = alpha, rng_state = NULL)
+    ))
+  }
+
+  method_y <- impute_args$method_y
+  if (
+    method_y == "2l.pmm" && !exists("mice.impute.2l.pmm", mode = "function")
+  ) {
+    stop(
+      "Function 'mice.impute.2l.pmm' not found. ",
+      "Attach the 'miceadds' package before calling with method_y = '2l.pmm': ",
+      "library(miceadds)"
+    )
+  }
+
+  run_method(
+    data,
+    method = "MI_LSPIM",
+    engine = "mice_pgee_fw",
+    prepare_type = "multiple_imputation",
+    fit = function(analysis_data) fit_mi_lspim(analysis_data, impute_args, alpha = alpha),
+    extract = function(fit_result, original_data, analysis_data) {
+      extract_lspim_results(
+        fit_result = fit_result,
+        original_data = original_data,
+        analysis_data = analysis_data,
+        method = "MI_LSPIM",
+        engine = "mice_pgee_fw"
+      )
+    }
+  )
+}
+
 #' Run the classical ML analysis layer across generated simulation datasets.
 #'
 #' Splits stacked canonical generated data by scenario and simulation replicate,
@@ -331,6 +388,35 @@ analyze_generated_data_lspim <- function(
   )
 }
 
+#' Run the multiple-imputation + LSPIM analysis across generated simulation datasets.
+#'
+#' Each replicate runs under its "analysis" RNG substream (see run_analysis_over_groups()), the
+#' same substream as for multiple_imputation, so both methods use the same imputed datasets.
+#'
+#' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
+#' @inheritParams analyze_generated_data_classical_ml
+
+# Name mirrors the registry's other analyze_generated_data_* wrappers; not shortened to stay
+# under 30 characters.
+analyze_generated_data_mi_lspim <- function( # nolint: object_length_linter.
+  data,
+  scenarios = NULL,
+  impute_args = set_impute_args(method_y = "2l.pmm"),
+  parallel = FALSE,
+  n_cores = default_n_cores(),
+  alpha = 0.05
+) {
+  run_analysis_over_groups(
+    data = data,
+    scenarios = scenarios,
+    analyzer_fn = analyze_mi_lspim,
+    parallel = parallel,
+    n_cores = n_cores,
+    impute_args = impute_args,
+    alpha = alpha
+  )
+}
+
 
 # Stops unless the LSPIM config holds a single, non-missing number for 'lspim_max_n' and one of
 # the LSPIM engines for 'lspim_engine'.
@@ -419,6 +505,20 @@ build_analysis_registry <- function() {
           parallel = parallel,
           n_cores = n_cores,
           engine = config$lspim_engine
+        )
+      }
+    ),
+    # No n gate and no engine choice: MI_LSPIM always uses engine pgee_fw per imputation.
+    MI_LSPIM = list(
+      default_config = list(impute_args = set_impute_args(method_y = "2l.pmm")),
+      runner = function(scenario_data, scenarios, config, parallel, n_cores, alpha) {
+        analyze_generated_data_mi_lspim(
+          data = scenario_data,
+          scenarios = scenarios,
+          impute_args = config$impute_args,
+          parallel = parallel,
+          n_cores = n_cores,
+          alpha = alpha
         )
       }
     )

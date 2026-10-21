@@ -1,6 +1,7 @@
 # test-mi-rubin.R
 # Multiple imputation as "fit, then combine": one CbC fit per completed dataset
-# (fit_mi_closed_form()), pooled with Rubin's rules (pool_rubin()).
+# (fit_mi_closed_form()), pooled with Rubin's rules (pool_rubin(), built on the
+# vector/covariance pooling of pool_rubin_core()).
 
 build_rubin_data <- function() {
   sc <- build_scenario_grid(
@@ -142,6 +143,83 @@ test_that("df_beta3 is NA when nu_com is not a positive finite number", {
 
 test_that("pool_rubin() needs at least two imputations", {
   expect_error(pool_rubin(hand_built_estimates(beta3 = 0.1), nu_com = 18), "at least 2 imputations")
+})
+
+test_that("pool_rubin() gives the same names and values as the per-column Rubin formulas", {
+  # The scalar formulas pool_rubin() used before it was built on pool_rubin_core().
+  est <- hand_built_estimates()
+  mat <- do.call(rbind, est)
+  m <- length(est)
+  estimate_names <- paste0("estimate_beta", 0:3)
+  se_names <- paste0("se_beta", 0:3)
+  u_bar <- colMeans(mat[, se_names]^2)
+  b <- apply(mat[, estimate_names], 2, stats::var)
+  total <- u_bar + (1 + 1 / m) * b
+  expected <- colMeans(mat)
+  expected[se_names] <- sqrt(total)
+  lambda <- unname((1 + 1 / m) * b[4] / total[4])
+  expected <- c(
+    expected,
+    mi_between_var_beta3 = unname(b[4]),
+    mi_lambda_beta3 = lambda,
+    df_beta3 = barnard_rubin_df(lambda, m, 18)
+  )
+
+  pooled <- pool_rubin(est, nu_com = 18)
+  expect_identical(names(pooled), names(expected))
+  expect_equal(pooled, expected, tolerance = 1e-12)
+})
+
+# pool_rubin_core() on hand-built inputs -----------------------------------------------------------------------------
+
+test_that("pool_rubin_core() gives beta_bar, U_bar, B and T for m = 2", {
+  pooled <- pool_rubin_core(
+    list(c(a = 1, b = 2), c(a = 3, b = 6)),
+    list(matrix(c(1, 0.5, 0.5, 2), 2), matrix(c(3, 0.1, 0.1, 4), 2))
+  )
+  # B = sample covariance of (1, 2) and (3, 6); T = U_bar + 1.5 B.
+  expect_identical(pooled$m, 2L)
+  expect_equal(pooled$beta_bar, c(a = 2, b = 4), tolerance = 1e-12)
+  expect_equal(unname(pooled$U_bar), matrix(c(2, 0.3, 0.3, 3), 2), tolerance = 1e-12)
+  expect_equal(unname(pooled$B), matrix(c(2, 4, 4, 8), 2), tolerance = 1e-12)
+  expect_equal(unname(pooled$T), matrix(c(5, 6.3, 6.3, 15), 2), tolerance = 1e-12)
+})
+
+test_that("pool_rubin_core() gives beta_bar, U_bar, B and T for m = 3", {
+  pooled <- pool_rubin_core(
+    list(c(a = 0, b = 1), c(a = 1, b = 1), c(a = 2, b = 4)),
+    list(diag(1, 2), diag(2, 2), matrix(c(3, 1, 1, 3), 2))
+  )
+  # Deviations from beta_bar = (1, 2): a = (-1, 0, 1), b = (-1, -1, 2); T = U_bar + 4/3 B.
+  expect_identical(pooled$m, 3L)
+  expect_equal(pooled$beta_bar, c(a = 1, b = 2), tolerance = 1e-12)
+  expect_equal(unname(pooled$U_bar), matrix(c(2, 1 / 3, 1 / 3, 2), 2), tolerance = 1e-12)
+  expect_equal(unname(pooled$B), matrix(c(1, 1.5, 1.5, 3), 2), tolerance = 1e-12)
+  expect_equal(unname(pooled$T), matrix(c(10 / 3, 7 / 3, 7 / 3, 6), 2), tolerance = 1e-12)
+})
+
+test_that("pool_rubin_core() takes names and dimnames from the first coefficient vector", {
+  pooled <- pool_rubin_core(
+    list(c(a = 0, b = 1), c(x = 1, y = 1)),
+    list(diag(1, 2), diag(2, 2))
+  )
+  ab <- list(c("a", "b"), c("a", "b"))
+  expect_identical(names(pooled$beta_bar), c("a", "b"))
+  expect_identical(dimnames(pooled$U_bar), ab)
+  expect_identical(dimnames(pooled$B), ab)
+  expect_identical(dimnames(pooled$T), ab)
+})
+
+test_that("pool_rubin_core() rejects invalid inputs", {
+  v <- diag(1, 2)
+  expect_error(pool_rubin_core(list(c(1, 2)), list(v)), "at least 2 imputations")
+  expect_error(
+    pool_rubin_core(list(c(1, 2), c(2, 3)), list(v)),
+    "one covariance matrix per coefficient vector"
+  )
+  expect_error(pool_rubin_core(list(c(1, 2), c(2, 3, 4)), list(v, v)), "same length")
+  expect_error(pool_rubin_core(list(c(1, 2), c(2, 3)), list(v, diag(1, 3))), "to be 2 x 2")
+  expect_error(pool_rubin_core(list(c(1, 2), c(2, 3)), list(v, c(1, 1))), "to be 2 x 2")
 })
 
 # fit_mi_closed_form() on imputed data -------------------------------------------------------------------------------

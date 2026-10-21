@@ -84,7 +84,8 @@ run_golden_pipeline <- function(root_dir) {
         "classical_ml",
         "multiple_imputation",
         "reweighting",
-        "LSPIM"
+        "LSPIM",
+        "MI_LSPIM"
       ),
       n_simulations = n_simulations,
       analysis_configs = list(
@@ -97,6 +98,9 @@ run_golden_pipeline <- function(root_dir) {
         ),
         LSPIM = list(
           lspim_max_n = 50
+        ),
+        MI_LSPIM = list(
+          impute_args = set_impute_args(method_y = "2l.pmm")
         )
       ),
       alpha = 0.05,

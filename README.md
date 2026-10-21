@@ -32,7 +32,7 @@ Dropout is monotone (`generate_dropout_process()`):
 The old spelling `half-missing` is rejected by `validate_scenario_grid()` with a message naming
 the new one.
 
-The four methods (names as they appear in the `method` column of the results; these registry keys
+The five methods (names as they appear in the `method` column of the results; these registry keys
 are the only method names used anywhere in the code):
 
 | `method` | `engine` | Description |
@@ -40,7 +40,8 @@ are the only method names used anywhere in the code):
 | `classical_ml` | `lme4` | `lme4::lmer()` with `REML = FALSE` on the observed rows. |
 | `multiple_imputation` | `mice_cbc` | Two-level imputation (`mice`, `method_y = "2l.pmm"` via `miceadds`, `m = 3`) of `y`; the imputation model has `treatment`, `time_value` (fixed effect and random slope per subject) and `trt_time` = `treatment * time_value` (fixed effect, derived by `impute_data()`). The closed-form cluster-by-cluster (CbC) estimator is fitted **on each of the `m` completed datasets** and the fits are pooled with Rubin's rules (`pool_rubin()`): estimate = mean of the `m` estimates, SE = sqrt(`U_bar` + (1 + 1/`m`) `B`) with `U_bar` the mean per-imputation variance and `B` the variance of the estimates; `sigma2_hat` and the `D` entries are means of the per-imputation values. |
 | `reweighting` | `cbc` | CbC estimator on the observed data (subjects with fewer than 3 observations excluded), followed by iterative reweighting with optimal weights. Update is damped (`damping`, default 0.7) and stops when the max change in beta is below `epsilon_B` (1e-6) or after `max_iterations` (30). |
-| `LSPIM` | in-house `pgee_fw` (default) or `geessbin` | Pairwise pseudo-observations (win = 1, tie = 0.5) within subjects and between arms per visit, logistic GEEs with independence working correlation clustered by left subject, right subject and pair, combined sandwich variance `V = V_C1 + V_C2 - V_C3`, and a Holm-adjusted test (`multcomp`) that the per-visit treatment effects differ. Reports only an interaction test decision, no beta estimates. Both engines give the Firth-penalised estimate (`PGEE`) with the Ford-Westgate variance (`FW`, the average of the Kauermann-Carroll and Mancl-DeRouen corrections; not Fay-Graubard). Engine (`lspim_engine`): `pgee_fw` (default, `fit_lspim_pgee_fw()`) fits the PGEE once, which under independence does not depend on the clustering, and computes the three FW sandwiches from p x p quantities per cluster (for the LSPIM design, where every design row has one non-zero entry, they are elementwise and need only pairs x parameters memory; other designs fall back to the general per-cluster form, see Section 8.1 of the note); time grows roughly quadratically in n and memory linearly (no pairs x pairs matrix). See [lspim-pgee-fw-in-house.md](supplementary_material/lspim-pgee-fw-in-house.md). `geessbin` runs three `geessbin` fits (`fit_lspim_gee()`), which are slow and memory-hungry at large n. Edge cases differ: `pgee_fw` accepts ties (0.5 pseudo-scores), whereas geessbin stops on them; with `pgee_fw` a cluster with leverage 1 (FW correction undefined) or a visit without between-arm pairs (all-zero design column) fails the replicate. Skipped for scenarios with `n > lspim_max_n` (default 50; `Inf` switches the gate off). |
+| `LSPIM` | in-house `pgee_fw` (default) or `geessbin` | Pairwise pseudo-observations (win = 1, tie = 0.5) within subjects and between arms per visit, logistic GEEs with independence working correlation clustered by left subject, right subject and pair, combined sandwich variance `V = V_C1 + V_C2 - V_C3`, and a Holm-adjusted test (normal reference, `lspim_holm_test()`) that the per-visit treatment effects differ. Reports only an interaction test decision, no beta estimates. Both engines give the Firth-penalised estimate (`PGEE`) with the Ford-Westgate variance (`FW`, the average of the Kauermann-Carroll and Mancl-DeRouen corrections; not Fay-Graubard). Engine (`lspim_engine`): `pgee_fw` (default, `fit_lspim_pgee_fw()`) fits the PGEE once, which under independence does not depend on the clustering, and computes the three FW sandwiches from p x p quantities per cluster (for the LSPIM design, where every design row has one non-zero entry, they are elementwise and need only pairs x parameters memory; other designs fall back to the general per-cluster form, see Section 8.1 of the note); time grows roughly quadratically in n and memory linearly (no pairs x pairs matrix). See [lspim-pgee-fw-in-house.md](supplementary_material/lspim-pgee-fw-in-house.md). `geessbin` runs three `geessbin` fits (`fit_lspim_gee()`), which are slow and memory-hungry at large n. Edge cases differ: `pgee_fw` accepts ties (0.5 pseudo-scores), whereas geessbin stops on them; with `pgee_fw` a cluster with leverage 1 (FW correction undefined) or a visit without between-arm pairs (all-zero design column) fails the replicate. Skipped for scenarios with `n > lspim_max_n` (default 50; `Inf` switches the gate off). |
+| `MI_LSPIM` | `mice_pgee_fw` | Multiple imputation with the `multiple_imputation` imputation model (`impute_data()`, same settings and, per replicate, the same imputed datasets), LSPIM with engine `pgee_fw` on each of the `m` completed datasets (`fit_mi_lspim()`), Rubin pooling of the coefficient vector and the combined covariance `V` (`pool_rubin_core()`), and the Holm test on the pooled estimate and total variance `T` with a t reference per contrast: Barnard-Rubin df with nu_com = N − 2 and lambda = (1 + 1/m) l'Bl / l'Tl. Reports only an interaction test decision, no beta estimates. No `n` gate and no engine choice. |
 
 The CbC estimator (`cbc_estimator()` in [analysis_layer.R](scripts/simulation/analysis_layer.R)) is
 a two-stage closed-form estimator: per-subject OLS in stage 1, weighted combination in stage 2.
@@ -149,7 +150,8 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
 - **How each method decides.** The parametric methods (`classical_ml`, `multiple_imputation`,
   `reweighting`) use a two-sided Wald t test on beta3
   (`|estimate / se| > qt(1 − alpha / 2, df_beta3)`, `wald_interaction_decision()`). `LSPIM`
-  rejects when any Holm-adjusted per-visit p-value (normal reference) is at most alpha. The
+  rejects when any Holm-adjusted per-visit p-value (normal reference) is at most alpha;
+  `MI_LSPIM` likewise, with a Barnard-Rubin t reference per contrast. The
   decision is stored in `interaction_tested`, `interaction_rejected`, `interaction_alpha` and
   `interaction_test_procedure` (`wald_t` or the LSPIM procedure).
 - **Degrees of freedom (`df_beta3`).** With N the number of subjects the method actually fits
@@ -161,7 +163,7 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
   somewhat optimistic. `multiple_imputation` uses the Barnard-Rubin df with complete-data df
   nu_com = N − 2 and m = 3: lambda = (1 + 1/m) B / T, nu_old = (m − 1) / lambda², nu_obs =
   (nu_com + 1) / (nu_com + 3) × nu_com × (1 − lambda) and df = 1 / (1 / nu_old + 1 / nu_obs)
-  (lambda = 0 gives df = nu_obs). `LSPIM` has `df_beta3 = NA`.
+  (lambda = 0 gives df = nu_obs). `LSPIM` and `MI_LSPIM` have `df_beta3 = NA`.
 - **beta3 gate.** The true beta3 of a group decides which rate is computed. With `beta3 == 0`
   only `type1_error` is computed (`power` is `NA`, `n_power` is 0); with `beta3 != 0` only `power`
   (`type1_error` is `NA`, `n_type1_error` is 0). MSE and coverage are computed in both cases,
@@ -176,7 +178,8 @@ never stops a scenario. The `analyze_generated_data_*()` functions (e.g.
   count. The rule is the same for every method; `n_type1_error` / `n_power` are the eligible
   rows.
 - **LSPIM** reports no beta estimates, so its `mse_beta*` and `coverage_beta3` are `NA` and
-  `n_estimated` is 0. Its groups exist only for `n <= lspim_max_n`.
+  `n_estimated` is 0. Its groups exist only for `n <= lspim_max_n`. The same holds for
+  `MI_LSPIM`, except that it has no `n` gate.
 - **Old artifacts.** Results schema v6 and aggregation schema v7 are current (v5: the `D`-matrix
   fix and Rubin-pooled multiple imputation with the two `mi_*` columns; v6: the `df_beta3`
   column and the t reference (`wald_t`); v7: `mean_mi_lambda_beta3`). Aggregation
@@ -201,6 +204,7 @@ The criterion differs per method:
 | `multiple_imputation` | never on a successful fit (the `m` CbC fits are closed form; `mice` runs a fixed number of iterations with no convergence test). If the imputation or any of the `m` fits fails, the replicate is an error (message `imputation k: ...` for a failed fit); there is no pooling over fewer fits | `D_tilde` positive-definiteness repair in any of the `m` fits (each fit is a single pass, so its `D_tilde` is the final one; also makes the fit singular, see below) |
 | `reweighting` | the reweighting loop reached `max_iterations` while the largest change in beta was still above `epsilon_B` (flag `converged` returned by `cbc_estimator()`) | `D_tilde` positive-definiteness repair of the final `D` (also makes the fit singular, see below); repairs in earlier reweighting passes (the stage-2 start or an intermediate iteration) raise no warning |
 | `LSPIM` | engine `geessbin`: any of its three GEE fits reports a `convergence` status other than "converged" (`lspim_gees_converged()`); in geessbin 1.0.2 that is "maximum number of iterations consumed" (iteration limit reached without meeting the tolerance), "convergence failure", "fitted probabilities numerically 0 or 1 occurred." or "infinite scale parameter". Engine `pgee_fw`: its single PGEE fit stopped without meeting its stopping rule (largest relative step `max\|delta\| / (\|beta\| + 0.1)` at most 1e-8), because fitted probabilities left [1e-4, 0.9999] or 50 iterations were used; one warning names the reason and the sandwiches are still computed at the last estimate | replacing the combined covariance `V` by the nearest positive semi-definite matrix (`nearest_psd()`) |
+| `MI_LSPIM` | any of the `m` per-imputation PGEE fits (engine `pgee_fw`, criterion as for `LSPIM`) stopped without meeting its stopping rule. If the imputation or any of the `m` fits fails, the replicate is an error (message `imputation k: ...` for a failed fit); there is no pooling over fewer fits | replacing the pooled total covariance `T` by the nearest positive semi-definite matrix (`nearest_psd()`, once, after pooling) |
 
 **Positive-definiteness repairs (CbC `D_tilde`, LSPIM `V`) never make a fit not converged.** A
 repair of the final CbC `D_tilde` (`multiple_imputation`, `reweighting`) additionally counts as a
@@ -252,7 +256,7 @@ scripts/
     data_generation_layer.R  Scenario grid, data-generating model, dropout, RNG streams, generation manifest
     analysis_layer.R         Data preparation, lme4 fit, imputation, CbC estimator, convergence, result extraction
     analysis_methods.R       run_method(), per-dataset analyzers, method registry, method defaults
-    lspim.R                  LSPIM fit (fit_lspim())
+    lspim.R                  LSPIM fit (fit_lspim()) and MI + LSPIM fit (fit_mi_lspim())
     pipeline.R               run_generation(), run_requested_analyses(), per-replicate loop
     artifact_store.R         Hashes, output paths, manifests, cache checks, convergence_status
     aggregation_layer.R      Performance metrics (aggregate_results())
@@ -494,7 +498,7 @@ testthat 3.3.2, lintr 3.4.0, renv 1.2.4).
 | reformulas | formula parsing |
 | geessbin | LSPIM engine `geessbin` (the default `pgee_fw` engine is in-house) |
 | digest | cache hashes (`xxhash64`) |
-| multcomp | Holm test |
+| multcomp | no longer used by the code (the Holm test is in-house); still in `renv.lock` |
 | dplyr | row binding |
 | testthat, withr, lintr | tests |
 
