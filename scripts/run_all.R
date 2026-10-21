@@ -70,6 +70,9 @@ analysis_configs <- list(
   ),
   LSPIM = list(
     lspim_max_n = Inf
+  ),
+  MI_LSPIM = list(
+    impute_args = set_impute_args(method_y = "2l.pmm")
   )
 )
 
@@ -88,6 +91,29 @@ analysis_outputs <- run_requested_analyses(
   scenarios = scenarios,
   generation_manifest = generation_manifest,
   analyses = c("classical_ml", "multiple_imputation", "reweighting", "LSPIM"),
+  n_simulations = n_simulations,
+  analysis_configs = analysis_configs,
+  alpha = 0.05,
+  output_dir = analysis_output_dir,
+  overwrite = FALSE,
+  parallel = use_parallel,
+  n_cores = n_cores
+)
+
+# MI_LSPIM runs as a separate analysis run: the run hash covers the requested analyses, so adding it to the call
+# above would change that run's hash and recompute the other methods. Its results get their own run folder.
+# Only scenarios with n <= mi_lspim_max_n are analysed. The gate subsets the generation manifest's entries, which do
+# not enter the run hash, so raising it to Inf later keeps the run folder and only adds the remaining scenarios.
+mi_lspim_max_n <- 100
+mi_lspim_manifest <- generation_manifest
+mi_lspim_manifest$entries <- mi_lspim_manifest$entries[
+  mi_lspim_manifest$entries$scenario_id %in% scenarios$scenario_id[scenarios$n <= mi_lspim_max_n], ,
+  drop = FALSE
+]
+analysis_outputs_mi_lspim <- run_requested_analyses(
+  scenarios = scenarios,
+  generation_manifest = mi_lspim_manifest,
+  analyses = "MI_LSPIM",
   n_simulations = n_simulations,
   analysis_configs = analysis_configs,
   alpha = 0.05,
