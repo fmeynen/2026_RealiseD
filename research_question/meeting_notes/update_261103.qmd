@@ -158,19 +158,26 @@ mse_split_table <- function(df, drop_code, caption) {
     knitr::kable(caption = caption, align = "l")
 }
 
-metric_plot <- function(df, metric, ylab, hline = NULL, log_y = FALSE) {
+# facet_effect = TRUE puts the effect sizes in facet rows instead of shape/linetype.
+metric_plot <- function(df, metric, ylab, hline = NULL, log_y = FALSE, facet_effect = FALSE) {
+  effect_aes <- if (facet_effect) aes() else aes(shape = effect, linetype = effect)
   p <- ggplot(df, aes(
-    x = n, y = .data[[metric]], colour = method, shape = effect, linetype = effect,
+    x = n, y = .data[[metric]], colour = method,
     group = interaction(method, effect)
   )) +
+    effect_aes +
     geom_line() +
     geom_point(size = 2) +
-    facet_wrap(~dropout) +
     scale_colour_manual(values = method_colours, drop = TRUE) +
     labs(x = "Number of clusters", y = ylab, colour = "Method", shape = "Effect", linetype = "Effect") +
     theme_minimal() +
     theme(legend.position = "bottom", legend.box = "vertical")
-  if (n_distinct(df$effect) == 1) p <- p + guides(shape = "none", linetype = "none")
+  if (facet_effect) {
+    p <- p + facet_grid(effect ~ dropout, labeller = label_wrap_gen(20))
+  } else {
+    p <- p + facet_wrap(~dropout)
+  }
+  if (facet_effect || n_distinct(df$effect) == 1) p <- p + guides(shape = "none", linetype = "none")
   if (!is.null(hline)) p <- p + geom_hline(yintercept = hline, linetype = "dotted")
   if (log_y) p <- p + scale_y_log10()
   p
@@ -390,24 +397,25 @@ mse_split_table(lin_est, "3O", "MSE, bias² and variance (var) of beta3, three o
 
 ```{r}
 #| label: fig-lin-mse
+#| fig-height: 5.5
 #| fig-cap: "MSE of beta3 for the linear time trend."
-metric_plot(lin_est, "mse_beta3", "MSE (beta3)", log_y = FALSE)
+metric_plot(lin_est, "mse_beta3", "MSE (beta3)", log_y = FALSE, facet_effect = TRUE)
 ```
 
 ```{r}
 #| label: fig-lin-bias2
 #| fig-pos: "H"
-#| fig-height: 3
+#| fig-height: 5.5
 #| fig-cap: "Squared bias of beta3 for the linear time trend (log scale)."
-metric_plot(lin_est, "bias2_beta3", "Bias² (beta3)", log_y = TRUE)
+metric_plot(lin_est, "bias2_beta3", "Bias² (beta3)", log_y = TRUE, facet_effect = TRUE)
 ```
 
 ```{r}
 #| label: fig-lin-var
 #| fig-pos: "H"
-#| fig-height: 3
+#| fig-height: 5.5
 #| fig-cap: "Variance of beta3 for the linear time trend."
-metric_plot(lin_est, "var_beta3", "Variance (beta3)")
+metric_plot(lin_est, "var_beta3", "Variance (beta3)", facet_effect = TRUE)
 ```
 
 - MSE falls with the number of clusters at a similar rate for all methods; the effect size doesn't matter, and MSE is slightly lower under three observations minimum.
@@ -471,8 +479,9 @@ metric_table(lin_est, "coverage_beta3", "Coverage of the 95% t interval for beta
 
 ```{r}
 #| label: fig-lin-cov
+#| fig-height: 5.5
 #| fig-cap: "Coverage of the 95% interval for beta3 for the linear time trend (dotted line: 0.95)."
-metric_plot(lin_est, "coverage_beta3", "Coverage (beta3)", hline = 0.95)
+metric_plot(lin_est, "coverage_beta3", "Coverage (beta3)", hline = 0.95, facet_effect = TRUE)
 ```
 
 - Classical ML has low coverage at small $n$ (about 0.90 at $n = 10$, 0.92--0.93 at $n = 20$) and is close to nominal from $n = 50$.
