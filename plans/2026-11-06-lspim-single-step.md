@@ -78,8 +78,12 @@ Ground rules:
 - Seed: `set.seed(123)` inside the call; the global `.Random.seed` is saved and restored on exit
   (the simulation RNG stream, imputation draws and other methods' goldens do not change).
   If `.Random.seed` does not exist yet, remove it again on exit.
-- Integration error > abseps, or a message other than "Normal Completion", becomes a warning
-  (so it reaches the result row's `warning_message`). An invalid integrated p (non-finite or
+- **Near-alpha refinement** (decided 2026-11-06 during commit 2): at maxpts 1e5 the error is
+  ~2e-5 to 6e-5 on almost every fit (the deviation correlation is singular), above abseps.
+  So: integrate at 1e5; if |p - alpha| <= 3 * error, integrate again at maxpts 1e7 (~3 s, rare).
+  Warn only if |p - alpha| <= 3 * error still holds afterwards (the error could affect the
+  decision), or on a message other than "Normal Completion" / "Completion with error > abseps"
+  (warnings reach the result row's `warning_message`). An invalid integrated p (non-finite or
   outside [0, 1] beyond 1e-10) is an error; otherwise clamp to [0, 1].
 - One contrast (m = 1): plain two-sided t, no integration.
 
@@ -97,7 +101,7 @@ Ground rules:
 
 - [x] 1. `docs:` add the reference script folder (`scripts/reference/stijn_lspim/`), `CONTEXT.md`
       and this plan.
-- [ ] 2. `feat:` contrast-level test helpers in `lspim.R`: S check/repair, single-step p-value
+- [x] 2. `feat:` contrast-level test helpers in `lspim.R`: S check/repair, single-step p-value
       (`mvtnorm`, seeded, RNG restored, integration warnings), Holm and single-contrast t, and one
       test function returning primary + secondary results. Unit tests: single-step p equals a direct
       `pmvt()` call and the reference's `revision_test()` (Single_step, Holm, time, Finite with the

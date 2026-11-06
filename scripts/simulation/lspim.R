@@ -384,6 +384,178 @@ lspim_holm_test <- function(beta, V, alpha, treatment_terms, df = Inf) {
   )
 }
 
+#' Contrast row for the time hypothesis: trend_treat - trend_ctrl.
+#'
+#' @param beta_names Coefficient names; must contain `trend_treat` and `trend_ctrl`.
+#' @return A 1-row matrix with columns `beta_names`.
+make_time_contrast_l <- function(beta_names) {
+  if (!all(c("trend_treat", "trend_ctrl") %in% beta_names)) {
+    stop("beta_names must contain trend_treat and trend_ctrl.")
+  }
+  L <- matrix(0, nrow = 1L, ncol = length(beta_names))
+  colnames(L) <- beta_names
+  rownames(L) <- "trend_treat - trend_ctrl"
+  L[1L, "trend_treat"] <- 1
+  L[1L, "trend_ctrl"] <- -1
+  L
+}
+
+#' Covariance S = L V L' of a set of contrasts, checked and repaired if needed.
+#'
+#' S is symmetrised. If it has a negative eigenvalue below -1e-8 it is replaced by
+#' nearest_psd() (with a warning). Errors on non-finite entries or non-positive variances.
+#'
+#' @return The (possibly repaired) contrast covariance matrix.
+lspim_contrast_cov <- function(L, V) {
+  S <- L %*% tcrossprod(V, L)
+  S <- (S + t(S)) / 2
+  dimnames(S) <- list(rownames(L), rownames(L))
+  if (any(!is.finite(S))) {
+    stop("Contrast covariance is not finite.")
+  }
+  if (min(eigen(S, symmetric = TRUE, only.values = TRUE)$values) < -1e-8) {
+    warning(
+      "Contrast covariance has negative eigenvalues; ",
+      "using nearest PSD matrix for numerical inference."
+    )
+    S <- nearest_psd(S)
+  }
+  if (any(diag(S) <= 0)) {
+    stop("Contrast covariance has non-positive contrast variances.")
+  }
+  S
+}
+
+#' Single-step max-|t| p-value: P(max |T_i| >= max |z_i|) under a multivariate t.
+#'
+#' Uses mvtnorm::pmvt() (integer df only) with a fixed seed; the global RNG state is restored
+#' on exit. One contrast gives the plain two-sided t p-value. mvtnorm warnings propagate.
+#' The integral is first evaluated with `maxpts`. If `alpha` is given and
+#' |p - alpha| <= 3 * error, it is evaluated again with `refine_maxpts` and that result is used.
+#' Warnings come after any refinement: if `alpha` is given, when |p - alpha| <= 3 * error still
+#' holds (the error could matter for the decision); if `alpha` is NULL, when error > abseps.
+#' A message other than "Normal Completion" or "Completion with error > abseps" also warns.
+#'
+#' @param z Contrast t statistics.
+#' @param R Correlation matrix of the contrasts.
+#' @param df Degrees of freedom (a single positive integer-valued number when length(z) > 1).
+#' @param alpha Optional significance level that triggers the refinement.
+#' @return A list with p, integration_error, integration_message and refined.
+lspim_single_step_p <- function(z, R, df, alpha = NULL, seed = 123L, maxpts = 100000L,
+                                abseps = 1e-5, refine_maxpts = 10000000L) {
+  m <- length(z)
+  mx <- max(abs(z))
+  if (m == 1L) {
+    return(list(
+      p = 2 * stats::pt(-mx, df), integration_error = 0, integration_message = "",
+      refined = FALSE
+    ))
+  }
+  if (length(df) != 1L || !is.finite(df) || df <= 0 || df != round(df)) {
+    stop("df must be a single positive integer-valued number for the single-step test.")
+  }
+  seed_name <- ".Random.seed"
+  had_seed <- exists(seed_name, envir = globalenv(), inherits = FALSE)
+  if (had_seed) {
+    old_seed <- get(seed_name, envir = globalenv(), inherits = FALSE)
+  }
+  on.exit(
+    if (had_seed) {
+      assign(seed_name, old_seed, envir = globalenv())
+    } else if (exists(seed_name, envir = globalenv(), inherits = FALSE)) {
+      rm(list = seed_name, envir = globalenv())
+    },
+    add = TRUE
+  )
+  integrate <- function(npts) {
+    set.seed(seed)
+    val <- mvtnorm::pmvt(
+      lower = rep(-mx, m), upper = rep(mx, m), df = as.integer(df), corr = R,
+      algorithm = mvtnorm::GenzBretz(maxpts = npts, abseps = abseps, releps = 0)
+    )
+    err <- attr(val, "error")
+    list(
+      p = 1 - as.numeric(val),
+      err = if (is.null(err)) NA_real_ else err,
+      msg = paste(attr(val, "msg"), collapse = "; ")
+    )
+  }
+  near_alpha <- function(r) {
+    !is.null(alpha) && is.finite(r$err) && abs(r$p - alpha) <= 3 * r$err
+  }
+  res <- integrate(maxpts)
+  refined <- near_alpha(res)
+  if (refined) {
+    res <- integrate(refine_maxpts)
+  }
+  warn_error <- if (is.null(alpha)) {
+    is.finite(res$err) && res$err > abseps
+  } else {
+    near_alpha(res)
+  }
+  if (warn_error) {
+    warning("Single-step integration error may affect the decision: ", res$err)
+  }
+  if (nzchar(res$msg) && !res$msg %in% c("Normal Completion", "Completion with error > abseps")) {
+    warning("Single-step integration: ", res$msg)
+  }
+  p <- res$p
+  if (length(p) != 1L || !is.finite(p) || p < -1e-10 || p > 1 + 1e-10) {
+    stop("Invalid integrated single-step p-value.")
+  }
+  list(
+    p = min(1, max(0, p)), integration_error = res$err, integration_message = res$msg,
+    refined = refined
+  )
+}
+
+#' LSPIM interaction test on the contrast level (not yet wired into fit_lspim()).
+#'
+#' Primary: single-step max-|t| test of the treatment-effect deviations from their mean
+#' (`single_step_p`, `interaction_rejected = p < alpha`). Secondary: Holm-adjusted p-values of the
+#' same contrasts (`Holm_p`, df `df_holm`) and the time contrast trend_treat - trend_ctrl
+#' (`time_p`, `time_rejected`, df `df_time`).
+#'
+#' @param df_single_step Integer-valued df of the multivariate t.
+#' @param df_holm,df_time Scalar (df_holm: or one per contrast); not rounded.
+#' @return A list with beta, V, single_step_p, interaction_rejected, interaction_alpha,
+#'   interaction_test_procedure, df_single_step, integration_error, integration_message,
+#'   integration_refined (see lspim_single_step_p()), Holm_p,
+#'   time_p and time_rejected.
+lspim_interaction_test <- function(beta, V, alpha, treatment_terms, df_single_step,
+                                   df_holm = df_single_step, df_time = df_single_step) {
+  L <- make_deviation_from_mean_l(names(beta), treatment_terms)
+  est <- drop(L %*% beta)
+  S <- lspim_contrast_cov(L, V)
+  z <- est / sqrt(diag(S))
+  ss <- lspim_single_step_p(z, stats::cov2cor(S), df_single_step, alpha = alpha)
+  holm_p <- stats::p.adjust(2 * stats::pt(-abs(z), df_holm), method = "holm")
+
+  Lt <- make_time_contrast_l(names(beta))
+  St <- lspim_contrast_cov(Lt, V)
+  time_t <- unname(drop(Lt %*% beta) / sqrt(St[1L, 1L]))
+  time_p <- 2 * stats::pt(-abs(time_t), df_time)
+
+  if (!is.finite(ss$p)) {
+    stop("LSPIM did not produce a finite single-step p-value.")
+  }
+  list(
+    beta = beta,
+    V = V,
+    single_step_p = ss$p,
+    interaction_rejected = ss$p < alpha,
+    interaction_alpha = alpha,
+    interaction_test_procedure = "Single-step max-t treatment-effect deviations",
+    df_single_step = df_single_step,
+    integration_error = ss$integration_error,
+    integration_message = ss$integration_message,
+    integration_refined = ss$refined,
+    Holm_p = holm_p,
+    time_p = time_p,
+    time_rejected = time_p < alpha
+  )
+}
+
 #' Fit the LSPIM model for one dataset.
 #'
 #' Convergence: engine "pgee_fw": converged = FALSE if the single PGEE fit stopped without
