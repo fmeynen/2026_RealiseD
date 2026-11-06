@@ -346,44 +346,6 @@ lspim_estimate <- function(dat, engine = c("pgee_fw", "geessbin")) {
   list(beta = beta, V_raw = V_raw, converged = converged, treatment_terms = treatment_terms)
 }
 
-#' Inference step of LSPIM: Holm test of the treatment-effect deviations from their mean.
-#'
-#' V is replaced by nearest_psd() (with a warning) if it is not PSD. Each deviation is tested
-#' with a two-sided t test on `df` degrees of freedom (Inf gives the normal reference).
-#'
-#' @param df Scalar or one value per treatment term.
-#' @return A list with beta, V (the matrix used for inference), Holm_p, interaction_rejected,
-#'   interaction_alpha and interaction_test_procedure.
-lspim_holm_test <- function(beta, V, alpha, treatment_terms, df = Inf) {
-  V_for_inference <- V
-  V_eig_check <- (V + t(V)) / 2
-  V_eig <- eigen(V_eig_check, symmetric = TRUE)
-  if (min(V_eig$values) < -1e-8 || any(diag(V) <= 0)) {
-    warning(
-      "Combined V has negative eigenvalues or non-positive variances; ",
-      "using nearest PSD matrix for numerical inference."
-    )
-    V_for_inference <- nearest_psd(V, eig = V_eig)
-  }
-
-  L_const <- make_deviation_from_mean_l(names(beta), treatment_terms)
-  estimates <- drop(L_const %*% beta)
-  ses <- sqrt(diag(L_const %*% tcrossprod(V_for_inference, L_const)))
-  holm_p <- stats::p.adjust(2 * stats::pt(-abs(estimates / ses), df), method = "holm")
-  if (length(holm_p) == 0L || !any(is.finite(holm_p))) {
-    stop("LSPIM did not produce a finite Holm-adjusted p-value.")
-  }
-
-  list(
-    beta = beta,
-    V = V_for_inference,
-    Holm_p = holm_p,
-    interaction_rejected = any(holm_p <= alpha, na.rm = TRUE),
-    interaction_alpha = alpha,
-    interaction_test_procedure = "Holm-adjusted treatment-effect deviations"
-  )
-}
-
 #' Contrast row for the time hypothesis: trend_treat - trend_ctrl.
 #'
 #' @param beta_names Coefficient names; must contain `trend_treat` and `trend_ctrl`.
@@ -398,6 +360,45 @@ make_time_contrast_l <- function(beta_names) {
   L[1L, "trend_treat"] <- 1
   L[1L, "trend_ctrl"] <- -1
   L
+}
+
+#' Full-rank basis of the treatment-effect deviations: rows beta_k - beta_K, k = 1..K-1.
+#'
+#' Same row space as make_deviation_from_mean_l() (which has rank K - 1), so it gives the
+#' same trace statistics; used for the fraction of missing information of the single-step test.
+#'
+#' @return A (K - 1)-row matrix with columns `beta_names`.
+make_visit_difference_l <- function(beta_names, treatment_terms) {
+  K <- length(treatment_terms)
+  if (K < 2) stop("Need at least two treatment terms.")
+  L <- matrix(0, nrow = K - 1L, ncol = length(beta_names))
+  colnames(L) <- beta_names
+  rownames(L) <- paste0(treatment_terms[-K], " - ", treatment_terms[K])
+  for (i in seq_len(K - 1L)) {
+    L[i, treatment_terms[i]] <- 1
+    L[i, treatment_terms[K]] <- -1
+  }
+  L
+}
+
+#' Trace-form fraction of missing information of a set of contrasts.
+#'
+#' lambda = (1 + 1/m) * tr(B_S T_S^-1) / r with B_S = L B L', T_S = L T L' and r = nrow(L), which
+#' must have full row rank. If T_S is not positive definite it is replaced by nearest_psd(T_S)
+#' (lambda is computed before the repair of the test covariance, so no extra warning is given).
+#'
+#' @param B,V_total Pooled between- and total (T) covariance of the coefficients.
+#' @param L Contrast matrix of full row rank.
+#' @param m Number of imputations.
+lspim_trace_lambda <- function(B, V_total, L, m) {
+  B_S <- L %*% tcrossprod(B, L)
+  T_S <- L %*% tcrossprod(V_total, L)
+  B_S <- (B_S + t(B_S)) / 2
+  T_S <- (T_S + t(T_S)) / 2
+  if (inherits(try(chol(T_S), silent = TRUE), "try-error")) {
+    T_S <- nearest_psd(T_S)
+  }
+  (1 + 1 / m) * sum(diag(solve(T_S, B_S))) / nrow(L)
 }
 
 #' Covariance S = L V L' of a set of contrasts, checked and repaired if needed.
@@ -623,12 +624,17 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("pgee_fw", "geessbin")) {
 #' (\code{pool_rubin_core()}). impute_data() draws from the current global RNG;
 #' fit_mi_lspim() takes no seed of its own (see analyze_mi_lspim()'s rng_state argument).
 #'
-#' Pooled test: the Holm test of lspim_holm_test() on the pooled beta_bar and total variance T.
-#' Each deviation contrast l (rows of make_deviation_from_mean_l()) gets its own t reference
-#' with Barnard-Rubin df from \code{barnard_rubin_df(lambda_l, m, nu_com)}, with
-#' \code{lambda_l = (1 + 1/m) * l'Bl / l'Tl} and \code{nu_com} = number of subjects - 2. lambda_l
-#' is computed on the pooled T before any PSD repair; the nearest_psd() repair (once, on the
-#' pooled T, with lspim_holm_test()'s warning) only affects the test.
+#' Pooled test: lspim_interaction_test() on the pooled beta_bar and total variance T, with
+#' Barnard-Rubin t references and nu_com = number of subjects - 1.
+#' Single-step (primary): one df from the trace-form fraction of missing information
+#' \code{lambda = (1 + 1/m) * tr(B_S T_S^-1) / (K - 1)} on the full-rank basis beta_k - beta_K
+#' (k < K) of the deviation contrasts (B_S, T_S: their between and total covariance), then
+#' \code{floor(barnard_rubin_df(lambda, m, nu_com))} because mvtnorm::pmvt() needs an integer df.
+#' Holm and the time contrast (secondary) each use their own, unrounded, df from
+#' \code{lambda_l = (1 + 1/m) * l'Bl / l'Tl}. All lambdas come from the pooled B and T before any
+#' repair; the covariance S = L T L' of the contrasts (not T) is checked in the test and
+#' replaced by nearest_psd() with a warning if indefinite. Returned in the fit:
+#' mi_lambda_single_step, df_holm, df_time and df_single_step.
 #'
 #' Failures: if the imputation or any of the m LSPIM fits errors, the replicate's result is an
 #' error (\code{fit = NULL}, \code{error_message} set, prefixed with the imputation number for a
@@ -636,14 +642,14 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("pgee_fw", "geessbin")) {
 #' coefficient names and treatment terms (e.g. the same visits), otherwise the replicate fails.
 #'
 #' Convergence: converged = TRUE only if all m PGEE fits met their stopping rule (see
-#' fit_lspim(), engine "pgee_fw"). Replacing the pooled T via nearest_psd() is only a warning.
+#' fit_lspim(), engine "pgee_fw"). Replacing the contrast covariance via nearest_psd() is only a warning.
 #'
 #' @param data        Prepared analysis data (missing outcomes as NA), see
 #'   \code{prepare_analysis_data(type = "multiple_imputation")}.
 #' @param impute_args Named list of imputation arguments, as returned by \code{set_impute_args()}.
-#' @param alpha       Significance level of the Holm test.
+#' @param alpha       Significance level of the single-step test.
 #'
-#' @return A list with fit (as from lspim_holm_test(), or NULL), converged, elapsed_seconds,
+#' @return A list with fit (as from lspim_interaction_test(), or NULL), converged, elapsed_seconds,
 #'   warnings, and error_message.
 fit_mi_lspim <- function(data, impute_args = set_impute_args(method_y = "2l.pmm"), alpha = 0.05) {
   if (!is.numeric(alpha) || length(alpha) != 1L || is.na(alpha) || alpha <= 0 || alpha >= 1) {
@@ -683,18 +689,40 @@ fit_mi_lspim <- function(data, impute_args = set_impute_args(method_y = "2l.pmm"
           lapply(per_imputation, `[[`, "beta"),
           lapply(per_imputation, `[[`, "V_raw")
         )
-        # Per-contrast Barnard-Rubin df, from the pooled T before any PSD repair.
-        nu_com <- length(unique(data$subject_id)) - 2
-        L <- make_deviation_from_mean_l(names(pooled$beta_bar), treatment_terms)
+        # Barnard-Rubin dfs from the pooled B and T before any repair of the contrast covariance.
+        nu_com <- length(unique(data$subject_id)) - 1
+        m_imp <- pooled$m
+        beta_names <- names(pooled$beta_bar)
+        # Single-step: one df from the trace-form lambda on a full-rank basis, floored because
+        # mvtnorm::pmvt() only accepts an integer df.
+        Lg <- make_visit_difference_l(beta_names, treatment_terms)
+        lambda_ss <- lspim_trace_lambda(pooled$B, pooled$T, Lg, m_imp)
+        df_ss <- floor(barnard_rubin_df(lambda_ss, m_imp, nu_com))
+        if (!is.finite(df_ss) || df_ss < 1) {
+          stop("MI_LSPIM: invalid Barnard-Rubin df for the single-step test.")
+        }
+        # Holm: one df per deviation contrast, not rounded.
+        L <- make_deviation_from_mean_l(beta_names, treatment_terms)
         between_l <- diag(L %*% tcrossprod(pooled$B, L))
         total_l <- diag(L %*% tcrossprod(pooled$T, L))
-        lambda_l <- (1 + 1 / pooled$m) * between_l / total_l
-        df_l <- barnard_rubin_df(lambda_l, pooled$m, nu_com)
+        lambda_l <- (1 + 1 / m_imp) * between_l / total_l
+        df_l <- barnard_rubin_df(lambda_l, m_imp, nu_com)
+        # Time contrast: its own df, not rounded.
+        Lt <- make_time_contrast_l(beta_names)
+        lambda_t <- (1 + 1 / m_imp) * drop(Lt %*% tcrossprod(pooled$B, Lt)) /
+          drop(Lt %*% tcrossprod(pooled$T, Lt))
+        df_t <- barnard_rubin_df(lambda_t, m_imp, nu_com)
 
-        holm <- lspim_holm_test(pooled$beta_bar, pooled$T, alpha, treatment_terms, df = df_l)
-        holm$interaction_test_procedure <-
-          "Holm-adjusted treatment-effect deviations, MI (Barnard-Rubin t)"
-        holm
+        test <- lspim_interaction_test(
+          pooled$beta_bar, pooled$T, alpha, treatment_terms,
+          df_single_step = df_ss, df_holm = df_l, df_time = df_t
+        )
+        test$interaction_test_procedure <-
+          "Single-step max-t treatment-effect deviations, MI (Barnard-Rubin t)"
+        test$mi_lambda_single_step <- lambda_ss
+        test$df_holm <- df_l
+        test$df_time <- df_t
+        test
       },
       error = function(error) {
         error_message <<- conditionMessage(error)
