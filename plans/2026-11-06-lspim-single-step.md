@@ -117,4 +117,20 @@ Ground rules:
       time, `nu_com = N - 1`. Update `test-mi-lspim.R` (MI with m identical imputations equals the
       single-dataset test up to the df). Regenerate goldens with only `MI_LSPIM` rows allowlisted.
 - [x] 5. `docs:` `DIFFERENCES.md`, roxygen comments of the changed functions.
-- [ ] 6. Smoke run (time estimate first, ask user), PR description drafted.
+- [x] 6. Smoke run (time estimate first, ask user), PR description drafted.
+
+## Status
+
+Implemented 2026-11-06 (commits f9856f9, c72e5a5, 594bc5c, 80e1d6c, 5528b03). Goldens
+regenerated twice (LSPIM rows, then MI_LSPIM rows): only the procedure label, the repair
+warning (S check replaces V check) and the convergence status derived from it changed;
+no decision, estimate, SE or status moved. Full suite: only the 17 pre-existing
+`test-run-all-grid.R` failures.
+
+Smoke run 2026-11-06 (null, half_missing, 6 visits, 50 sims, n = 10/20/50, seed_base 2026,
+2 min 50 s): single-step rejection LSPIM 0.00 / 0.06 / 0.06 (6/50 leverage-1 failures at
+n = 10), MI_LSPIM 0.00 / 0.02 / 0.02 (2/50 failures at n = 10: "invalid Barnard-Rubin df for
+the single-step test", floored df < 1 or non-finite; not investigated). No near-alpha
+refinement and no integration warning; integration errors up to 1.3e-3 but far from alpha.
+S-repair warnings LSPIM 34/50 (n = 10), 8/50 (n = 20), MI none. MI single-step df 3-6 at
+n = 10 (conservative).
