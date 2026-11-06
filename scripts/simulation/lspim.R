@@ -8,7 +8,7 @@ pseudo_score <- function(y_left, y_right, higher_is_better = TRUE) {
   }
 }
 make_deviation_from_mean_l <- function(beta_names, treatment_terms) {
-  # Holm procedure used in the simulations and manuscript:
+  # Deviation contrasts used by the single-step and Holm tests (simulations and manuscript):
   # H0t: beta_At - mean_t(beta_At) = 0 for each visit t.
   K <- length(treatment_terms)
   if (K < 2) stop("Need at least two treatment terms.")

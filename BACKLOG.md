@@ -154,7 +154,7 @@ see the plans in [plans/](plans/) and the git history for what was done.
 - [ ] **[clarity] LSPIM: split `fit_lspim()` into helpers.**
   Its body is about 100 lines inside a `tryCatch`. Candidates: `build_lspim_pairs(dat)`,
   `build_lspim_design(dat, pairs, times)`, `combine_lspim_vcov(fits)` and
-  `lspim_holm_test(beta, V, treatment_terms, alpha)`; each could be tested on its own and the
+  the inference step (now `lspim_interaction_test()`); each could be tested on its own and the
   wrapper would match the other `fit_*()` functions.
 
 - [ ] **[clarity] LSPIM: simplify `pseudo_score()`.**

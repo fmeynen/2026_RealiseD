@@ -116,5 +116,5 @@ Ground rules:
 - [x] 4. `feat:` `fit_mi_lspim()`: trace-form floored df for single-step, per-contrast df for Holm and
       time, `nu_com = N - 1`. Update `test-mi-lspim.R` (MI with m identical imputations equals the
       single-dataset test up to the df). Regenerate goldens with only `MI_LSPIM` rows allowlisted.
-- [ ] 5. `docs:` `DIFFERENCES.md`, roxygen comments of the changed functions.
+- [x] 5. `docs:` `DIFFERENCES.md`, roxygen comments of the changed functions.
 - [ ] 6. Smoke run (time estimate first, ask user), PR description drafted.
