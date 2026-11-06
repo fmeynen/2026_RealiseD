@@ -509,7 +509,7 @@ lspim_single_step_p <- function(z, R, df, alpha = NULL, seed = 123L, maxpts = 10
   )
 }
 
-#' LSPIM interaction test on the contrast level (not yet wired into fit_lspim()).
+#' LSPIM interaction test on the contrast level (used by fit_lspim()).
 #'
 #' Primary: single-step max-|t| test of the treatment-effect deviations from their mean
 #' (`single_step_p`, `interaction_rejected = p < alpha`). Secondary: Holm-adjusted p-values of the
@@ -562,11 +562,16 @@ lspim_interaction_test <- function(beta, V, alpha, treatment_terms, df_single_st
 #' meeting its stopping rule (fitted probabilities outside [1e-4, 0.9999] or 50 iterations;
 #' one warning names the reason, and the sandwiches are still computed at the last beta);
 #' engine "geessbin": converged = FALSE if any of the three GEE fits reports a `convergence`
-#' other than "converged". Replacing the combined V via nearest_psd() is only a warning.
+#' other than "converged".
+#'
+#' Inference: lspim_interaction_test() with t reference on N - 1 degrees of freedom, N the number
+#' of subjects. The covariance S = L V L' of each contrast set (treatment-effect deviations, time
+#' contrast) is checked, not V itself; replacing S via nearest_psd() is only a warning.
 #'
 #' @param engine "pgee_fw" (default: one in-house PGEE fit plus three Ford-Westgate sandwiches,
 #'   see fit_lspim_pgee_fw()) or "geessbin" (three PGEE + FW GEE fits with geessbin).
-#' @return A list with fit, converged, elapsed_seconds, warnings, and error_message.
+#' @return A list with fit (as from lspim_interaction_test(), or NULL), converged,
+#'   elapsed_seconds, warnings, and error_message.
 fit_lspim <- function(dat, alpha = 0.05, engine = c("pgee_fw", "geessbin")) {
   engine <- match.arg(engine)
   if (engine == "geessbin" && !requireNamespace("geessbin", quietly = TRUE)) {
@@ -585,7 +590,11 @@ fit_lspim <- function(dat, alpha = 0.05, engine = c("pgee_fw", "geessbin")) {
       {
         est <- lspim_estimate(dat, engine = engine)
         converged <- est$converged
-        lspim_holm_test(est$beta, est$V_raw, alpha, est$treatment_terms, df = Inf)
+        n_subjects <- length(unique(dat$subject_id))
+        lspim_interaction_test(
+          est$beta, est$V_raw, alpha, est$treatment_terms,
+          df_single_step = n_subjects - 1L
+        )
       },
       error = function(error) {
         error_message <<- conditionMessage(error)

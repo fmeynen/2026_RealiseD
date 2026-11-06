@@ -69,7 +69,9 @@ Ground rules:
 - If `min(eigen(S)) < -1e-8`: replace S by `nearest_psd(S)` (eps = 1e-8) with a warning
   (the reference fails instead). The structural zero eigenvalue of the deviation S is lifted to
   1e-8; accepted.
-- `diag(S) <= 0` after the repair, or a non-finite S: the fit fails (error).
+- `diag(S) <= 0` after the repair, or a non-finite S: the fit fails (error). This includes
+  separated fits where all deviation contrasts have variance 0 (previously repaired via V and
+  counted as not rejected); confirmed by the user 2026-11-06: keep as failure.
 
 ### Multivariate integration
 
@@ -108,7 +110,7 @@ Ground rules:
       same df); RNG state unchanged after the call (also when `.Random.seed` is absent); m = 1
       reduces to the t-test; repair warning and failure on non-positive diag. Result-neutral for
       the pipeline (helpers not wired in yet).
-- [ ] 3. `feat:` `fit_lspim()` uses the new test with df = N - 1 (both engines). Update affected tests
+- [x] 3. `feat:` `fit_lspim()` uses the new test with df = N - 1 (both engines). Update affected tests
       (`test-lspim-pgee-fw.R` engine agreement now on the single-step p too). Regenerate goldens
       with only `LSPIM` rows allowlisted.
 - [ ] 4. `feat:` `fit_mi_lspim()`: trace-form floored df for single-step, per-contrast df for Holm and

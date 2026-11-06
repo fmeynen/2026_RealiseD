@@ -248,7 +248,7 @@ build_lspim_data <- function() {
 }
 
 # build_lspim_data() has a leverage-1 cluster, which engine "pgee_fw" rejects; this complete
-# dataset fits under "pgee_fw" and needs the nearest_psd repair of V.
+# dataset fits under "pgee_fw".
 build_lspim_complete_data <- function() {
   sc <- build_scenario_grid(
     n_values = 6,
@@ -258,6 +258,25 @@ build_lspim_complete_data <- function() {
     seed_base = 1
   )
   simulate_scenario(sc[1, , drop = FALSE], B = 1)
+}
+
+# Stub lspim_estimate() (global environment, restored on exit) so that the covariance of the
+# treatment-effect deviations, S = L V L', is indefinite and lspim_contrast_cov() repairs it.
+# The data sets below no longer trigger the repair on their own: the check is on S, not on V.
+stub_indefinite_contrast_cov <- function(env = parent.frame()) {
+  original <- lspim_estimate
+  withr::defer(assign("lspim_estimate", original, envir = globalenv()), envir = env)
+  assign(
+    "lspim_estimate",
+    function(dat, engine = c("pgee_fw", "geessbin")) {
+      est <- original(dat, engine = engine)
+      L1 <- make_deviation_from_mean_l(names(est$beta), est$treatment_terms)[1L, , drop = FALSE]
+      v11 <- drop(L1 %*% est$V_raw %*% t(L1))
+      est$V_raw <- est$V_raw - 2 * v11 / drop(L1 %*% t(L1))^2 * crossprod(L1)
+      est
+    },
+    envir = globalenv()
+  )
 }
 
 test_that("lspim_gees_converged() requires every GEE to report 'converged'", {
@@ -293,8 +312,8 @@ test_that("LSPIM geessbin row is not converged when one GEE hits its iteration l
   expect_identical(row$convergence_status, "not_converged")
 })
 
-test_that("LSPIM geessbin nearest_psd repair of V is a warning, not non-convergence", {
-  # On this dataset the combined V is not PSD, so nearest_psd() is applied.
+test_that("LSPIM geessbin nearest_psd repair of S is a warning, not non-convergence", {
+  stub_indefinite_contrast_cov()
   row <- add_convergence_status(analyze_lspim(build_lspim_data(), engine = "geessbin"))
 
   expect_identical(row$status, "success")
@@ -326,8 +345,8 @@ test_that("LSPIM pgee_fw row is not converged when the PGEE fit does not converg
   expect_identical(row$convergence_status, "not_converged")
 })
 
-test_that("LSPIM pgee_fw nearest_psd repair of V is a warning, not non-convergence", {
-  # On this dataset the combined V is not PSD, so nearest_psd() is applied.
+test_that("LSPIM pgee_fw nearest_psd repair of S is a warning, not non-convergence", {
+  stub_indefinite_contrast_cov()
   row <- add_convergence_status(analyze_lspim(build_lspim_complete_data()))
 
   expect_identical(row$engine, "pgee_fw")

@@ -86,7 +86,7 @@ test_that("pgee_fw with geessbin's stopping rule matches geessbin on beta, covb 
   expect_identical(pgee$sandwich_path, "diagonal")
 })
 
-test_that("fit_lspim engines pgee_fw and geessbin agree on V and Holm_p", {
+test_that("fit_lspim engines pgee_fw and geessbin agree on V, Holm_p, single_step_p and time_p", {
   skip_if_not_installed("geessbin")
 
   datasets <- list(
@@ -101,6 +101,10 @@ test_that("fit_lspim engines pgee_fw and geessbin agree on V and Holm_p", {
     expect_true(gee$converged, label = label)
     expect_lt(max_relative_diff(pgee$fit$V, gee$fit$V), 1e-6)
     expect_lt(max(abs(pgee$fit$Holm_p - gee$fit$Holm_p)), 1e-6)
+    expect_lt(abs(pgee$fit$time_p - gee$fit$time_p), 1e-6)
+    # Same seed in both integrations; the engines' V differ by < 1e-6 relative.
+    expect_lt(abs(pgee$fit$single_step_p - gee$fit$single_step_p), 1e-5)
+    expect_identical(pgee$fit$interaction_rejected, gee$fit$interaction_rejected)
   }
 })
 
@@ -259,9 +263,11 @@ test_that("pgee_fw returns a not-converged fit with one warning when probabiliti
   expect_true(all(is.finite(pgee$beta)))
   expect_true(all(is.finite(pgee$V_raw)))
 
+  # Separated data give identical coefficients for every visit, so all deviation contrasts have
+  # zero variance: the single-step test fails the fit (a failure row), the warning is kept.
   row <- add_convergence_status(analyze_lspim(build_separated_data()))
-  expect_identical(row$status, "success")
+  expect_identical(row$status, "failure")
   expect_false(row$converged)
-  expect_identical(row$convergence_status, "not_converged")
+  expect_match(row$error_message, "non-positive contrast variances", fixed = TRUE)
   expect_match(row$warning_message, "LSPIM PGEE did not converge", fixed = TRUE)
 })
